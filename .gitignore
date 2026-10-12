@@ -5,6 +5,7 @@ build/
 .env
 .env.local
 .DS_Store
-server/data/state.json
+data/
 coverage/
 *.tsbuildinfo
+*.zip

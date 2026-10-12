@@ -1,0 +1,9 @@
+{
+  "name": "MAAI — Musaed Abdulrahman AI",
+  "short_name": "MAAI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2F2F7",
+  "theme_color": "#0A6E63",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
