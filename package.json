@@ -8,8 +8,8 @@
     "dev": "tsx watch --clear-screen=false --ignore ./data/** server/index.ts",
     "phone": "tsx watch --clear-screen=false --ignore ./data/** server/index.ts --phone",
     "build": "vite build",
-    "start": "vite build && cross-env NODE_ENV=production tsx server/index.ts",
-    "serve": "tsx server/index.ts",
+    "start": "vite build && tsx server/index.ts --online",
+    "serve": "tsx server/index.ts --online",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -36,7 +36,6 @@
     "@types/react-dom": "^18.3.1",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^4.3.3",
-    "cross-env": "^7.0.3",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vitest": "^2.1.5"

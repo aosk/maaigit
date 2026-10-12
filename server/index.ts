@@ -18,6 +18,10 @@ app.use('/api', api);
 
 if (config.production) {
   const dist = path.resolve('dist');
+  if (!fs.existsSync(path.join(dist, 'index.html'))) {
+    console.error('\n  The app has not been built. Use "npm start", or run "npm run build" before "npm run serve".\n');
+    process.exit(1);
+  }
   app.use(express.static(dist));
   app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
 } else {
@@ -35,7 +39,8 @@ const ai = process.env.ANTHROPIC_API_KEY ? 'Claude connected' : 'demo mode (no A
 if (config.production) {
   // Online: reachable by anyone, so everything behind the password.
   if (config.password.length < 8) {
-    console.error('\n  MAAI_PASSWORD must be set to at least 8 characters before MAAI can run online.\n');
+    console.error('\n  MAAI_PASSWORD must be set to at least 8 characters before MAAI can run online.');
+    console.error('  On Render: your service → Environment → Add Environment Variable → MAAI_PASSWORD.\n');
     process.exit(1);
   }
   const secretFile = path.join(config.dataDir, 'session-secret');

@@ -18,7 +18,8 @@ export const config = {
   port: num(process.env.PORT, 5173),
   /** HTTPS port for phones on the same Wi-Fi (npm run phone). */
   phonePort: num(process.env.MAAI_PHONE_PORT, num(process.env.PORT, 5173) + 1),
-  production: process.env.NODE_ENV === 'production',
+  /** Online mode: password, all network interfaces, built files. Render sets RENDER=true on its servers. */
+  production: process.env.NODE_ENV === 'production' || process.env.RENDER === 'true' || process.argv.includes('--online'),
   latitude: num(process.env.MAAI_LATITUDE, 24.7136),
   longitude: num(process.env.MAAI_LONGITUDE, 46.6753),
   timezone,
