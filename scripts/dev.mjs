@@ -4,13 +4,16 @@
  *  reason a restart appears to hang. */
 import { spawn } from 'node:child_process';
 
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const isWindows = process.platform === 'win32';
+const npm = isWindows ? 'npm.cmd' : 'npm';
 
 const children = [
   { name: 'api', args: ['run', 'dev', '--workspace=server'] },
   { name: 'web', args: ['run', 'dev', '--workspace=web'] },
 ].map(({ name, args }) => {
-  const child = spawn(npm, args, { stdio: 'inherit', env: process.env });
+  // Node refuses to spawn a .cmd file directly on Windows (EINVAL), so it has
+  // to go through the shell there. The arguments are fixed, so this is safe.
+  const child = spawn(npm, args, { stdio: 'inherit', env: process.env, shell: isWindows });
   child.on('exit', (code, signal) => {
     if (!shuttingDown) {
       console.error(`\n[dev] ${name} exited (${signal ?? code}); stopping the other process.`);
