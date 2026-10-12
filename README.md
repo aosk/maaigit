@@ -17,6 +17,26 @@ npm run dev
 Open **http://localhost:5173**. The admin portal is at
 **http://localhost:5173/#/admin**.
 
+### Use it on your phone
+
+```
+npm run phone
+```
+
+This runs MAAI as usual and also serves it to phones on the same Wi-Fi. The
+terminal shows a QR code, an address like `https://192.168.1.20:5174` and a
+6-digit PIN.
+
+1. Scan the QR code with the phone camera (or type the address in Safari).
+2. Safari warns that the connection is not private. That is expected for a
+   server at home: tap **Show Details** → **visit this website** → **Visit Website**.
+3. Enter the PIN from the terminal.
+4. To install it like an app: Share button → **Add to Home Screen**.
+
+The first time, Windows asks whether Node.js may use the network: tick
+**Private networks** and click **Allow**. Phones need the PIN once; the
+computer itself never does. Set your own PIN with `MAAI_PIN=` in `.env`.
+
 ### Turn on the AI
 
 Without a key MAAI runs in **demo mode** with simple canned replies, so you can
@@ -48,6 +68,7 @@ server/      Express API (one process serves the app and /api)
   ai.ts      Claude: chat with approval-card tools, reply drafts, briefing, demo mode
   routes.ts  REST endpoints
   store.ts   Data, saved to data/store.json (delete it to start fresh)
+  phone.ts   HTTPS certificate, PIN and QR code for phone access
 shared/      Types and prayer times (Umm al-Qura), used by both sides
 src/         React app
   screens/   Today, Assistant, Inbox, Settings
@@ -66,6 +87,7 @@ Other settings in `.env`: `PORT`, and `MAAI_LATITUDE` / `MAAI_LONGITUDE` /
 | Command | Does |
 |---|---|
 | `npm run dev` | Runs the app with live reload |
+| `npm run phone` | Same, plus HTTPS + PIN access for phones on your Wi-Fi |
 | `npm start` | Builds and runs the production version |
 | `npm test` | Runs the tests |
 | `npm run typecheck` | Checks the TypeScript |
@@ -73,5 +95,5 @@ Other settings in `.env`: `PORT`, and `MAAI_LATITUDE` / `MAAI_LONGITUDE` /
 ## Not built yet
 
 Connecting real Google / Outlook calendars and email, push notifications,
-sign-in for more than one user, and a native iPhone app. The old StockPlay
+access from outside your home Wi-Fi, sign-in for more than one user, and a native iPhone app. The old StockPlay
 project is kept in `archive/stockplay`.

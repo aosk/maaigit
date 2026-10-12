@@ -20,6 +20,8 @@ export interface TodayData {
   nextPrayer: { name: PrayerName; time: string };
 }
 
+export const LOCKED_EVENT = 'maai:locked';
+
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${url}`, {
     method,
@@ -28,6 +30,8 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
+    // On a phone without the PIN yet: show the PIN screen instead of an error.
+    if (res.status === 401 && data.error === 'locked') window.dispatchEvent(new Event(LOCKED_EVENT));
     throw new Error(data.error ?? `Request failed (${res.status})`);
   }
   return (res.status === 204 ? undefined : await res.json()) as T;
@@ -35,6 +39,7 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
 
 export const api = {
   status: () => call<StatusInfo>('GET', '/status'),
+  unlock: (pin: string) => call<void>('POST', '/unlock', { pin }),
   today: () => call<TodayData>('GET', '/today'),
   briefing: (lang: Lang) => call<Briefing>('GET', `/briefing?lang=${lang}`),
   addEvent: (e: { title: string; start: string; minutes: number }) => call<CalendarEvent>('POST', '/events', e),

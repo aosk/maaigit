@@ -80,6 +80,9 @@ a { color: var(--tint-text); }
 /* ---------- Phone shell ---------- */
 .shell { max-width: 480px; margin: 0 auto; min-height: 100dvh; position: relative; background: var(--bg); }
 @media (min-width: 600px) { .shell { box-shadow: 0 0 0 1px var(--sep); } }
+/* Home-screen mode on iPhone draws under the status bar; keep content below it. */
+.screen { padding-top: calc(24px + env(safe-area-inset-top)) !important; }
+.chat-head { padding-top: calc(20px + env(safe-area-inset-top)) !important; }
 .screen { padding: 24px 20px calc(110px * var(--scale)) 20px; display: flex; flex-direction: column; gap: 16px; }
 
 .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }

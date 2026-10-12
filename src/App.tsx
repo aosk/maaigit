@@ -6,6 +6,8 @@ import { Assistant } from './screens/Assistant';
 import { Inbox } from './screens/Inbox';
 import { SettingsScreen } from './screens/Settings';
 import { Admin } from './admin/Admin';
+import { Unlock } from './screens/Unlock';
+import { LOCKED_EVENT } from './api';
 
 export type Route = 'today' | 'assistant' | 'inbox' | 'settings' | 'admin';
 const ROUTES: Route[] = ['today', 'assistant', 'inbox', 'settings', 'admin'];
@@ -27,6 +29,13 @@ export const PROMPT_KEY = 'maai.prompt';
 export function App() {
   const { t } = useSettings();
   const [route, setRoute] = useState<Route>(readRoute);
+  const [locked, setLocked] = useState(false);
+
+  useEffect(() => {
+    const onLocked = () => setLocked(true);
+    window.addEventListener(LOCKED_EVENT, onLocked);
+    return () => window.removeEventListener(LOCKED_EVENT, onLocked);
+  }, []);
 
   useEffect(() => {
     const onHash = () => {
@@ -41,6 +50,7 @@ export function App() {
     document.title = route === 'admin' ? 'MAAI Admin' : `MAAI · ${t[route]}`;
   }, [route, t]);
 
+  if (locked) return <Unlock />;
   if (route === 'admin') return <Admin />;
 
   const tabs: { route: Route; label: string; icon: JSX.Element }[] = [
