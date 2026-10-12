@@ -1,11 +1,14 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import https from 'node:https';
+import { randomBytes } from 'node:crypto';
 import express from 'express';
 import qrcode from 'qrcode-terminal';
 import { config } from './config.js';
 import { api } from './routes.js';
-import { phoneSetup, requirePin } from './phone.js';
+import { pinGuard, phoneSetup } from './phone.js';
 import { startScheduler } from './notify.js';
+import { createGuard } from './auth.js';
 
 const phoneMode = process.argv.includes('--phone') || process.env.MAAI_PHONE === '1';
 
@@ -29,13 +32,33 @@ startScheduler();
 
 const ai = process.env.ANTHROPIC_API_KEY ? 'Claude connected' : 'demo mode (no ANTHROPIC_API_KEY in .env)';
 
-// The computer itself: no PIN, and only reachable from this computer.
-app.listen(config.port, '127.0.0.1', () => {
-  console.log(`\n  MAAI is running: http://localhost:${config.port}   [${ai}]`);
-  console.log(`  Admin portal:    http://localhost:${config.port}/#/admin\n`);
-});
+if (config.production) {
+  // Online: reachable by anyone, so everything behind the password.
+  if (config.password.length < 8) {
+    console.error('\n  MAAI_PASSWORD must be set to at least 8 characters before MAAI can run online.\n');
+    process.exit(1);
+  }
+  const secretFile = path.join(config.dataDir, 'session-secret');
+  if (!fs.existsSync(secretFile)) {
+    fs.mkdirSync(config.dataDir, { recursive: true });
+    fs.writeFileSync(secretFile, randomBytes(32).toString('hex'));
+  }
+  const site = express();
+  // The hosting service checks this to know MAAI is up; it reveals nothing.
+  site.get('/api/health', (_req, res) => res.json({ ok: true }));
+  site.use(express.json({ limit: '1mb' }));
+  site.use(createGuard('password', config.password, fs.readFileSync(secretFile, 'utf8').trim()));
+  site.use(app);
+  site.listen(config.port, '0.0.0.0', () => console.log(`MAAI is online on port ${config.port} [${ai}]`));
+} else {
+  // The computer itself: no sign-in, and only reachable from this computer.
+  app.listen(config.port, '127.0.0.1', () => {
+    console.log(`\n  MAAI is running: http://localhost:${config.port}   [${ai}]`);
+    console.log(`  Admin portal:    http://localhost:${config.port}/#/admin\n`);
+  });
+}
 
-if (phoneMode) {
+if (phoneMode && !config.production) {
   const { pin, key, cert, ips } = await phoneSetup();
   const phone = express();
   phone.use(express.json({ limit: '1mb' }));
@@ -44,7 +67,7 @@ if (phoneMode) {
     res.attachment('MAAI.crt').setHeader('Content-Type', 'application/x-x509-ca-cert');
     res.send(Buffer.from(cert));
   });
-  phone.use(requirePin);
+  phone.use(pinGuard());
   phone.use(app);
   https.createServer({ key, cert }, phone).listen(config.phonePort, '0.0.0.0', () => {
     if (ips.length === 0) {

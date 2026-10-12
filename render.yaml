@@ -1,0 +1,33 @@
+# One-click setup for Render (https://render.com): Dashboard → New → Blueprint → this repo.
+services:
+  - type: web
+    name: maai
+    runtime: node
+    plan: starter            # a disk (below) needs a paid plan; starter is the smallest
+    region: frankfurt        # the closest Render region to Saudi Arabia
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run serve
+    healthCheckPath: /api/health
+    autoDeploy: true         # every push to main updates the live site
+    disk:
+      name: maai-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: MAAI_DATA_DIR
+        value: /var/data
+      - key: MAAI_TIMEZONE
+        value: Asia/Riyadh
+      - key: MAAI_LATITUDE
+        value: "24.7136"
+      - key: MAAI_LONGITUDE
+        value: "46.6753"
+      # Render asks for these two when you create the service; they are never stored in Git.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: MAAI_PASSWORD
+        sync: false

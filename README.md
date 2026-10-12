@@ -69,6 +69,31 @@ try every screen. For real answers:
 The terminal says `Claude connected` when the key is picked up. Keep `.env`
 private: it is excluded from Git so it never gets uploaded.
 
+## Put it online (Render)
+
+Online, MAAI runs all the time at a real `https://` address: it works away from
+home, notifications arrive without your computer on, and iPhone needs no
+certificate steps. Everything is behind a password.
+
+1. Sign up at <https://render.com> with your GitHub account and let Render see
+   the `musaedapp` repository.
+2. Dashboard → **New** → **Blueprint** → pick `musaedapp` → **Connect**.
+   Render reads `render.yaml` and sets everything up.
+3. It asks for two values:
+   - `ANTHROPIC_API_KEY`: your Claude key.
+   - `MAAI_PASSWORD`: a password of at least 8 characters. You sign in with it.
+4. **Apply**. The first build takes a few minutes. Your address appears at the
+   top, like `https://maai-xxxx.onrender.com`.
+
+Cost: Render's Starter plan (about $7/month) plus about $0.25/month for the
+1 GB disk that keeps your data. Claude usage is billed separately by Anthropic.
+Every push to `main` updates the live site automatically.
+
+On iPhone: open the address in Safari, sign in, Share → **Add to Home Screen**,
+open MAAI from the icon, then Settings → **Turn on notifications**.
+
+Your data online starts fresh; it is separate from the copy on your computer.
+
 ## What's in it
 
 | Screen | What it does |
@@ -86,6 +111,7 @@ server/      Express API (one process serves the app and /api)
   ai.ts      Claude: chat with approval-card tools, reply drafts, briefing, demo mode
   routes.ts  REST endpoints
   store.ts   Data, saved to data/store.json (delete it to start fresh)
+  auth.ts    Sign-in: PIN on the home Wi-Fi, password online
   phone.ts   HTTPS certificate, PIN and QR code for phone access
   notify.ts  Alert timing and Web Push (reminders, time to leave, prayers)
 shared/      Types and prayer times (Umm al-Qura), used by both sides
@@ -100,19 +126,20 @@ pending card; the server books or saves only when you approve. Requests use the
 API's server-side fallback, so if a safety check declines a request it is
 retried on a suitable model instead of failing.
 
-Other settings in `.env`: `PORT`, and `MAAI_LATITUDE` / `MAAI_LONGITUDE` /
+Other settings in `.env`: `PORT`, `MAAI_DATA_DIR` (where data is kept), and `MAAI_LATITUDE` / `MAAI_LONGITUDE` /
 `MAAI_TIMEZONE` for prayer times (default Riyadh).
 
 | Command | Does |
 |---|---|
 | `npm run dev` | Runs the app with live reload |
 | `npm run phone` | Same, plus HTTPS + PIN access for phones on your Wi-Fi |
-| `npm start` | Builds and runs the production version |
+| `npm start` | Builds and runs the online version (needs `MAAI_PASSWORD`) |
+| `npm run serve` | Runs an already-built online version (what Render uses) |
 | `npm test` | Runs the tests |
 | `npm run typecheck` | Checks the TypeScript |
 
 ## Not built yet
 
-Connecting real Google / Outlook calendars and email,
-access from outside your home Wi-Fi, sign-in for more than one user, and a native iPhone app. The old StockPlay
+Connecting real Google / Outlook calendars and email, accounts for more than
+one person, and a native iPhone app. The old StockPlay
 project is kept in `archive/stockplay`.

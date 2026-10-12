@@ -32,9 +32,9 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    const data = (await res.json().catch(() => ({}))) as { error?: string; kind?: string };
     // On a phone without the PIN yet: show the PIN screen instead of an error.
-    if (res.status === 401 && data.error === 'locked') window.dispatchEvent(new Event(LOCKED_EVENT));
+    if (res.status === 401 && data.error === 'locked') window.dispatchEvent(new CustomEvent(LOCKED_EVENT, { detail: data.kind }));
     throw new Error(data.error ?? `Request failed (${res.status})`);
   }
   return (res.status === 204 ? undefined : await res.json()) as T;
@@ -43,6 +43,7 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
 export const api = {
   status: () => call<StatusInfo>('GET', '/status'),
   unlock: (pin: string) => call<void>('POST', '/unlock', { pin }),
+  logout: () => call<void>('POST', '/logout'),
   today: () => call<TodayData>('GET', '/today'),
   briefing: (lang: Lang) => call<Briefing>('GET', `/briefing?lang=${lang}`),
   addEvent: (e: { title: string; start: string; minutes: number }) => call<CalendarEvent>('POST', '/events', e),

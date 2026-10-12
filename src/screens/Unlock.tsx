@@ -2,8 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useSettings } from '../settings';
 
-/** Shown on a phone until the PIN from the computer's terminal is entered. */
-export function Unlock() {
+/** Sign-in: the PIN from the computer's terminal at home, or the password when MAAI is online. */
+export function Unlock({ kind }: { kind: 'pin' | 'password' }) {
   const { t, settings, update } = useSettings();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -31,23 +31,27 @@ export function Unlock() {
             {settings.lang === 'ar' ? 'EN' : 'ع'}
           </button>
         </div>
-        <h1 className="title">{t.unlockTitle}</h1>
-        <p className="sub" style={{ fontSize: '0.9em' }}>{t.unlockHint}</p>
+        <h1 className="title">{kind === 'pin' ? t.unlockTitle : t.passwordTitle}</h1>
+        <p className="sub" style={{ fontSize: '0.9em' }}>{kind === 'pin' ? t.unlockHint : t.passwordHint}</p>
         <div className="field">
-          <label htmlFor="pin">{t.pin}</label>
-          <input
-            id="pin"
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            dir="ltr"
-            style={{ fontSize: '1.6em', letterSpacing: '0.3em', textAlign: 'center' }}
-            autoFocus
-          />
+          <label htmlFor="pin">{kind === 'pin' ? t.pin : t.password}</label>
+          {kind === 'pin' ? (
+            <input
+              id="pin"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              dir="ltr"
+              style={{ fontSize: '1.6em', letterSpacing: '0.3em', textAlign: 'center' }}
+              autoFocus
+            />
+          ) : (
+            <input id="pin" type="password" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="current-password" dir="ltr" autoFocus />
+          )}
         </div>
         {error && <div className="error" role="alert">{error}</div>}
-        <button className="btn primary big" type="submit" disabled={busy || pin.length < 4}>{t.unlock}</button>
+        <button className="btn primary big" type="submit" disabled={busy || pin.length < (kind === 'pin' ? 4 : 1)}>{t.unlock}</button>
       </form>
     </div>
   );

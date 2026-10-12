@@ -25,7 +25,7 @@ function status(): StatusInfo {
   };
 }
 
-api.get('/status', (_req, res) => res.json(status()));
+api.get('/status', (_req, res) => res.json({ ...status(), auth: res.locals.auth ?? 'none' }));
 
 // ---------- Today ----------
 

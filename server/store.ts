@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type Anthropic from '@anthropic-ai/sdk';
+import { config } from './config.js';
 import type {
   AgentSetting,
   AppAlert,
@@ -42,7 +43,7 @@ export interface State {
   alerts: AppAlert[];
 }
 
-const DATA_FILE = process.env.MAAI_DATA_FILE ?? path.resolve('data', 'store.json');
+const DATA_FILE = process.env.MAAI_DATA_FILE ?? path.join(config.dataDir, 'store.json');
 
 export const id = () => randomUUID().slice(0, 8);
 

@@ -9,6 +9,7 @@
     "phone": "tsx watch --clear-screen=false --ignore ./data/** server/index.ts --phone",
     "build": "vite build",
     "start": "vite build && cross-env NODE_ENV=production tsx server/index.ts",
+    "serve": "tsx server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

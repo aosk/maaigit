@@ -98,6 +98,8 @@ export interface Briefing {
 
 export interface StatusInfo {
   aiConfigured: boolean;
+  /** How this device signed in: not at all on the computer itself, a PIN at home, a password online. */
+  auth?: 'none' | 'pin' | 'password';
   model: string;
   location: { latitude: number; longitude: number; timezone: string };
 }

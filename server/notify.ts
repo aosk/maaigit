@@ -21,7 +21,7 @@ const LEAVE_BUFFER_MIN = 10;
 
 // ---------- Keys for Web Push, made once and kept in data/push.json ----------
 
-const KEYS_FILE = path.resolve('data', 'push.json');
+const KEYS_FILE = path.join(config.dataDir, 'push.json');
 
 function vapidKeys(): { publicKey: string; privateKey: string } {
   try {
