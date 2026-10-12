@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Lang, Proposal, Tone } from '../shared/types.js';
+import type { Lang, PrayerName, Proposal, Tone } from '../shared/types.js';
 import { clashesWithPrayer, prayersFor } from '../shared/prayer.js';
 import { agentEnabled, audit, id, save, state, type Conversation } from './store.js';
 import { config } from './config.js';
@@ -89,10 +89,16 @@ const tools: Tool[] = [
       properties: {
         title: { type: 'string', description: 'What to be reminded about.' },
         when: { type: 'string', description: 'When, in the user\'s own words, e.g. "15 min after Maghrib".' },
-        at: { type: 'string', description: 'ISO 8601 time of the first reminder if you can work it out, else an empty string.' },
+        at: { type: 'string', description: 'ISO 8601 time of the first reminder for clock-time reminders, else an empty string.' },
+        after_prayer: {
+          type: 'string',
+          enum: ['none', 'fajr', 'dhuhr', 'asr', 'maghrib', 'isha'],
+          description: 'For reminders tied to a prayer ("after Maghrib"), which prayer; else "none".',
+        },
+        offset_minutes: { type: 'integer', description: 'Minutes after that prayer (negative for before). 0 when after_prayer is "none".' },
         repeat: { type: 'string', enum: ['once', 'daily', 'weekly'] },
       },
-      required: ['title', 'when', 'at', 'repeat'],
+      required: ['title', 'when', 'at', 'after_prayer', 'offset_minutes', 'repeat'],
       additionalProperties: false,
     },
   },
@@ -109,6 +115,8 @@ interface ReminderInput {
   title: string;
   when: string;
   at: string;
+  after_prayer: PrayerName | 'none';
+  offset_minutes: number;
   repeat: 'once' | 'daily' | 'weekly';
 }
 
@@ -149,6 +157,8 @@ function runTool(block: Anthropic.Beta.Messages.BetaToolUseBlock, created: Propo
       title: input.title,
       when: input.when,
       at: input.at && !Number.isNaN(Date.parse(input.at)) ? new Date(input.at).toISOString() : undefined,
+      prayer: input.after_prayer === 'none' ? undefined : input.after_prayer,
+      offsetMinutes: input.after_prayer === 'none' ? undefined : input.offset_minutes,
       repeat: input.repeat,
     };
     created.push(proposal);
@@ -337,7 +347,19 @@ function demoChat(userText: string, lang: Lang): { text: string; proposals: Prop
     const name = userText.match(/with\s+([A-Z][\w-]+)/)?.[1] ?? userText.match(/مع\s+(\S+)/)?.[1] ?? 'Sara';
     proposal = { id: id(), kind: 'meeting', status: 'pending', title: `Meeting with ${name}`, attendee: name, minutes: 30, options: nextFreeMornings(30) };
   } else if (/remind|ذكر/.test(t)) {
-    proposal = { id: id(), kind: 'reminder', status: 'pending', title: userText.replace(/^(please\s+)?remind me (to\s+)?/i, '').replace(/^ذكّ?رني\s*/, ''), when: ar ? 'اليوم' : 'Today', repeat: 'once' };
+    const prayers: [RegExp, PrayerName][] = [[/fajr|الفجر/, 'fajr'], [/dhuhr|الظهر/, 'dhuhr'], [/asr|العصر/, 'asr'], [/maghrib|المغرب/, 'maghrib'], [/isha|العشاء/, 'isha']];
+    const prayer = prayers.find(([re]) => re.test(t))?.[1];
+    proposal = {
+      id: id(),
+      kind: 'reminder',
+      status: 'pending',
+      title: userText.replace(/^(please\s+)?remind me (to\s+)?/i, '').replace(/^ذكّ?رني\s*/, ''),
+      when: prayer ? (ar ? 'بعد الصلاة بربع ساعة' : '15 min after the prayer') : ar ? 'بعد ساعة' : 'In an hour',
+      at: prayer ? undefined : new Date(Date.now() + 3_600_000).toISOString(),
+      prayer,
+      offsetMinutes: prayer ? 15 : undefined,
+      repeat: 'once',
+    };
   }
   if (proposal) {
     state.proposals.push(proposal);

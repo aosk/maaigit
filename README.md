@@ -37,6 +37,24 @@ The first time, Windows asks whether Node.js may use the network: tick
 **Private networks** and click **Allow**. Phones need the PIN once; the
 computer itself never does. Set your own PIN with `MAAI_PIN=` in `.env`.
 
+### Notifications
+
+Settings → **Notifications** → **Turn on notifications**. MAAI then alerts you
+at reminder time, when it's time to leave for an appointment with travel time,
+and (if you switch them on) before each event or prayer, even with the app
+closed. Reminders can be tied to a prayer ("15 minutes after Maghrib").
+
+- **On the computer:** works in Chrome or Edge at `http://localhost:5173`.
+- **On iPhone** (iOS 16.4 or newer), with `npm run phone` running:
+  1. Add MAAI to the Home Screen and open it from the icon.
+  2. Settings → Notifications shows **Download certificate**: tap it and allow.
+  3. iPhone Settings → General → VPN & Device Management → MAAI → **Install**.
+  4. iPhone Settings → General → About → Certificate Trust Settings → turn on **MAAI**.
+  5. Back in MAAI: **Turn on notifications**.
+
+Alerts come from your computer, so it has to be on with MAAI running. While
+MAAI is open, alerts also appear as a banner at the top.
+
 ### Turn on the AI
 
 Without a key MAAI runs in **demo mode** with simple canned replies, so you can
@@ -69,6 +87,7 @@ server/      Express API (one process serves the app and /api)
   routes.ts  REST endpoints
   store.ts   Data, saved to data/store.json (delete it to start fresh)
   phone.ts   HTTPS certificate, PIN and QR code for phone access
+  notify.ts  Alert timing and Web Push (reminders, time to leave, prayers)
 shared/      Types and prayer times (Umm al-Qura), used by both sides
 src/         React app
   screens/   Today, Assistant, Inbox, Settings
@@ -94,6 +113,6 @@ Other settings in `.env`: `PORT`, and `MAAI_LATITUDE` / `MAAI_LONGITUDE` /
 
 ## Not built yet
 
-Connecting real Google / Outlook calendars and email, push notifications,
+Connecting real Google / Outlook calendars and email,
 access from outside your home Wi-Fi, sign-in for more than one user, and a native iPhone app. The old StockPlay
 project is kept in `archive/stockplay`.

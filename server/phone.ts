@@ -14,6 +14,7 @@ import { generate } from 'selfsigned';
 const DATA_DIR = path.resolve('data');
 const PHONE_FILE = path.join(DATA_DIR, 'phone.json');
 const COOKIE = 'maai_phone';
+const CERT_VERSION = 2;
 
 /** The computer's addresses on the local network, e.g. 192.168.1.20. */
 export function lanAddresses(): string[] {
@@ -26,7 +27,7 @@ export function lanAddresses(): string[] {
 interface PhoneFile {
   pin: string;
   secret: string;
-  cert?: { ips: string[]; key: string; cert: string; expires: string };
+  cert?: { ips: string[]; key: string; cert: string; expires: string; v?: number };
 }
 
 function readFile(): PhoneFile {
@@ -44,11 +45,13 @@ function writeFile(file: PhoneFile) {
 
 /** A self-signed certificate for this computer's addresses, reused until they change or it nears expiry. */
 export async function phoneSetup(): Promise<{ pin: string; key: string; cert: string; ips: string[] }> {
+  // (The certificate is also offered for download at /maai-cert.crt so a phone can trust it.)
   const file = readFile();
   if (process.env.MAAI_PIN) file.pin = process.env.MAAI_PIN;
   const ips = lanAddresses();
   const stale =
     !file.cert ||
+    file.cert.v !== CERT_VERSION ||
     file.cert.ips.join() !== ips.join() ||
     new Date(file.cert.expires).getTime() < Date.now() + 7 * 86_400_000;
   if (stale) {
@@ -58,13 +61,17 @@ export async function phoneSetup(): Promise<{ pin: string; key: string; cert: st
       algorithm: 'sha256',
       notAfterDate: expires,
       extensions: [
+        // Marked as its own authority so an iPhone can fully trust it (needed for notifications).
+        { name: 'basicConstraints', cA: true, critical: true },
+        { name: 'keyUsage', digitalSignature: true, keyEncipherment: true, keyCertSign: true, critical: true },
+        { name: 'extKeyUsage', serverAuth: true },
         {
           name: 'subjectAltName',
           altNames: [{ type: 2, value: 'localhost' }, { type: 7, ip: '127.0.0.1' }, ...ips.map((ip) => ({ type: 7 as const, ip }))],
         },
       ],
     });
-    file.cert = { ips, key: pems.private, cert: pems.cert, expires: expires.toISOString() };
+    file.cert = { ips, key: pems.private, cert: pems.cert, expires: expires.toISOString(), v: CERT_VERSION };
   }
   writeFile(file);
   pinToken = token(file.pin, file.secret);

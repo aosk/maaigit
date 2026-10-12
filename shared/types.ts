@@ -1,6 +1,7 @@
 /** Data shared by the server and the app. Times are ISO 8601 strings. */
 
 export type Lang = 'en' | 'ar';
+export type PrayerName = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
 
 export interface CalendarEvent {
   id: string;
@@ -20,8 +21,11 @@ export interface Reminder {
   title: string;
   /** Human wording kept as said, e.g. "15 min after Maghrib". */
   when: string;
-  /** Resolved time, when MAAI could work one out. */
+  /** Resolved time, when MAAI could work one out. For daily/weekly, the time of day (and weekday) repeats. */
   at?: string;
+  /** Tied to a prayer instead of a clock time: fires `offsetMinutes` after it (negative = before). */
+  prayer?: PrayerName;
+  offsetMinutes?: number;
   repeat: 'once' | 'daily' | 'weekly';
   done: boolean;
 }
@@ -59,6 +63,8 @@ export type Proposal =
       title: string;
       when: string;
       at?: string;
+      prayer?: PrayerName;
+      offsetMinutes?: number;
       repeat: Reminder['repeat'];
     };
 
@@ -111,4 +117,30 @@ export interface AdminOverview {
   audit: AuditEntry[];
   status: StatusInfo;
   usage: { inputTokens: number; outputTokens: number; requests: number };
+}
+
+/** Which alerts MAAI sends. */
+export interface NotifyPrefs {
+  reminders: boolean;
+  /** "Time to leave" for events with travel time. */
+  leave: boolean;
+  /** Heads-up before every event. */
+  events: boolean;
+  eventMinutes: number;
+  prayers: boolean;
+  prayerMinutes: number;
+}
+
+export interface AppAlert {
+  id: string;
+  at: string;
+  kind: 'reminder' | 'leave' | 'event' | 'prayer' | 'test';
+  title: string;
+  body: string;
+}
+
+export interface NotifyStatus {
+  publicKey: string;
+  devices: number;
+  prefs: NotifyPrefs;
 }

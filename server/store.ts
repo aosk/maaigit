@@ -4,10 +4,13 @@ import { randomUUID } from 'node:crypto';
 import type Anthropic from '@anthropic-ai/sdk';
 import type {
   AgentSetting,
+  AppAlert,
   AuditEntry,
   CalendarEvent,
   ChatTurn,
   InboxMessage,
+  Lang,
+  NotifyPrefs,
   Proposal,
   Reminder,
 } from '../shared/types.js';
@@ -30,6 +33,13 @@ export interface State {
   agents: AgentSetting[];
   drafts: number;
   usage: { inputTokens: number; outputTokens: number; requests: number };
+  /** Phones and browsers that turned on notifications. */
+  subscriptions: { subscription: { endpoint: string; keys: { p256dh: string; auth: string } }; lang: Lang; createdAt: string }[];
+  notifyPrefs: NotifyPrefs;
+  /** Keys of alerts already sent, so each goes out once. */
+  sentAlerts: string[];
+  /** Recent alerts, for the banner in the open app. */
+  alerts: AppAlert[];
 }
 
 const DATA_FILE = process.env.MAAI_DATA_FILE ?? path.resolve('data', 'store.json');
@@ -54,7 +64,7 @@ function seed(): State {
     ],
     reminders: [
       { id: id(), title: 'Pay the electricity bill', when: 'Today, 20:00', at: at(0, 20, 0), repeat: 'once', done: false },
-      { id: id(), title: 'Call my mother', when: 'Every day after Maghrib', repeat: 'daily', done: false },
+      { id: id(), title: 'Call my mother', when: 'Every day, 15 min after Maghrib', prayer: 'maghrib', offsetMinutes: 15, repeat: 'daily', done: false },
     ],
     inbox: [
       {
@@ -86,6 +96,10 @@ function seed(): State {
     ],
     drafts: 0,
     usage: { inputTokens: 0, outputTokens: 0, requests: 0 },
+    subscriptions: [],
+    notifyPrefs: { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10 },
+    sentAlerts: [],
+    alerts: [],
   };
 }
 

@@ -5,6 +5,7 @@ import { nextPrayer, prayersFor } from '../shared/prayer.js';
 import { MODEL, briefing, chat, client, draftReply } from './ai.js';
 import { config } from './config.js';
 import { audit, id, save, state, type Conversation } from './store.js';
+import { DEFAULT_PREFS, publicKey, sendTest, subscribe, unsubscribe } from './notify.js';
 
 export const api = Router();
 
@@ -116,7 +117,7 @@ api.post('/proposals/:id/approve', (req, res) => {
     p.chosen = option.start;
     state.events.push({ id: id(), title: p.title, start: option.start, minutes: p.minutes, place: p.attendeeEmail, bookedByMaai: true });
   } else {
-    state.reminders.push({ id: id(), title: p.title, when: p.when, at: p.at, repeat: p.repeat, done: false });
+    state.reminders.push({ id: id(), title: p.title, when: p.when, at: p.at, prayer: p.prayer, offsetMinutes: p.offsetMinutes, repeat: p.repeat, done: false });
   }
   p.status = 'approved';
   audit(`${p.kind === 'meeting' ? 'Booked' : 'Saved reminder'}: ${p.title}`, 'User', 'approved');
@@ -167,6 +168,51 @@ api.delete('/inbox/:id', (req, res) => {
   state.inbox = state.inbox.filter((m) => m.id !== req.params.id);
   save();
   res.status(204).end();
+});
+
+// ---------- Notifications ----------
+
+api.get('/notify', (_req, res) => {
+  res.json({ publicKey, devices: state.subscriptions.length, prefs: state.notifyPrefs });
+});
+
+api.patch('/notify/prefs', (req, res) => {
+  const p = { ...DEFAULT_PREFS, ...state.notifyPrefs };
+  for (const key of ['reminders', 'leave', 'events', 'prayers'] as const) {
+    if (typeof req.body[key] === 'boolean') p[key] = req.body[key];
+  }
+  for (const key of ['eventMinutes', 'prayerMinutes'] as const) {
+    const n = Number(req.body[key]);
+    if (Number.isInteger(n) && n >= 0 && n <= 120) p[key] = n;
+  }
+  state.notifyPrefs = p;
+  save();
+  res.json(p);
+});
+
+api.post('/notify/subscribe', (req, res) => {
+  const s = req.body.subscription;
+  if (typeof s?.endpoint !== 'string' || !s.endpoint.startsWith('https://') || typeof s?.keys?.p256dh !== 'string' || typeof s?.keys?.auth !== 'string') {
+    return res.status(400).json({ error: 'Not a valid push subscription' });
+  }
+  subscribe({ endpoint: s.endpoint, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } }, lang(req.body.lang));
+  audit('Notifications turned on for a device', 'User', 'done');
+  res.status(204).end();
+});
+
+api.post('/notify/unsubscribe', (req, res) => {
+  unsubscribe(text(req.body.endpoint, 2000));
+  res.status(204).end();
+});
+
+api.post('/notify/test', wrap(async (req, res) => {
+  await sendTest(lang(req.body.lang));
+  res.status(204).end();
+}));
+
+api.get('/alerts', (req, res) => {
+  const since = Date.parse(String(req.query.since ?? ''));
+  res.json(state.alerts.filter((a) => !Number.isNaN(since) && Date.parse(a.at) > since));
 });
 
 // ---------- Admin ----------

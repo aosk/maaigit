@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Lang, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings, type Look, type ToggleId } from '../settings';
+import { NotificationSettings } from '../components/NotificationSettings';
 
 export function SettingsScreen() {
   const { t, settings, update, toggle } = useSettings();
@@ -20,7 +21,7 @@ export function SettingsScreen() {
 
   return (
     <div className="screen">
-      <h1 className="title">{t.accessibility}</h1>
+      <h1 className="title">{t.settings}</h1>
 
       <section className="card">
         <div className="field">
@@ -41,7 +42,9 @@ export function SettingsScreen() {
         </div>
       </section>
 
-      <div className="section-label">{t.howYouUse}</div>
+      <NotificationSettings />
+
+      <div className="section-label">{t.accessibility} · {t.howYouUse}</div>
       <section className="card flush">
         {toggles.map((id) => {
           const [label, hint] = t.toggles[id];

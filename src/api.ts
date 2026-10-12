@@ -1,5 +1,8 @@
 import type {
   AdminOverview,
+  AppAlert,
+  NotifyPrefs,
+  NotifyStatus,
   AgentSetting,
   Briefing,
   CalendarEvent,
@@ -56,6 +59,13 @@ export const api = {
   draft: (id: string, tone: Tone, lang: Lang) => call<{ draft: string; summary: string }>('POST', `/inbox/${id}/draft`, { tone, lang }),
   replied: (id: string) => call<InboxMessage>('POST', `/inbox/${id}/replied`, {}),
   deleteMessage: (id: string) => call<void>('DELETE', `/inbox/${id}`),
+
+  notify: () => call<NotifyStatus>('GET', '/notify'),
+  setNotifyPrefs: (p: Partial<NotifyPrefs>) => call<NotifyPrefs>('PATCH', '/notify/prefs', p),
+  subscribe: (subscription: PushSubscription, lang: Lang) => call<void>('POST', '/notify/subscribe', { subscription: subscription.toJSON(), lang }),
+  unsubscribe: (endpoint: string) => call<void>('POST', '/notify/unsubscribe', { endpoint }),
+  testNotify: (lang: Lang) => call<void>('POST', '/notify/test', { lang }),
+  alerts: (since: string) => call<AppAlert[]>('GET', `/alerts?since=${encodeURIComponent(since)}`),
 
   admin: () => call<AdminOverview>('GET', '/admin'),
   setAgent: (id: AgentSetting['id'], enabled: boolean) => call<AgentSetting>('PATCH', `/admin/agents/${id}`, { enabled }),

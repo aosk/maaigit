@@ -5,6 +5,7 @@ import qrcode from 'qrcode-terminal';
 import { config } from './config.js';
 import { api } from './routes.js';
 import { phoneSetup, requirePin } from './phone.js';
+import { startScheduler } from './notify.js';
 
 const phoneMode = process.argv.includes('--phone') || process.env.MAAI_PHONE === '1';
 
@@ -24,6 +25,8 @@ if (config.production) {
   app.use(vite.middlewares);
 }
 
+startScheduler();
+
 const ai = process.env.ANTHROPIC_API_KEY ? 'Claude connected' : 'demo mode (no ANTHROPIC_API_KEY in .env)';
 
 // The computer itself: no PIN, and only reachable from this computer.
@@ -36,6 +39,11 @@ if (phoneMode) {
   const { pin, key, cert, ips } = await phoneSetup();
   const phone = express();
   phone.use(express.json({ limit: '1mb' }));
+  // The public certificate, so the phone can trust it; it holds no secret.
+  phone.get('/maai-cert.crt', (_req, res) => {
+    res.attachment('MAAI.crt').setHeader('Content-Type', 'application/x-x509-ca-cert');
+    res.send(Buffer.from(cert));
+  });
   phone.use(requirePin);
   phone.use(app);
   https.createServer({ key, cert }, phone).listen(config.phonePort, '0.0.0.0', () => {

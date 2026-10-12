@@ -1,6 +1,7 @@
 import { CalculationMethod, Coordinates, PrayerTimes } from 'adhan';
 
-export type PrayerName = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
+import type { PrayerName } from './types.js';
+export type { PrayerName };
 
 export interface PrayerSlot {
   name: PrayerName;

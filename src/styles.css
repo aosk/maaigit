@@ -211,3 +211,9 @@ a { color: var(--tint-text); }
 .admin-table th { text-align: start; color: var(--text2); font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; padding: 8px; }
 .admin-table td { padding: 12px 8px; border-top: 1px solid var(--sep); vertical-align: middle; }
 .badge { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; }
+
+/* ---------- Alert banners while the app is open ---------- */
+.alerts { position: fixed; top: calc(8px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: calc(100% - 16px); max-width: 464px; display: flex; flex-direction: column; gap: 8px; z-index: 20; }
+.alert { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px 8px 10px 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); animation: drop 0.25s ease-out; }
+.alert-icon { width: 36px; height: 36px; border-radius: 18px; background: var(--tint-soft); color: var(--tint-text); display: flex; align-items: center; justify-content: center; flex: none; }
+@keyframes drop { from { transform: translateY(-12px); opacity: 0; } }

@@ -8,6 +8,8 @@ import { SettingsScreen } from './screens/Settings';
 import { Admin } from './admin/Admin';
 import { Unlock } from './screens/Unlock';
 import { LOCKED_EVENT } from './api';
+import { AlertBanner } from './components/AlertBanner';
+import { worker } from './push';
 
 export type Route = 'today' | 'assistant' | 'inbox' | 'settings' | 'admin';
 const ROUTES: Route[] = ['today', 'assistant', 'inbox', 'settings', 'admin'];
@@ -30,6 +32,11 @@ export function App() {
   const { t } = useSettings();
   const [route, setRoute] = useState<Route>(readRoute);
   const [locked, setLocked] = useState(false);
+
+  // The service worker shows notifications; register it early so they work with the app closed.
+  useEffect(() => {
+    void worker();
+  }, []);
 
   useEffect(() => {
     const onLocked = () => setLocked(true);
@@ -62,6 +69,7 @@ export function App() {
 
   return (
     <div className="shell">
+      <AlertBanner />
       <main>
         {route === 'today' && <Today />}
         {route === 'assistant' && <Assistant />}
