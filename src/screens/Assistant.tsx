@@ -3,7 +3,7 @@ import type { ChatTurn, Proposal, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { dayTime } from '../format';
 import { useSettings } from '../settings';
-import { canListen, listen, speak, stopSpeaking } from '../speech';
+import { canListen, listen, speak, stopSpeaking, type ListenProblem } from '../speech';
 import { Bell, Calendar, Mic, Plus, Send } from '../components/Icons';
 import { PROMPT_KEY } from '../App';
 import { Logo } from '../components/Logo';
@@ -99,6 +99,8 @@ export function Assistant() {
   const [error, setError] = useState('');
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const stopRef = useRef<() => void>();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [voiceNote, setVoiceNote] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -150,6 +152,8 @@ export function Assistant() {
       return;
     }
     stopSpeaking();
+    setVoiceNote('');
+    if (!canListen) return typeInstead('unsupported');
     setLive(true);
     let heard = '';
     stopRef.current = listen(
@@ -158,11 +162,18 @@ export function Assistant() {
         heard = text;
         setInput(text);
       },
-      () => {
+      (problem) => {
         setLive(false);
         if (heard) void send(heard);
+        else if (problem) typeInstead(problem);
       },
     );
+  }
+
+  /** When the browser can't listen, open the keyboard: its own microphone key works everywhere. */
+  function typeInstead(problem: ListenProblem) {
+    setVoiceNote(problem === 'denied' ? t.micDenied : problem === 'no-speech' ? t.noSpeech : t.voiceUnsupported);
+    inputRef.current?.focus();
   }
 
   async function newChat() {
@@ -218,12 +229,14 @@ export function Assistant() {
 
       <form className="composer" onSubmit={onSubmit}>
         <div className="composer-hint" aria-live="polite">
-          {live ? t.listening : canListen ? t.tapToSpeak : t.voiceUnsupported}
+          {live ? t.listening : voiceNote || t.tapToSpeak}
         </div>
         <div className="composer-row">
           <label htmlFor="chat-input" className="sr-only">{t.typeMessage}</label>
           <input
             id="chat-input"
+            ref={inputRef}
+            enterKeyHint="send"
             value={input}
             placeholder={t.typeMessage}
             onChange={(e) => setInput(e.target.value)}
@@ -239,7 +252,7 @@ export function Assistant() {
               aria-label={live ? t.stopListening : t.startListening}
               aria-pressed={live}
               onClick={toggleMic}
-              disabled={busy || !canListen}
+              disabled={busy}
             >
               <Mic size={26} />
             </button>

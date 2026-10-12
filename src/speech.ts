@@ -36,23 +36,57 @@ const Ctor = (window as unknown as { SpeechRecognition?: RecognitionCtor; webkit
 
 export const canListen = Boolean(Ctor);
 
-/** Starts listening; calls back with the live transcript and once more when done. Returns a stop function. */
-export function listen(lang: Lang, onText: (text: string, final: boolean) => void, onEnd: () => void): () => void {
+/** Why listening stopped early: no voice support, the microphone was refused, or nothing was heard. */
+export type ListenProblem = 'unsupported' | 'denied' | 'no-speech';
+
+/**
+ * Starts listening; calls back with the live transcript, then once when finished
+ * (with a problem if it failed). Returns a stop function.
+ */
+export function listen(lang: Lang, onText: (text: string) => void, onEnd: (problem?: ListenProblem) => void): () => void {
   if (!Ctor) {
-    onEnd();
+    onEnd('unsupported');
     return () => {};
   }
+  let finished = false;
+  let problem: ListenProblem | undefined;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(safety);
+    onEnd(problem);
+  };
   const rec = new Ctor();
   rec.lang = voiceLang(lang);
   rec.interimResults = true;
   rec.continuous = false;
-  rec.onresult = (e) => {
-    const results = Array.from(e.results);
-    const text = results.map((r) => r[0].transcript).join('');
-    onText(text, results.every((r) => r.isFinal));
+  rec.onresult = (e) => onText(Array.from(e.results).map((r) => r[0].transcript).join(''));
+  rec.onend = finish;
+  rec.onerror = (e) => {
+    // iPhone home-screen apps report "service-not-allowed": voice typing isn't offered there.
+    problem = e.error === 'not-allowed' ? 'denied' : e.error === 'no-speech' || e.error === 'aborted' ? 'no-speech' : 'unsupported';
+    finish();
   };
-  rec.onend = onEnd;
-  rec.onerror = () => onEnd();
-  rec.start();
-  return () => rec.stop();
+  // Some browsers never report the end; don't leave the button stuck on "listening".
+  const safety = setTimeout(() => {
+    try {
+      rec.stop();
+    } catch {
+      // already stopped
+    }
+    finish();
+  }, 15_000);
+  try {
+    rec.start();
+  } catch {
+    problem = 'unsupported';
+    finish();
+  }
+  return () => {
+    try {
+      rec.stop();
+    } catch {
+      // already stopped
+    }
+  };
 }
