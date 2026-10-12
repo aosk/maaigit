@@ -6,6 +6,7 @@ import { useSettings } from '../settings';
 import { canListen, listen, speak, stopSpeaking } from '../speech';
 import { Bell, Calendar, Mic, Plus, Send } from '../components/Icons';
 import { PROMPT_KEY } from '../App';
+import { Logo } from '../components/Logo';
 
 function ProposalCard({ proposal, onChange }: { proposal: Proposal; onChange: (p: Proposal) => void }) {
   const { t, settings } = useSettings();
@@ -179,7 +180,7 @@ export function Assistant() {
     <div className="chat-screen">
       <div className="chat-head">
         <button className="btn ghost" onClick={newChat} disabled={busy}><Plus size={18} />{t.newChat}</button>
-        <div style={{ fontWeight: 600 }}>{t.appName}</div>
+        <div className="row" style={{ fontWeight: 600, color: 'var(--tint-text)', gap: 6 }}><Logo size={22} /><span style={{ color: 'var(--text)' }}>{t.appName}</span></div>
         <button className="icon-btn" aria-label={t.switchLanguage} onClick={() => update({ lang: lang === 'ar' ? 'en' : 'ar' })}>
           {lang === 'ar' ? 'EN' : 'ع'}
         </button>

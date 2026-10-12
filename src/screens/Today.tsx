@@ -6,6 +6,7 @@ import { useSettings } from '../settings';
 import { speak, stopSpeaking } from '../speech';
 import { Bell, Mic, Speaker, Sun } from '../components/Icons';
 import { go } from '../App';
+import { Logo } from '../components/Logo';
 
 type Row =
   | { kind: 'event'; at: string; event: CalendarEvent }
@@ -100,7 +101,7 @@ export function Today() {
           <h1 className="title">{t.today}</h1>
         </div>
         <a className="icon-btn" href="#/settings" aria-label={t.profile} style={{ textDecoration: 'none' }}>
-          {lang === 'ar' ? 'م' : 'M'}
+          <Logo size={28} />
         </a>
       </div>
 

@@ -3,6 +3,7 @@ import type { AdminOverview, AgentSetting } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
 import { Moon } from '../components/Icons';
+import { Logo } from '../components/Logo';
 
 const when = (iso: string) =>
   new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
@@ -58,7 +59,7 @@ export function Admin() {
     <div className="admin" dir="ltr" lang="en">
       <nav className="admin-nav" aria-label="Admin sections">
         <div className="row" style={{ padding: '0 8px 20px' }}>
-          <div className="admin-logo">M</div>
+          <div className="admin-logo"><Logo size={22} /></div>
           <div><div style={{ fontWeight: 700, fontSize: 15 }}>MAAI Admin</div><div className="sub">Local</div></div>
         </div>
         <a href="#/admin" aria-current="page">Overview</a>
