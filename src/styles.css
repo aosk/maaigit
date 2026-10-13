@@ -217,3 +217,11 @@ a { color: var(--tint-text); }
 .alert { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px 8px 10px 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); animation: drop 0.25s ease-out; }
 .alert-icon { width: 36px; height: 36px; border-radius: 18px; background: var(--tint-soft); color: var(--tint-text); display: flex; align-items: center; justify-content: center; flex: none; }
 @keyframes drop { from { transform: translateY(-12px); opacity: 0; } }
+
+/* ---------- Gmail digest ---------- */
+.mail-item { border-bottom: 1px solid var(--sep); }
+.mail-item:last-child { border-bottom: none; }
+.mail-item .msg-item { border-bottom: none; }
+.mail-actions { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 14px; }
+.mail-body { margin: 0 16px 14px; padding: 12px; border-radius: 12px; background: var(--raised); font-size: 0.85em; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; }
+.badge-high { font-size: 0.7em; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--danger-soft); color: var(--danger); }

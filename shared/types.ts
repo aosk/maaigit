@@ -111,7 +111,7 @@ export interface Briefing {
 export interface StatusInfo {
   aiConfigured: boolean;
   /** Gmail connected for sending, and from which address. */
-  mail?: { configured: boolean; from: string };
+  mail?: { configured: boolean; from: string; inbox?: boolean };
   /** How this device signed in: not at all on the computer itself, a PIN at home, a password online. */
   auth?: 'none' | 'pin' | 'password';
   model: string;
@@ -159,4 +159,36 @@ export interface NotifyStatus {
   publicKey: string;
   devices: number;
   prefs: NotifyPrefs;
+}
+
+/** An email from the user's Gmail inbox (read-only copy, kept in memory). */
+export interface MailItem {
+  uid: number;
+  fromName: string;
+  fromAddress: string;
+  subject: string;
+  date: string;
+  unread: boolean;
+  /** Plain text, quoted history removed, shortened. */
+  body: string;
+}
+
+export type MailCategory = 'decide' | 'reply' | 'fyi' | 'ignore';
+
+/** MAAI's read of one email: what it is and what to do about it. */
+export interface MailInsight {
+  uid: number;
+  category: MailCategory;
+  priority: 'high' | 'normal' | 'low';
+  gist: string;
+  suggestion: string;
+  /** Choices for a decision, recommended first. Empty when there is nothing to decide. */
+  options: string[];
+}
+
+export interface MailDigest {
+  fetchedAt: string;
+  summary: string;
+  source: 'claude' | 'demo';
+  emails: (MailItem & { insight?: MailInsight })[];
 }

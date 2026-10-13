@@ -1,6 +1,7 @@
 import type {
   AdminOverview,
   AppAlert,
+  MailDigest,
   NotifyPrefs,
   NotifyStatus,
   AgentSetting,
@@ -63,6 +64,7 @@ export const api = {
   replied: (id: string) => call<InboxMessage>('POST', `/inbox/${id}/replied`, {}),
   deleteMessage: (id: string) => call<void>('DELETE', `/inbox/${id}`),
 
+  mailDigest: (lang: Lang, refresh = false) => call<MailDigest>('GET', `/mail/digest?lang=${lang}${refresh ? '&refresh=1' : ''}`),
   notify: () => call<NotifyStatus>('GET', '/notify'),
   setNotifyPrefs: (p: Partial<NotifyPrefs>) => call<NotifyPrefs>('PATCH', '/notify/prefs', p),
   subscribe: (subscription: PushSubscription, lang: Lang) => call<void>('POST', '/notify/subscribe', { subscription: subscription.toJSON(), lang }),

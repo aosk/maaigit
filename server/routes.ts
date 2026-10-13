@@ -2,8 +2,9 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import Anthropic from '@anthropic-ai/sdk';
 import type { AdminOverview, Lang, StatusInfo, Tone } from '../shared/types.js';
 import { nextPrayer, prayersFor } from '../shared/prayer.js';
-import { MODEL, apiErrorMessage, briefing, chat, client, draftReply } from './ai.js';
+import { MODEL, apiErrorMessage, briefing, chat, client, digestInbox, draftReply } from './ai.js';
 import { MailError, isEmail, mailConfigured, mailFrom, sendMail } from './mail.js';
+import { inboxConfigured } from './gmail-inbox.js';
 import { config } from './config.js';
 import { audit, id, save, state, type Conversation } from './store.js';
 import { DEFAULT_PREFS, publicKey, sendTest, subscribe, unsubscribe } from './notify.js';
@@ -21,7 +22,7 @@ const text = (value: unknown, max = 4000) => (typeof value === 'string' ? value.
 function status(): StatusInfo {
   return {
     aiConfigured: Boolean(client),
-    mail: { configured: mailConfigured, from: mailFrom },
+    mail: { configured: mailConfigured, from: mailFrom, inbox: inboxConfigured },
     model: MODEL,
     location: { latitude: config.latitude, longitude: config.longitude, timezone: config.timezone },
   };
@@ -204,6 +205,17 @@ api.delete('/inbox/:id', (req, res) => {
   save();
   res.status(204).end();
 });
+
+// ---------- Gmail inbox (read-only) ----------
+
+api.get('/mail/digest', wrap(async (req, res) => {
+  try {
+    res.json(await digestInbox(lang(req.query.lang), req.query.refresh === '1'));
+  } catch (error) {
+    if (error instanceof MailError) return res.status(400).json({ error: error.message });
+    throw error;
+  }
+}));
 
 // ---------- Notifications ----------
 

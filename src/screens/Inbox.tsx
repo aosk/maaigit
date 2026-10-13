@@ -5,6 +5,7 @@ import { time } from '../format';
 import { useSettings } from '../settings';
 import { Back, Chat, Send, Trash } from '../components/Icons';
 import { mailtoLink } from '../components/EmailCard';
+import { MailDigest } from './MailDigest';
 
 const TONES: Tone[] = ['short', 'friendly', 'formal', 'arabic'];
 
@@ -153,8 +154,21 @@ export function Inbox() {
   const [open, setOpen] = useState<string | null>(null);
   const [form, setForm] = useState({ from: '', phone: '', email: '', text: '' });
   const [gmail, setGmail] = useState(false);
+  const [gmailInbox, setGmailInbox] = useState(false);
+  // Email (Gmail) first once Gmail is connected; the choice is remembered on this device.
+  const [view, setView] = useState<'email' | 'messages'>(() => (sessionStorage.getItem('maai.inboxView') as 'email' | 'messages') || 'email');
+  const pickView = (v: 'email' | 'messages') => {
+    setView(v);
+    sessionStorage.setItem('maai.inboxView', v);
+  };
   useEffect(() => {
-    api.status().then((s) => setGmail(Boolean(s.mail?.configured))).catch(() => {});
+    api
+      .status()
+      .then((s) => {
+        setGmail(Boolean(s.mail?.configured));
+        setGmailInbox(Boolean(s.mail?.inbox));
+      })
+      .catch(() => {});
   }, []);
   const [error, setError] = useState('');
 
@@ -187,8 +201,16 @@ export function Inbox() {
   return (
     <div className="screen">
       <h1 className="title">{t.inboxTitle}</h1>
+      <div className="seg" role="radiogroup" aria-label={t.inboxTitle}>
+        <button role="radio" aria-checked={view === 'email'} onClick={() => pickView('email')}>{t.emailTab}</button>
+        <button role="radio" aria-checked={view === 'messages'} onClick={() => pickView('messages')}>{t.messagesTab}</button>
+      </div>
       {error && <div className="error" role="alert">{error}</div>}
 
+      {view === 'email' ? (
+        <MailDigest gmail={gmailInbox} />
+      ) : (
+      <>
       <section className="card flush">
         {messages.length === 0 && <div className="msg-item sub">{t.inboxEmpty}</div>}
         {messages.map((m) => (
@@ -228,6 +250,8 @@ export function Inbox() {
         </div>
         <button className="btn primary big" type="submit">{t.add}</button>
       </form>
+      </>
+      )}
     </div>
   );
 }

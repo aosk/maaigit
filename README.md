@@ -84,6 +84,15 @@ can go by email too. Mail goes out from your own Gmail and shows in **Sent**.
 Without them, the card opens your mail app with the email filled in instead.
 Delete the App Password in your Google account at any time to cut MAAI off.
 
+The same App Password lets MAAI **read** your inbox: Inbox → **Email** shows a
+summary of the last two days of your Primary inbox, sorted into *Needs your
+decision*, *Needs a reply*, *For your information* and *Can skip*, each with a
+suggestion. Tap a decision and the assistant reads that email and drafts your
+reply for you to approve. Reading is read-only (nothing is marked read, moved
+or deleted), emails are kept in memory only, and their text is sent to Claude to
+summarise. You can also ask the assistant about an email ("what did Sara want?").
+Set `MAAI_DEMO_INBOX=1` to try the screen with sample emails before connecting Gmail.
+
 ## Put it online (Render)
 
 Online, MAAI runs all the time at a real `https://` address: it works away from
@@ -130,6 +139,7 @@ server/      Express API (one process serves the app and /api)
   phone.ts   HTTPS certificate, PIN and QR code for phone access
   notify.ts  Alert timing and Web Push (reminders, time to leave, prayers)
   mail.ts    Sending email through Gmail
+  gmail-inbox.ts  Reading the Gmail inbox (IMAP, read-only)
 shared/      Types and prayer times (Umm al-Qura), used by both sides
 src/         React app
   screens/   Today, Assistant, Inbox, Settings
@@ -138,7 +148,8 @@ src/         React app
 
 The AI uses Claude (`claude-opus-5-5`) through the official Anthropic SDK. Its
 tools are `propose_meeting`, `propose_reminder` and `propose_email`, and each just
-creates a pending card; the server books, saves or sends only when you approve. Requests use the
+creates a pending card; the server books, saves or sends only when you approve.
+`read_email` lets it open an email from your inbox (read-only). Requests use the
 API's server-side fallback, so if a safety check declines a request it is
 retried on a suitable model instead of failing.
 
@@ -156,6 +167,6 @@ Other settings in `.env`: `PORT`, `MAAI_DATA_DIR` (where data is kept), and `MAA
 
 ## Not built yet
 
-Connecting real Google / Outlook calendars and email, accounts for more than
+Connecting real Google / Outlook calendars, accounts for more than
 one person, and a native iPhone app. The old StockPlay
 project is kept in `archive/stockplay`.
