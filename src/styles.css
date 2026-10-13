@@ -228,7 +228,7 @@ a { color: var(--tint-text); }
 
 /* ---------- Live progress while MAAI works ---------- */
 .bubble.working { display: flex; flex-direction: column; gap: 8px; min-width: 60%; }
-.working-head { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--tint-text); font-size: 0.9em; }
+.working-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; color: var(--tint-text); font-size: 0.9em; }
 .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--tint-soft); border-top-color: var(--tint); animation: spin 0.8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.82em; }
@@ -260,7 +260,7 @@ a { color: var(--tint-text); }
 .conn-dot.bad { background: var(--danger); }
 
 /* While MAAI works: the Najiz logo (official file, on its light tile so it stays on an allowed background) and the typing phrase. */
-.najiz-loader { display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
+.najiz-loader { display: flex; align-items: center; gap: 8px; }
 .najiz-logo { flex: none; display: inline-flex; background: #fff; border-radius: 6px; padding: 2px 3px; animation: najiz-fade 1.6s ease-in-out infinite; }
 .najiz-logo img { display: block; width: 40px; height: auto; }
 .najiz-phrase { font-family: 'Almarai', var(--font); font-weight: 700; color: #008d55; min-height: 1.4em; display: inline-flex; align-items: center; white-space: nowrap; }

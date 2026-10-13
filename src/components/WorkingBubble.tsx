@@ -32,9 +32,9 @@ export function WorkingBubble({ progress }: { progress: Progress }) {
 
   return (
     <div className="bubble assistant working" aria-live="polite" aria-busy="true">
-      <NajizLoader />
       <div className="working-head">
         <span>{headline}</span>
+        <NajizLoader />
       </div>
 
       {progress.steps.length > 0 && (
