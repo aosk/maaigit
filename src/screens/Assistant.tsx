@@ -173,6 +173,7 @@ export function Assistant() {
         if (heard) void send(heard);
         else if (problem) typeInstead(problem);
       },
+      { silenceMs: settings.toggles.longListen ? 5000 : 2500 },
     );
   }
 

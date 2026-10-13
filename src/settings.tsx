@@ -14,7 +14,7 @@ export interface Settings {
 const DEFAULTS: Settings = {
   lang: 'en',
   look: 'system',
-  toggles: { simple: false, captions: true, speakReplies: false, slow: false, largeText: false, contrast: false, reduceMotion: false },
+  toggles: { longListen: false, simple: false, captions: true, speakReplies: false, slow: false, largeText: false, contrast: false, reduceMotion: false },
 };
 
 const KEY = 'maai.settings';

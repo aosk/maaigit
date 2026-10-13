@@ -40,53 +40,113 @@ export const canListen = Boolean(Ctor);
 export type ListenProblem = 'unsupported' | 'denied' | 'no-speech';
 
 /**
- * Starts listening; calls back with the live transcript, then once when finished
- * (with a problem if it failed). Returns a stop function.
+ * Listens until the user stops talking (a pause of `silenceMs` after they last
+ * spoke), or taps stop, or two minutes pass. Browsers end recognition on their
+ * own after a short pause, so MAAI quietly restarts it and keeps what was said.
+ * Calls back with the full transcript so far, then once when finished.
  */
-export function listen(lang: Lang, onText: (text: string) => void, onEnd: (problem?: ListenProblem) => void): () => void {
+export function listen(
+  lang: Lang,
+  onText: (text: string) => void,
+  onEnd: (problem?: ListenProblem) => void,
+  opts: { silenceMs?: number } = {},
+): () => void {
   if (!Ctor) {
     onEnd('unsupported');
     return () => {};
   }
+  const silenceMs = opts.silenceMs ?? 2500;
   let finished = false;
+  let stopping = false;
   let problem: ListenProblem | undefined;
-  const finish = () => {
+  let kept = ''; // finished phrases from earlier rounds
+  let current = ''; // what this round has heard so far
+  let heardAnything = false;
+  let rec: Recognition | null = null;
+  let silence: ReturnType<typeof setTimeout> | undefined;
+  const limit = setTimeout(() => stop(), 120_000);
+  // Give up waiting for the first word after 8 seconds of quiet.
+  let firstWord: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+    if (!heardAnything) {
+      problem = 'no-speech';
+      stop();
+    }
+  }, 8000);
+
+  const text = () => `${kept} ${current}`.replace(/\s+/g, ' ').trim();
+
+  function finish() {
     if (finished) return;
     finished = true;
-    clearTimeout(safety);
-    onEnd(problem);
-  };
-  const rec = new Ctor();
-  rec.lang = voiceLang(lang);
-  rec.interimResults = true;
-  rec.continuous = false;
-  rec.onresult = (e) => onText(Array.from(e.results).map((r) => r[0].transcript).join(''));
-  rec.onend = finish;
-  rec.onerror = (e) => {
-    // iPhone home-screen apps report "service-not-allowed": voice typing isn't offered there.
-    problem = e.error === 'not-allowed' ? 'denied' : e.error === 'no-speech' || e.error === 'aborted' ? 'no-speech' : 'unsupported';
-    finish();
-  };
-  // Some browsers never report the end; don't leave the button stuck on "listening".
-  const safety = setTimeout(() => {
+    clearTimeout(limit);
+    clearTimeout(silence);
+    clearTimeout(firstWord);
+    onEnd(heardAnything ? undefined : problem ?? 'no-speech');
+  }
+
+  function stop() {
+    stopping = true;
     try {
-      rec.stop();
+      rec?.stop();
     } catch {
       // already stopped
     }
-    finish();
-  }, 15_000);
+    // Some browsers never fire "end" after stop(); don't hang.
+    setTimeout(finish, 600);
+  }
+
+  let startedAt = 0;
+  function round() {
+    startedAt = Date.now();
+    const r = new Ctor!();
+    rec = r;
+    r.lang = voiceLang(lang);
+    r.interimResults = true;
+    r.continuous = true;
+    r.onresult = (e) => {
+      current = Array.from(e.results).map((res) => res[0].transcript).join('');
+      if (current.trim()) {
+        heardAnything = true;
+        clearTimeout(firstWord);
+        firstWord = undefined;
+        onText(text());
+        // Each new word resets the pause timer.
+        clearTimeout(silence);
+        silence = setTimeout(stop, silenceMs);
+      }
+    };
+    r.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        // iPhone home-screen apps report "service-not-allowed": voice typing isn't offered there.
+        problem = e.error === 'not-allowed' ? 'denied' : 'unsupported';
+        stopping = true;
+      }
+    };
+    r.onend = () => {
+      kept = text();
+      current = '';
+      if (stopping || finished) return finish();
+      // The browser stopped on its own (a short pause): keep listening. If it gave up
+      // almost at once, wait a moment first so it doesn't spin.
+      const restart = () => {
+        if (stopping || finished) return finish();
+        try {
+          round();
+        } catch {
+          finish();
+        }
+      };
+      if (Date.now() - startedAt < 1000) setTimeout(restart, 400);
+      else restart();
+    };
+    r.start();
+  }
+
   try {
-    rec.start();
+    round();
   } catch {
     problem = 'unsupported';
     finish();
   }
-  return () => {
-    try {
-      rec.stop();
-    } catch {
-      // already stopped
-    }
-  };
+  return stop;
 }

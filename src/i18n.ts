@@ -48,7 +48,7 @@ const en = {
   repeatOnce: 'Once',
   repeatDaily: 'Every day',
   repeatWeekly: 'Every week',
-  listening: 'Listening… speak now',
+  listening: 'Listening… speak, then pause. Tap to finish.',
   tapToSpeak: 'Tap the microphone to speak, or type below',
   voiceUnsupported: "Voice isn't available here. Tap the microphone key on your keyboard to speak.",
   micDenied: 'Microphone access is off. Allow it in your browser or phone settings, or use the keyboard microphone.',
@@ -98,6 +98,7 @@ const en = {
   looks: { system: 'System', light: 'Light', dark: 'Dark' },
   howYouUse: 'How you use MAAI',
   toggles: {
+    longListen: ['Longer listening time', 'Waits longer before you finish speaking'],
     simple: ['Simple mode', 'One task per screen, plain words'],
     captions: ['Show text for every reply', 'Captions for spoken answers'],
     speakReplies: ['Read replies aloud', 'MAAI speaks its answers'],
@@ -221,7 +222,7 @@ const ar: Strings = {
   repeatOnce: 'مرة واحدة',
   repeatDaily: 'كل يوم',
   repeatWeekly: 'كل أسبوع',
-  listening: 'أستمع إليك… تكلّم الآن',
+  listening: 'أستمع… تكلّم ثم توقف قليلاً، أو اضغط للإنهاء.',
   tapToSpeak: 'اضغط الميكروفون للتحدث، أو اكتب بالأسفل',
   voiceUnsupported: 'الصوت غير متاح هنا. اضغط زر الميكروفون في لوحة المفاتيح لتتكلم.',
   micDenied: 'الوصول إلى الميكروفون مغلق. اسمح به من إعدادات المتصفح أو الجوال، أو استخدم ميكروفون لوحة المفاتيح.',
@@ -271,6 +272,7 @@ const ar: Strings = {
   looks: { system: 'النظام', light: 'فاتح', dark: 'داكن' },
   howYouUse: 'طريقة استخدامك لمساعد',
   toggles: {
+    longListen: ['وقت استماع أطول', 'ينتظر أكثر قبل أن تُنهي كلامك'],
     simple: ['الوضع البسيط', 'مهمة واحدة في كل شاشة، بكلمات سهلة'],
     captions: ['إظهار النص لكل رد', 'نص مكتوب للإجابات المنطوقة'],
     speakReplies: ['قراءة الردود بصوت', 'مساعد ينطق إجاباته'],
