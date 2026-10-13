@@ -14,9 +14,13 @@ import { worker } from './push';
 export type Route = 'today' | 'assistant' | 'inbox' | 'settings' | 'admin';
 const ROUTES: Route[] = ['today', 'assistant', 'inbox', 'settings', 'admin'];
 
+/** Sections of the admin portal; their links (#/admin/agents, or plain #agents) open the portal there. */
+export const ADMIN_SECTIONS = ['agents', 'integrations', 'audit'] as const;
+
 function readRoute(): Route {
-  const name = window.location.hash.replace(/^#\/?/, '') as Route;
-  return ROUTES.includes(name) ? name : 'today';
+  const name = window.location.hash.replace(/^#\/?/, '');
+  if (name.startsWith('admin/') || (ADMIN_SECTIONS as readonly string[]).includes(name)) return 'admin';
+  return ROUTES.includes(name as Route) ? (name as Route) : 'today';
 }
 
 /** Hash routes (#/assistant) so links work without any server setup. */

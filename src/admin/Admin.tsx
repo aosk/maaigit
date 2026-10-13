@@ -22,8 +22,37 @@ function Badge({ outcome, label }: { outcome: string; label?: string }) {
 }
 
 /** The admin portal from the design: live counts, agent switches, integration health and the audit log. */
+const SECTIONS = [
+  { id: '', label: 'Overview' },
+  { id: 'agents', label: 'Agents' },
+  { id: 'integrations', label: 'Integrations' },
+  { id: 'audit', label: 'Safety & audit' },
+];
+
+/** Which admin section the address points at: #/admin/integrations (or an old #integrations link). */
+const readSection = () => {
+  const name = window.location.hash.replace(/^#\/?(admin\/?)?/, '');
+  return SECTIONS.some((s) => s.id === name) ? name : '';
+};
+
 export function Admin() {
   const { settings, update } = useSettings();
+  const [section, setSection] = useState(readSection);
+
+  // Section links scroll within the portal instead of leaving it.
+  useEffect(() => {
+    const go = () => {
+      const next = readSection();
+      setSection(next);
+      requestAnimationFrame(() => {
+        if (next) document.getElementById(next)?.scrollIntoView({ block: 'start' });
+        else window.scrollTo(0, 0);
+      });
+    };
+    go();
+    window.addEventListener('hashchange', go);
+    return () => window.removeEventListener('hashchange', go);
+  }, []);
   const [data, setData] = useState<AdminOverview | null>(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
@@ -62,10 +91,11 @@ export function Admin() {
           <div className="admin-logo"><Logo size={22} /></div>
           <div><div style={{ fontWeight: 700, fontSize: 15 }}>MAAI Admin</div><div className="sub">Local</div></div>
         </div>
-        <a href="#/admin" aria-current="page">Overview</a>
-        <a href="#agents">Agents</a>
-        <a href="#integrations">Integrations</a>
-        <a href="#audit">Safety &amp; audit</a>
+        {SECTIONS.map((s) => (
+          <a key={s.id} href={s.id ? `#/admin/${s.id}` : '#/admin'} aria-current={section === s.id ? 'page' : undefined}>
+            {s.label}
+          </a>
+        ))}
         <a href="#/today" style={{ marginTop: 'auto' }}>← Back to the app</a>
       </nav>
 
