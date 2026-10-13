@@ -260,12 +260,13 @@ a { color: var(--tint-text); }
 .conn-dot.bad { background: var(--danger); }
 
 /* While MAAI works: the Najiz logo (official file, on its light tile so it stays on an allowed background) and the typing phrase. */
-.najiz-loader { display: flex; align-items: center; gap: 12px; }
-.najiz-logo { flex: none; display: inline-flex; background: #fff; border-radius: 12px; padding: 4px; border: 1px solid var(--sep); animation: najiz-pulse 1.8s ease-in-out infinite; }
-.najiz-logo img { display: block; width: 78px; height: auto; }
-.najiz-phrase { font-family: 'Almarai', var(--font); font-weight: 800; font-size: 1.15em; color: #008d55; min-height: 1.5em; display: inline-flex; align-items: center; white-space: nowrap; }
-.najiz-caret { display: inline-block; width: 2px; height: 1.1em; margin-inline-start: 3px; background: #F6B221; animation: najiz-blink 0.8s steps(1) infinite; }
-@keyframes najiz-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.najiz-loader { display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
+.najiz-logo { flex: none; display: inline-flex; background: #fff; border-radius: 6px; padding: 2px 3px; animation: najiz-fade 1.6s ease-in-out infinite; }
+.najiz-logo img { display: block; width: 40px; height: auto; }
+.najiz-phrase { font-family: 'Almarai', var(--font); font-weight: 700; color: #008d55; min-height: 1.4em; display: inline-flex; align-items: center; white-space: nowrap; }
+.najiz-caret { display: inline-block; width: 1.5px; height: 1em; margin-inline-start: 2px; background: #F6B221; animation: najiz-blink 0.8s steps(1) infinite; }
+/* Like Claude's thinking mark: fades out completely, then comes back. */
+@keyframes najiz-fade { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes najiz-blink { 50% { opacity: 0; } }
 :root[data-motion='reduce'] .najiz-logo, :root[data-motion='reduce'] .najiz-caret { animation: none; }
 @media (prefers-color-scheme: dark) { :root:not([data-look='light']) .najiz-phrase { color: #00AD68; } }
