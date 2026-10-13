@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ChatEvent } from '../../shared/types';
 import { useSettings } from '../settings';
 
 export interface Progress {
@@ -8,6 +9,17 @@ export interface Progress {
 }
 
 export const emptyProgress = (): Progress => ({ thinking: '', steps: [], text: '' });
+
+/** Adds one live event to the progress. "read_email" starts a step; "read_email:done" finishes the oldest open one. */
+export function addEvent(p: Progress, e: ChatEvent): Progress {
+  if (e.type === 'thinking') return { ...p, thinking: p.thinking + e.text };
+  if (e.type === 'text') return { ...p, text: p.text + e.text };
+  const [tool, done] = e.tool.split(':');
+  if (!done) return { ...p, steps: [...p.steps, { tool, done: false }] };
+  const i = p.steps.findIndex((s) => s.tool === tool && !s.done);
+  if (i < 0) return p;
+  return { ...p, steps: p.steps.map((s, j) => (j === i ? { ...s, done: true, detail: e.detail } : s)) };
+}
 
 /** Shows what MAAI is doing right now: the current step, finished steps, its thinking, and the reply as it arrives. */
 export function WorkingBubble({ progress }: { progress: Progress }) {

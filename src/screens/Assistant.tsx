@@ -1,99 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ChatTurn, Proposal, StatusInfo } from '../../shared/types';
 import { api } from '../api';
-import { dayTime } from '../format';
 import { useSettings } from '../settings';
 import { canListen, listen, speak, stopSpeaking, type ListenProblem } from '../speech';
-import { Bell, Calendar, Mic, Plus, Send } from '../components/Icons';
-import { LISTEN_KEY, PROMPT_KEY } from '../App';
+import { Mic, Plus, Send } from '../components/Icons';
+import { takeArrival } from '../nav';
 import { Logo } from '../components/Logo';
-import { EmailCard } from '../components/EmailCard';
-import { WorkingBubble, emptyProgress, type Progress } from '../components/WorkingBubble';
-
-function ProposalCard({ proposal, gmail, onChange }: { proposal: Proposal; gmail: boolean; onChange: (p: Proposal) => void }) {
-  if (proposal.kind === 'email') return <EmailCard proposal={proposal} gmail={gmail} onChange={onChange} />;
-  return <PlanCard proposal={proposal} onChange={onChange} />;
-}
-
-function PlanCard({ proposal, onChange }: { proposal: Exclude<Proposal, { kind: 'email' }>; onChange: (p: Proposal) => void }) {
-  const { t, settings } = useSettings();
-  const lang = settings.lang;
-  const [picked, setPicked] = useState(proposal.kind === 'meeting' ? proposal.chosen ?? proposal.options[0]?.start : undefined);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const done = proposal.status !== 'pending';
-
-  async function act(kind: 'approve' | 'cancel') {
-    setBusy(true);
-    setError('');
-    try {
-      onChange(kind === 'approve' ? await api.approve(proposal.id, picked) : await api.cancel(proposal.id));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const repeatLabel = { once: t.repeatOnce, daily: t.repeatDaily, weekly: t.repeatWeekly };
-
-  return (
-    <section className={`card approval${done ? ' done' : ''}`} aria-label={proposal.title}>
-      <div className="card-label">
-        {proposal.kind === 'meeting' ? <Calendar size={18} /> : <Bell size={18} />}
-        {proposal.kind === 'meeting' ? t.needsApproval : t.newReminder}
-      </div>
-      <div style={{ fontWeight: 600 }}>
-        {proposal.title}
-        {proposal.kind === 'meeting' && ` · ${t.minutesShort(proposal.minutes)}`}
-      </div>
-
-      {proposal.kind === 'meeting' ? (
-        <>
-          <div role="radiogroup" aria-label={t.timeOptions} className="chips">
-            {proposal.options.map((o) => (
-              <button
-                key={o.start}
-                role="radio"
-                aria-checked={picked === o.start}
-                className="option"
-                disabled={done}
-                onClick={() => setPicked(o.start)}
-              >
-                <span>{dayTime(o.start, lang)}</span>
-                <span className="sub">{o.note}</span>
-              </button>
-            ))}
-          </div>
-          <div className="sub">{t.inviteNote(proposal.attendeeEmail)}</div>
-        </>
-      ) : (
-        <div>
-          <div className="kv"><span>{t.time}</span><span>{proposal.at ? dayTime(proposal.at, lang) : proposal.when}</span></div>
-          <div className="kv"><span>{t.repeat}</span><span>{repeatLabel[proposal.repeat]}</span></div>
-        </div>
-      )}
-
-      {error && <div className="error" role="alert">{error}</div>}
-
-      {done ? (
-        <div className={`status-tag ${proposal.status}`} role="status">
-          {proposal.status === 'approved' ? `✓ ${t.approved}` : t.cancelled}
-          {proposal.kind === 'meeting' && proposal.chosen ? ` · ${dayTime(proposal.chosen, lang)}` : ''}
-        </div>
-      ) : (
-        <>
-          <div className="row">
-            <button className="btn primary big" style={{ flex: 2 }} disabled={busy} onClick={() => act('approve')}>
-              {proposal.kind === 'meeting' ? t.approveSend : t.approve}
-            </button>
-            <button className="btn danger big grow" disabled={busy} onClick={() => act('cancel')}>{t.cancel}</button>
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
+import { ProposalCard } from '../components/ProposalCard';
+import { WorkingBubble, addEvent, emptyProgress, type Progress } from '../components/WorkingBubble';
 
 export function Assistant() {
   const { t, settings, update } = useSettings();
@@ -118,11 +32,9 @@ export function Assistant() {
       .then((c) => {
         setTurns(c.turns);
         setProposals(Object.fromEntries(c.proposals.map((p) => [p.id, p])));
-        const queued = sessionStorage.getItem(PROMPT_KEY);
-        sessionStorage.removeItem(PROMPT_KEY);
-        if (queued) void send(queued);
-        else if (sessionStorage.getItem(LISTEN_KEY)) toggleMic();
-        sessionStorage.removeItem(LISTEN_KEY);
+        const arrival = takeArrival();
+        if (arrival.prompt) void send(arrival.prompt);
+        else if (arrival.listen) toggleMic();
       })
       .catch((e: Error) => setError(e.message));
     return () => {
@@ -142,25 +54,9 @@ export function Assistant() {
     setError('');
     setBusy(true);
     setTurns((ts) => [...ts, { role: 'user', text: message }]);
+    setProgress(emptyProgress());
     try {
-      setProgress(emptyProgress());
-      const res = await api.sendStream(message, lang, (e) =>
-        setProgress((p) => {
-          if (e.type === 'thinking') return { ...p, thinking: p.thinking + e.text };
-          if (e.type === 'text') return { ...p, text: p.text + e.text };
-          if (e.type === 'step') {
-            // "read_email" starts a step; "read_email:done" finishes the oldest open one of that kind.
-            const [tool, done] = e.tool.split(':');
-            if (!done) return { ...p, steps: [...p.steps, { tool, done: false }] };
-            const i = p.steps.findIndex((s) => s.tool === tool && !s.done);
-            if (i < 0) return p;
-            const steps = [...p.steps];
-            steps[i] = { ...steps[i], done: true, detail: e.detail };
-            return { ...p, steps };
-          }
-          return p;
-        }),
-      );
+      const res = await api.send(message, lang, (e) => setProgress((p) => addEvent(p, e)));
       setProposals((ps) => ({ ...ps, ...Object.fromEntries(res.proposals.map((p) => [p.id, p])) }));
       setTurns((ts) => [...ts, { role: 'assistant', text: res.reply, proposalIds: res.proposals.map((p) => p.id) }]);
       if (settings.toggles.speakReplies) speak(res.reply, lang, settings.toggles.slow);

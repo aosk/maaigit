@@ -1,22 +1,27 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import type { Briefing, CalendarEvent } from '../../shared/types';
-import { api, type TodayData } from '../api';
+import type { Briefing, CalendarEvent, TodayData } from '../../shared/types';
+import { PRAYER_BUFFER_MINUTES } from '../../shared/prayer';
+import { eventEnd, leaveTime } from '../../shared/schedule';
+import { api } from '../api';
 import { dayHeading, dayTime, hijri, sameDay, time } from '../format';
 import { useSettings } from '../settings';
 import { speak, stopSpeaking } from '../speech';
 import { Bell, Mic, Send, Speaker, Sun } from '../components/Icons';
-import { LISTEN_KEY, go } from '../App';
+import { askAssistant, talkToAssistant } from '../nav';
 import { Logo } from '../components/Logo';
+import { useMailCount } from '../useMailCount';
 
 type Row =
-  | { kind: 'event'; at: string; event: CalendarEvent }
-  | { kind: 'prayer'; at: string; name: TodayData['prayers'][number]['name'] };
+  | { kind: 'event'; at: string; end: number; event: CalendarEvent }
+  | { kind: 'prayer'; at: string; end: number; name: TodayData['prayers'][number]['name'] };
+
+const prayerEnd = (time: string) => Date.parse(time) + PRAYER_BUFFER_MINUTES * 60_000;
 
 /** First free 2-hour gap between 13:00 and 18:00 today that avoids events and prayers. */
 function focusGap(data: TodayData): Date | null {
   const busy = [
-    ...data.events.map((e) => [new Date(e.start).getTime(), new Date(e.start).getTime() + e.minutes * 60_000]),
-    ...data.prayers.map((p) => [new Date(p.time).getTime(), new Date(p.time).getTime() + 20 * 60_000]),
+    ...data.events.map((e) => [Date.parse(e.start), eventEnd(e)]),
+    ...data.prayers.map((p) => [Date.parse(p.time), prayerEnd(p.time)]),
   ];
   const now = Date.now();
   for (let hour = 13; hour <= 16; hour++) {
@@ -40,10 +45,7 @@ export function Today() {
   const [error, setError] = useState('');
   const [now, setNow] = useState(() => new Date());
   const [showPast, setShowPast] = useState(false);
-  const [unread, setUnread] = useState<number | null>(null);
-  useEffect(() => {
-    api.mailCount().then((c) => setUnread(c.unread)).catch(() => {});
-  }, []);
+  const unread = useMailCount();
 
   const load = useCallback(() => {
     api.today().then(setData).catch((e: Error) => setError(e.message));
@@ -64,25 +66,19 @@ export function Today() {
 
   const rows = useMemo<Row[]>(() => {
     if (!data) return [];
-    const events: Row[] = data.events.filter((e) => !e.allDay && sameDay(e.start, now)).map((e) => ({ kind: 'event', at: e.start, event: e }));
-    const prayers: Row[] = data.prayers.map((p) => ({ kind: 'prayer', at: p.time, name: p.name }));
+    const events: Row[] = data.events.filter((e) => !e.allDay && sameDay(e.start, now)).map((e) => ({ kind: 'event', at: e.start, end: eventEnd(e), event: e }));
+    const prayers: Row[] = data.prayers.map((p) => ({ kind: 'prayer', at: p.time, end: prayerEnd(p.time), name: p.name }));
     return [...events, ...prayers].sort((a, b) => a.at.localeCompare(b.at));
   }, [data, now]);
 
-  const allDay = useMemo(() => (data?.events ?? []).filter((e) => {
-    if (!e.allDay) return false;
-    const start = new Date(e.start).getTime();
-    return start <= now.getTime() && start + e.minutes * 60_000 > now.getTime();
-  }), [data, now]);
-  // Items that have finished (a prayer counts as finished 20 minutes after it starts).
+  const allDay = useMemo(
+    () => (data?.events ?? []).filter((e) => e.allDay && Date.parse(e.start) <= now.getTime() && eventEnd(e) > now.getTime()),
+    [data, now],
+  );
+  // Rows at the top that have already finished; they fold away under "Earlier today".
   const pastCount = useMemo(() => {
-    let n = 0;
-    for (const row of rows) {
-      const end = row.kind === 'prayer' ? new Date(row.at).getTime() + 20 * 60_000 : new Date(row.at).getTime() + row.event.minutes * 60_000;
-      if (end < now.getTime()) n++;
-      else break;
-    }
-    return n;
+    const i = rows.findIndex((row) => row.end >= now.getTime());
+    return i < 0 ? rows.length : i;
   }, [rows, now]);
   const upcoming = useMemo(() => (data?.events ?? []).filter((e) => !sameDay(e.start, now) && new Date(e.start) > now).slice(0, 3), [data, now]);
   const gap = data && !dismissed ? focusGap(data) : null;
@@ -124,7 +120,7 @@ export function Today() {
             {t.today}
           </h1>
         </div>
-        <button className="icon-btn mic-head" aria-label={t.talkToMaai} onClick={() => { sessionStorage.setItem(LISTEN_KEY, '1'); go('assistant'); }}>
+        <button className="icon-btn mic-head" aria-label={t.talkToMaai} onClick={talkToAssistant}>
           <Mic size={24} />
         </button>
       </div>
@@ -138,7 +134,7 @@ export function Today() {
           <button className="btn primary grow" onClick={toggleListen} disabled={!brief}>
             <Speaker size={18} />{speaking ? t.stop : t.listen}
           </button>
-          <button className="btn secondary grow" onClick={() => go('assistant', t.planMyDayPrompt)}>{t.planMyDay}</button>
+          <button className="btn secondary grow" onClick={() => askAssistant(t.planMyDayPrompt)}>{t.planMyDay}</button>
         </div>
       </section>
 
@@ -176,43 +172,13 @@ export function Today() {
           </button>
         )}
         {rows.map((row, i) => {
-          const isPast = i < pastCount;
-          if (isPast && !showPast) return null;
-          const nowLine = i === pastCount && pastCount > 0 ? (
-            <div key="now" className="now-line" aria-label={t.now}><span>{t.now} · {time(now, lang)}</span></div>
-          ) : null;
-          if (row.kind === 'prayer') {
-            return (
-              <Fragment key={`p-${row.name}`}>
-                {nowLine}
-                <div className={`slot prayer${isPast ? ' past' : ''}`}>
-                  <div className="slot-time">{time(row.at, lang)}</div>
-                  <div className="slot-bar" />
-                  <div><div className="slot-title">{t.prayers[row.name]}</div><div className="slot-meta">{t.protectedTime}</div></div>
-                </div>
-              </Fragment>
-            );
-          }
-          const e = row.event;
-          const end = new Date(e.start).getTime() + e.minutes * 60_000;
-          const leave = e.travelMinutes ? new Date(new Date(e.start).getTime() - (e.travelMinutes + 7) * 60_000) : null;
-          const meta = leave
-            ? t.leaveAt(time(leave, lang), e.travelMinutes!)
-            : [e.place, e.bookedByMaai ? t.bookedByMaai : t.minutesShort(e.minutes)].filter(Boolean).join(' · ');
+          if (i < pastCount && !showPast) return null;
           return (
-            <Fragment key={e.id}>
-              {nowLine}
-              <div className={`slot${leave ? ' warn' : ''}${end < now.getTime() ? ' past' : ''}${e.source === 'google' ? ' google' : ''}`}>
-                <div className="slot-time">{time(e.start, lang)}</div>
-                <div className="slot-bar" />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="slot-title">
-                    {e.title}
-                    {e.source === 'google' && <span className="g-tag" title={t.fromGoogle} aria-label={t.fromGoogle}>G</span>}
-                  </div>
-                  <div className="slot-meta">{meta}</div>
-                </div>
-              </div>
+            <Fragment key={row.kind === 'prayer' ? `p-${row.name}` : row.event.id}>
+              {i === pastCount && pastCount > 0 && (
+                <div className="now-line" aria-label={t.now}><span>{t.now} · {time(now, lang)}</span></div>
+              )}
+              <ScheduleRow row={row} past={row.end < now.getTime()} />
             </Fragment>
           );
         })}
@@ -260,6 +226,40 @@ export function Today() {
         </>
       )}
 
+    </div>
+  );
+}
+
+/** One line of the day: a prayer (protected time) or an event, with a "leave by" hint when there is travel. */
+function ScheduleRow({ row, past }: { row: Row; past: boolean }) {
+  const { t, settings } = useSettings();
+  const lang = settings.lang;
+  if (row.kind === 'prayer') {
+    return (
+      <div className={`slot prayer${past ? ' past' : ''}`}>
+        <div className="slot-time">{time(row.at, lang)}</div>
+        <div className="slot-bar" />
+        <div><div className="slot-title">{t.prayers[row.name]}</div><div className="slot-meta">{t.protectedTime}</div></div>
+      </div>
+    );
+  }
+  const e = row.event;
+  const leave = leaveTime(e);
+  const meta = leave
+    ? t.leaveAt(time(leave, lang), e.travelMinutes!)
+    : [e.place, e.bookedByMaai ? t.bookedByMaai : t.minutesShort(e.minutes)].filter(Boolean).join(' · ');
+  const google = e.source === 'google';
+  return (
+    <div className={`slot${leave ? ' warn' : ''}${past ? ' past' : ''}${google ? ' google' : ''}`}>
+      <div className="slot-time">{time(e.start, lang)}</div>
+      <div className="slot-bar" />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="slot-title">
+          {e.title}
+          {google && <span className="g-tag" title={t.fromGoogle} aria-label={t.fromGoogle}>G</span>}
+        </div>
+        <div className="slot-meta">{meta}</div>
+      </div>
     </div>
   );
 }

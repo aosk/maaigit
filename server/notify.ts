@@ -3,6 +3,7 @@ import path from 'node:path';
 import webpush, { type PushSubscription } from 'web-push';
 import type { AppAlert, CalendarEvent, Lang, NotifyPrefs, PrayerName, Reminder } from '../shared/types.js';
 import { prayersFor } from '../shared/prayer.js';
+import { leaveTime } from '../shared/schedule.js';
 import { config } from './config.js';
 import { allEvents, id, save, state } from './store.js';
 
@@ -12,12 +13,8 @@ import { allEvents, id, save, state } from './store.js';
  * short list the open app shows as a banner.
  */
 
-export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10 };
-
 /** Alerts that come due while the computer was asleep still go out if they are at most this late. */
 const GRACE_MS = 10 * 60_000;
-/** Extra minutes before travel time for the "time to leave" alert. */
-const LEAVE_BUFFER_MIN = 10;
 
 // ---------- Keys for Web Push, made once and kept in data/push.json ----------
 
@@ -98,10 +95,11 @@ export function dueAlerts(
 
   for (const e of data.events) {
     const start = new Date(e.start);
-    if (prefs.leave && e.travelMinutes) {
+    const leave = leaveTime(e);
+    if (prefs.leave && leave) {
       out.push({
         key: `leave:${e.id}:${e.start}`,
-        at: new Date(start.getTime() - (e.travelMinutes + LEAVE_BUFFER_MIN) * 60_000),
+        at: leave,
         kind: 'leave',
         text: (lang) =>
           lang === 'ar'
@@ -165,13 +163,12 @@ async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>) {
   save();
 }
 
-export async function sendTest(lang: Lang) {
+export async function sendTest() {
   await deliver({
     key: `test:${Date.now()}`,
     kind: 'test',
     text: (l) => (l === 'ar' ? { title: 'مساعد', body: 'التنبيهات تعمل ✓' } : { title: 'MAAI', body: 'Notifications are working ✓' }),
   });
-  void lang;
 }
 
 export function subscribe(subscription: PushSubscription, lang: Lang) {

@@ -92,6 +92,23 @@ export interface ChatTurn {
   proposalIds?: string[];
 }
 
+/** Live progress while MAAI works: its thinking, each step ("read_email", then "read_email:done"), the reply as it is written. */
+export type ChatEvent =
+  | { type: 'thinking'; text: string }
+  | { type: 'step'; tool: string; detail?: string }
+  | { type: 'text'; text: string };
+
+/** What POST /api/chat/stream sends: progress events, then exactly one done or error. */
+export type StreamEvent = ChatEvent | { type: 'done'; reply: string; proposals: Proposal[] } | { type: 'error'; error: string };
+
+/** GET /api/today */
+export interface TodayData {
+  events: CalendarEvent[];
+  reminders: Reminder[];
+  prayers: { name: PrayerName; time: string }[];
+  nextPrayer: { name: PrayerName; time: string };
+}
+
 export interface AuditEntry {
   id: string;
   at: string;

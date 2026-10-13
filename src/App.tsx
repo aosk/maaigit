@@ -7,46 +7,17 @@ import { Inbox } from './screens/Inbox';
 import { SettingsScreen } from './screens/Settings';
 import { Admin } from './admin/Admin';
 import { Unlock } from './screens/Unlock';
-import { LOCKED_EVENT, api } from './api';
+import { LOCKED_EVENT } from './api';
 import { AlertBanner } from './components/AlertBanner';
 import { worker } from './push';
-
-export type Route = 'today' | 'assistant' | 'inbox' | 'settings' | 'admin';
-const ROUTES: Route[] = ['today', 'assistant', 'inbox', 'settings', 'admin'];
-
-/** Sections of the admin portal; their links (#/admin/agents, or plain #agents) open the portal there. */
-export const ADMIN_SECTIONS = ['agents', 'integrations', 'audit'] as const;
-
-function readRoute(): Route {
-  const name = window.location.hash.replace(/^#\/?/, '');
-  if (name.startsWith('admin/') || (ADMIN_SECTIONS as readonly string[]).includes(name)) return 'admin';
-  return ROUTES.includes(name as Route) ? (name as Route) : 'today';
-}
-
-/** Hash routes (#/assistant) so links work without any server setup. */
-export function go(route: Route, prompt?: string) {
-  if (prompt) sessionStorage.setItem(PROMPT_KEY, prompt);
-  window.location.hash = `/${route}`;
-}
-
-/** A request another screen asked the assistant to send on arrival. */
-export const PROMPT_KEY = 'maai.prompt';
-/** Set by the mic button on Today: the assistant starts listening on arrival. */
-export const LISTEN_KEY = 'maai.listen';
+import { readRoute, type Route } from './nav';
+import { useMailCount } from './useMailCount';
 
 export function App() {
   const { t } = useSettings();
   const [route, setRoute] = useState<Route>(readRoute);
   const [locked, setLocked] = useState<'pin' | 'password' | null>(null);
-  const [unread, setUnread] = useState<number | null>(null);
-
-  // Unread email count for the Inbox tab badge, checked every 5 minutes (no AI involved).
-  useEffect(() => {
-    const check = () => api.mailCount().then((c) => setUnread(c.unread)).catch(() => {});
-    void check();
-    const timer = setInterval(check, 5 * 60_000);
-    return () => clearInterval(timer);
-  }, []);
+  const unread = useMailCount();
 
   // The service worker shows notifications; register it early so they work with the app closed.
   useEffect(() => {

@@ -3,7 +3,7 @@ import type { MailCategory, MailDigest as Digest } from '../../shared/types';
 import { api } from '../api';
 import { dayTime } from '../format';
 import { useSettings } from '../settings';
-import { go } from '../App';
+import { askAssistant } from '../nav';
 import { Chat, Sun } from '../components/Icons';
 
 const ORDER: MailCategory[] = ['decide', 'reply', 'fyi', 'ignore'];
@@ -39,7 +39,7 @@ export function MailDigest({ gmail }: { gmail: boolean }) {
 
   // Each choice opens the assistant with the decision, so it can read the email and draft the reply.
   const decide = (uid: number, from: string, subject: string, choice: string) =>
-    go('assistant', t.decidePrompt(uid, from, subject, choice));
+    askAssistant(t.decidePrompt(uid, from, subject, choice));
 
   const groups = ORDER.map((cat) => ({
     cat,
@@ -97,7 +97,7 @@ export function MailDigest({ gmail }: { gmail: boolean }) {
                         </div>
                       )}
                       {cat === 'reply' && (
-                        <button className="btn secondary round" onClick={() => go('assistant', t.replyPrompt(m.uid, m.fromName, m.subject))}>
+                        <button className="btn secondary round" onClick={() => askAssistant(t.replyPrompt(m.uid, m.fromName, m.subject))}>
                           <Chat size={16} />{t.draftReplyWithMaai}
                         </button>
                       )}

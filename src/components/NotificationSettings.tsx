@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { NotifyPrefs, NotifyStatus } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
+import { useAction } from '../useAction';
 import { currentSubscription, disablePush, enablePush, isIos, isStandalone, pushSupported, worker } from '../push';
 
 type Problem = 'denied' | 'unsupported' | 'home' | 'cert' | null;
@@ -13,7 +14,7 @@ export function NotificationSettings() {
   const [on, setOn] = useState(false);
   const [problem, setProblem] = useState<Problem>(null);
   const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { busy, error, run } = useAction();
 
   useEffect(() => {
     api.notify().then(setStatus).catch(() => {});
@@ -24,45 +25,39 @@ export function NotificationSettings() {
     else worker().then((reg) => !reg && window.location.protocol === 'https:' && setProblem('cert'));
   }, []);
 
-  async function turnOn() {
-    if (!status) return;
-    setBusy(true);
-    setNote('');
-    try {
-      const result = await enablePush(status.publicKey, (sub) => api.subscribe(sub, settings.lang));
-      if (result === 'ok') {
-        setOn(true);
-        setProblem(null);
-        setStatus(await api.notify());
-      } else {
-        setProblem(result === 'no-worker' ? 'cert' : result === 'denied' ? 'denied' : 'unsupported');
-      }
-    } catch (e) {
-      console.error(e);
-      setNote(t.notifyFailed);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const turnOn = () =>
+    run(async () => {
+      if (!status) return;
+      setNote('');
+      const result = await enablePush(status.publicKey, (sub) => api.subscribe(sub, settings.lang)).catch((e: Error) => {
+        console.error(e);
+        throw new Error(t.notifyFailed);
+      });
+      if (result !== 'ok') return setProblem(result === 'no-worker' ? 'cert' : result === 'denied' ? 'denied' : 'unsupported');
+      setOn(true);
+      setProblem(null);
+      setStatus(await api.notify());
+    });
 
-  async function turnOff() {
-    setBusy(true);
-    await disablePush((endpoint) => api.unsubscribe(endpoint)).catch(() => {});
-    setOn(false);
-    setStatus(await api.notify());
-    setBusy(false);
-  }
+  const turnOff = () =>
+    run(async () => {
+      await disablePush((endpoint) => api.unsubscribe(endpoint)).catch(() => {});
+      setOn(false);
+      setStatus(await api.notify());
+    });
 
-  async function test() {
-    await api.testNotify(settings.lang);
-    setNote(t.notifyTestSent);
-  }
+  const test = () =>
+    run(async () => {
+      await api.testNotify();
+      setNote(t.notifyTestSent);
+    });
 
-  async function flip(key: keyof Pick<NotifyPrefs, 'reminders' | 'leave' | 'events' | 'prayers'>) {
-    if (!status) return;
-    const prefs = await api.setNotifyPrefs({ [key]: !status.prefs[key] });
-    setStatus({ ...status, prefs });
-  }
+  const flip = (key: keyof Pick<NotifyPrefs, 'reminders' | 'leave' | 'events' | 'prayers'>) =>
+    run(async () => {
+      if (!status) return;
+      const prefs = await api.setNotifyPrefs({ [key]: !status.prefs[key] });
+      setStatus({ ...status, prefs });
+    });
 
   const kinds = Object.keys(t.notifyKinds) as (keyof typeof t.notifyKinds)[];
 
@@ -97,6 +92,7 @@ export function NotificationSettings() {
             </button>
           )}
         </div>
+        {error && <div className="error" role="alert">{error}</div>}
         {note && <p className="sub" role="status">{note}</p>}
         {status && status.devices > 0 && <p className="sub">{t.devices(status.devices)}</p>}
       </section>

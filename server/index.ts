@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import express from 'express';
 import qrcode from 'qrcode-terminal';
 import { config } from './config.js';
-import { api } from './routes.js';
+import { api } from './routes/index.js';
 import { pinGuard, phoneSetup } from './phone.js';
 import { startScheduler } from './notify.js';
 import { refreshCalendar } from './gcal.js';

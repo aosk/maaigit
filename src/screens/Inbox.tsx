@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import type { InboxMessage, Tone } from '../../shared/types';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import type { InboxMessage, StatusInfo, Tone } from '../../shared/types';
 import { api } from '../api';
 import { time } from '../format';
 import { useSettings } from '../settings';
+import { useAction } from '../useAction';
 import { Back, Chat, Send, Trash } from '../components/Icons';
 import { mailtoLink } from '../components/EmailCard';
 import { MailDigest } from './MailDigest';
@@ -15,31 +16,22 @@ function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; g
   const [tone, setTone] = useState<Tone>(lang === 'ar' ? 'arabic' : 'friendly');
   const [draft, setDraft] = useState('');
   const [summary, setSummary] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const drafting = useAction();
+  const emailing = useAction();
+  const busy = drafting.busy;
+  const error = drafting.error || emailing.error;
 
-  const makeDraft = useCallback(
-    async (chosen: Tone) => {
-      setBusy(true);
-      setError('');
-      try {
-        const res = await api.draft(message.id, chosen, lang);
-        setDraft(res.draft);
-        setSummary(res.summary);
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [message.id, lang],
-  );
+  const makeDraft = (chosen: Tone) =>
+    drafting.run(async () => {
+      const res = await api.draft(message.id, chosen, lang);
+      setDraft(res.draft);
+      setSummary(res.summary);
+    });
 
+  // Draft once on open; picking a tone redrafts explicitly.
   useEffect(() => {
     void makeDraft(tone);
-    // Draft once on open; tone changes redraft explicitly below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message.id]);
 
   function pickTone(next: Tone) {
@@ -49,21 +41,12 @@ function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; g
 
   const waLink = `https://wa.me/${message.phone ?? ''}?text=${encodeURIComponent(draft)}`;
   const replySubject = `Re: ${message.text.slice(0, 60)}`;
-  const [emailing, setEmailing] = useState(false);
-
-  async function emailIt() {
-    if (!message.email) return;
-    setEmailing(true);
-    setError('');
-    try {
+  const emailIt = () =>
+    emailing.run(async () => {
+      if (!message.email) return;
       await api.emailReply(message.id, { to: message.email, subject: replySubject, body: draft });
       onChanged();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setEmailing(false);
-    }
-  }
+    });
 
   async function sent() {
     await api.replied(message.id);
@@ -76,7 +59,7 @@ function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; g
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      setError(t.errorGeneric);
+      drafting.setError(t.errorGeneric);
     }
   }
 
@@ -122,8 +105,8 @@ function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; g
       {message.email && (
         <section className="card" aria-label={t.sendByEmail}>
           {gmail ? (
-            <button className="btn primary big" onClick={emailIt} disabled={busy || !draft || emailing}>
-              <Send size={20} />{emailing ? t.sending : `${t.sendByEmail} · ${message.email}`}
+            <button className="btn primary big" onClick={emailIt} disabled={busy || !draft || emailing.busy}>
+              <Send size={20} />{emailing.busy ? t.sending : `${t.sendByEmail} · ${message.email}`}
             </button>
           ) : (
             <a className="btn primary big" href={mailtoLink(message.email, replySubject, draft)} style={{ textDecoration: 'none' }}>
@@ -148,69 +131,77 @@ function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; g
   );
 }
 
+type View = 'email' | 'messages';
+const VIEW_KEY = 'maai.inboxView';
+
+/** Two inboxes: Gmail, read and sorted by MAAI, and messages the user pasted in from WhatsApp. */
 export function Inbox() {
-  const { t, settings } = useSettings();
-  const [messages, setMessages] = useState<InboxMessage[]>([]);
-  const [open, setOpen] = useState<string | null>(null);
-  const [form, setForm] = useState({ from: '', phone: '', email: '', text: '' });
-  const [gmail, setGmail] = useState(false);
-  const [gmailInbox, setGmailInbox] = useState(false);
-  // Email (Gmail) first once Gmail is connected; the choice is remembered on this device.
-  const [view, setView] = useState<'email' | 'messages'>(() => (sessionStorage.getItem('maai.inboxView') as 'email' | 'messages') || 'email');
-  const pickView = (v: 'email' | 'messages') => {
+  const { t } = useSettings();
+  const [status, setStatus] = useState<StatusInfo | null>(null);
+  // Email first; the choice is remembered for this visit.
+  const [view, setView] = useState<View>(() => (sessionStorage.getItem(VIEW_KEY) as View | null) ?? 'email');
+  const pickView = (v: View) => {
     setView(v);
-    sessionStorage.setItem('maai.inboxView', v);
+    sessionStorage.setItem(VIEW_KEY, v);
   };
   useEffect(() => {
-    api
-      .status()
-      .then((s) => {
-        setGmail(Boolean(s.mail?.configured));
-        setGmailInbox(Boolean(s.mail?.inbox));
-      })
-      .catch(() => {});
+    api.status().then(setStatus).catch(() => {});
   }, []);
-  const [error, setError] = useState('');
 
-  const load = useCallback(() => {
-    api.inbox().then(setMessages).catch((e: Error) => setError(e.message));
-  }, []);
-  useEffect(load, [load]);
-
-  const current = messages.find((m) => m.id === open);
-  if (current) return <Reply message={current} gmail={gmail} onBack={() => setOpen(null)} onChanged={load} />;
-
-  async function add(e: FormEvent) {
-    e.preventDefault();
-    setError('');
-    try {
-      const m = await api.addMessage(form);
-      setForm({ from: '', phone: '', email: '', text: '' });
-      load();
-      setOpen(m.id);
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
-
-  async function remove(id: string) {
-    await api.deleteMessage(id);
-    load();
-  }
-
-  return (
-    <div className="screen">
+  const header = (
+    <>
       <h1 className="title">{t.inboxTitle}</h1>
       <div className="seg" role="radiogroup" aria-label={t.inboxTitle}>
         <button role="radio" aria-checked={view === 'email'} onClick={() => pickView('email')}>{t.emailTab}</button>
         <button role="radio" aria-checked={view === 'messages'} onClick={() => pickView('messages')}>{t.messagesTab}</button>
       </div>
-      {error && <div className="error" role="alert">{error}</div>}
+    </>
+  );
+  if (view === 'messages') return <Messages header={header} gmail={Boolean(status?.mail?.configured)} />;
+  return (
+    <div className="screen">
+      {header}
+      <MailDigest gmail={Boolean(status?.mail?.inbox)} />
+    </div>
+  );
+}
 
-      {view === 'email' ? (
-        <MailDigest gmail={gmailInbox} />
-      ) : (
-      <>
+/** Messages pasted in from WhatsApp or email, each with a reply MAAI drafts (which takes over the screen). */
+function Messages({ header, gmail }: { header: ReactNode; gmail: boolean }) {
+  const { t, settings } = useSettings();
+  const [messages, setMessages] = useState<InboxMessage[]>([]);
+  const [open, setOpen] = useState<string | null>(null);
+  const [form, setForm] = useState({ from: '', phone: '', email: '', text: '' });
+  const { error, setError, run } = useAction();
+
+  const load = useCallback(() => {
+    api.inbox().then(setMessages).catch((e: Error) => setError(e.message));
+  }, [setError]);
+  useEffect(load, [load]);
+
+  const current = messages.find((m) => m.id === open);
+  if (current) return <Reply message={current} gmail={gmail} onBack={() => setOpen(null)} onChanged={load} />;
+
+  const add = (e: FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      const m = await api.addMessage(form);
+      setForm({ from: '', phone: '', email: '', text: '' });
+      load();
+      setOpen(m.id);
+    });
+  };
+
+  const remove = (id: string) =>
+    run(async () => {
+      await api.deleteMessage(id);
+      load();
+    });
+
+  return (
+    <div className="screen">
+      {header}
+      {error && <div className="error" role="alert">{error}</div>}
       <section className="card flush">
         {messages.length === 0 && <div className="msg-item sub">{t.inboxEmpty}</div>}
         {messages.map((m) => (
@@ -250,8 +241,6 @@ export function Inbox() {
         </div>
         <button className="btn primary big" type="submit">{t.add}</button>
       </form>
-      </>
-      )}
     </div>
   );
 }

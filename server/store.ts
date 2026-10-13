@@ -44,6 +44,8 @@ export interface State {
   alerts: AppAlert[];
 }
 
+export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10 };
+
 const DATA_FILE = process.env.MAAI_DATA_FILE ?? path.join(config.dataDir, 'store.json');
 
 export const id = () => randomUUID().slice(0, 8);
@@ -100,7 +102,7 @@ function seed(): State {
     drafts: 0,
     usage: { inputTokens: 0, outputTokens: 0, requests: 0 },
     subscriptions: [],
-    notifyPrefs: { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10 },
+    notifyPrefs: { ...DEFAULT_PREFS },
     sentAlerts: [],
     alerts: [],
   };

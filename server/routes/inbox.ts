@@ -1,0 +1,69 @@
+import { Router } from 'express';
+import type { Tone } from '../../shared/types.js';
+import { digestInbox, draftReply } from '../ai/mail.js';
+import { isEmail, sendMail } from '../mail.js';
+import { fetchInbox, inboxConfigured } from '../gmail-inbox.js';
+import { audit, id, save, state } from '../store.js';
+import { HttpError, find, lang, text, wrap } from './http.js';
+
+export const inbox = Router();
+
+const TONES: Tone[] = ['short', 'friendly', 'formal', 'arabic'];
+
+// ---------- Messages the user pasted in (WhatsApp or email) ----------
+
+inbox.get('/inbox', (_req, res) => res.json([...state.inbox].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))));
+
+inbox.post('/inbox', (req, res) => {
+  const from = text(req.body.from, 100);
+  const body = text(req.body.text, 4000);
+  if (!from || !body) throw new HttpError(400, 'Who it is from and the message are both needed');
+  const phone = text(req.body.phone, 20).replace(/\D/g, '') || undefined;
+  const email = text(req.body.email, 320);
+  if (email && !isEmail(email)) throw new HttpError(400, `"${email}" is not a valid email address`);
+  const message = { id: id(), from, phone, email: email || undefined, channel: email && !phone ? ('email' as const) : ('whatsapp' as const), text: body, receivedAt: new Date().toISOString(), replied: false };
+  state.inbox.push(message);
+  save();
+  res.status(201).json(message);
+});
+
+inbox.post('/inbox/:id/draft', wrap(async (req, res) => {
+  const message = find(state.inbox, req.params.id);
+  const tone = TONES.includes(req.body.tone) ? (req.body.tone as Tone) : 'friendly';
+  res.json(await draftReply({ from: message.from, text: message.text, tone, lang: lang(req.body.lang) }));
+}));
+
+inbox.post('/inbox/:id/email', wrap(async (req, res) => {
+  const message = find(state.inbox, req.params.id);
+  const to = text(req.body.to, 320) || message.email || '';
+  const body = text(req.body.body, 20_000);
+  if (!body) throw new HttpError(400, 'The reply is empty');
+  await sendMail({ to, subject: text(req.body.subject, 300) || `Re: ${message.text.slice(0, 60)}`, body });
+  message.replied = true;
+  audit(`Emailed a reply to ${message.from} (${to})`, 'User', 'approved');
+  res.json(message);
+}));
+
+inbox.post('/inbox/:id/replied', (req, res) => {
+  const message = find(state.inbox, req.params.id);
+  message.replied = true;
+  audit(`Reply to ${message.from} handed to ${message.channel}`, 'User', 'done');
+  res.json(message);
+});
+
+inbox.delete('/inbox/:id', (req, res) => {
+  state.inbox = state.inbox.filter((m) => m.id !== req.params.id);
+  save();
+  res.status(204).end();
+});
+
+// ---------- Gmail inbox (read-only) ----------
+
+// Unread count for badges: reads the inbox (cached 5 minutes) without calling Claude.
+inbox.get('/mail/count', wrap(async (_req, res) => {
+  if (!inboxConfigured) return res.json({ unread: null });
+  const mails = await fetchInbox().catch(() => null);
+  res.json(mails ? { unread: mails.filter((m) => m.unread).length, total: mails.length } : { unread: null });
+}));
+
+inbox.get('/mail/digest', wrap(async (req, res) => res.json(await digestInbox(lang(req.query.lang), req.query.refresh === '1'))));

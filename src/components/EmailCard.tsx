@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Proposal } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
+import { useAction } from '../useAction';
 import { Send } from './Icons';
 
 type EmailProposal = Extract<Proposal, { kind: 'email' }>;
@@ -15,27 +16,12 @@ export function EmailCard({ proposal, gmail, onChange }: { proposal: EmailPropos
   const [to, setTo] = useState(proposal.to);
   const [subject, setSubject] = useState(proposal.subject);
   const [body, setBody] = useState(proposal.body);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const { busy, error, run } = useAction();
   const done = proposal.status !== 'pending';
   const fid = (name: string) => `${name}-${proposal.id}`;
 
-  async function send() {
-    setBusy(true);
-    setError('');
-    try {
-      onChange(await api.approveEmail(proposal.id, { to, subject, body }));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function cancel() {
-    setBusy(true);
-    onChange(await api.cancel(proposal.id).finally(() => setBusy(false)));
-  }
+  const send = () => run(async () => onChange(await api.approveEmail(proposal.id, { to, subject, body })));
+  const cancel = () => run(async () => onChange(await api.cancel(proposal.id)));
 
   return (
     <section className={`card approval${done ? ' done' : ''}`} aria-label={t.emailDraft}>

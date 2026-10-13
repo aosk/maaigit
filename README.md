@@ -148,20 +148,31 @@ Your data online starts fresh; it is separate from the copy on your computer.
 ## How it fits together
 
 ```
-server/      Express API (one process serves the app and /api)
-  ai.ts      Claude: chat with approval-card tools, reply drafts, briefing, demo mode
-  routes.ts  REST endpoints
-  store.ts   Data, saved to data/store.json (delete it to start fresh)
-  auth.ts    Sign-in: PIN on the home Wi-Fi, password online
-  phone.ts   HTTPS certificate, PIN and QR code for phone access
-  notify.ts  Alert timing and Web Push (reminders, time to leave, prayers)
-  mail.ts    Sending email through Gmail
+server/
+  index.ts        Starts MAAI: at home, on the phone (HTTPS + PIN) or online (password)
+  ai/             Everything that talks to Claude
+    claude.ts     The API connection: requests, streaming, fallback, token counts
+    context.ts    What Claude is told about your day and inbox
+    tools.ts      Its tools (approval cards, reading an email)
+    chat.ts       The assistant conversation
+    mail.ts       Reply drafts and the inbox summary
+    briefing.ts   The morning briefing
+    demo.ts       Canned answers when there's no API key
+  routes/         The /api endpoints, one file per screen, plus shared helpers (http.ts)
+  store.ts        Data, saved to data/store.json (delete it to start fresh)
+  auth.ts         Sign-in: PIN on the home Wi-Fi, password online
+  phone.ts        HTTPS certificate, PIN and QR code for phone access
+  notify.ts       Alert timing and Web Push (reminders, time to leave, prayers)
+  mail.ts         Sending email through Gmail
   gmail-inbox.ts  Reading the Gmail inbox (IMAP, read-only)
-  gcal.ts    Reading Google Calendar (secret iCal address, read-only)
-shared/      Types and prayer times (Umm al-Qura), used by both sides
-src/         React app
-  screens/   Today, Assistant, Inbox, Settings
-  admin/     Admin portal
+  gcal.ts         Reading Google Calendar (secret iCal address, read-only)
+shared/           Types, prayer times (Umm al-Qura) and schedule rules, used by both sides
+src/              React app
+  screens/        Today, Assistant, Inbox, Settings
+  components/     Cards, progress bubble, icons
+  admin/          Admin portal
+  api.ts          Calls to the server
+  nav.ts          Moving between screens
 ```
 
 The AI uses Claude (`claude-opus-5-5`) through the official Anthropic SDK. Its
