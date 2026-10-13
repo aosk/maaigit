@@ -7,7 +7,7 @@ const ERASE_MS = 55;
 const HOLD_MS = 1300;
 
 /**
- * Shown while MAAI works: the official Najiz logo, gently pulsing, with
+ * Shown while MAAI works: the Najiz checkmark, fading out and back in, with
  * "ناجز ينجزك" typing itself out, pausing, erasing and starting again.
  */
 export function NajizLoader() {
@@ -31,7 +31,7 @@ export function NajizLoader() {
   return (
     <div className="najiz-loader" aria-hidden="true">
       <span className="najiz-logo">
-        <img src="/najiz-logo.svg" alt="" width={157} height={92} />
+        <img src="/najiz-check.svg" alt="" width={86} height={70} />
       </span>
       <span className="najiz-phrase" dir="rtl" lang="ar">
         {PHRASE.slice(0, shown)}

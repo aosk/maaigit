@@ -259,10 +259,10 @@ a { color: var(--tint-text); }
 .conn-dot.off { background: var(--switch-off); }
 .conn-dot.bad { background: var(--danger); }
 
-/* While MAAI works: the Najiz logo (official file, on its light tile so it stays on an allowed background) and the typing phrase. */
+/* While MAAI works: the Najiz checkmark (no background, so it sits on the chat bubble) and the typing phrase. */
 .najiz-loader { display: flex; align-items: center; gap: 8px; }
-.najiz-logo { flex: none; display: inline-flex; background: #fff; border-radius: 6px; padding: 2px 3px; animation: najiz-fade 1.6s ease-in-out infinite; }
-.najiz-logo img { display: block; width: 40px; height: auto; }
+.najiz-logo { flex: none; display: inline-flex; animation: najiz-fade 1.6s ease-in-out infinite; }
+.najiz-logo img { display: block; width: auto; height: 1.15em; }
 .najiz-phrase { font-family: 'Almarai', var(--font); font-weight: 700; color: #008d55; min-height: 1.4em; display: inline-flex; align-items: center; white-space: nowrap; }
 .najiz-caret { display: inline-block; width: 1.5px; height: 1em; margin-inline-start: 2px; background: #F6B221; animation: najiz-blink 0.8s steps(1) infinite; }
 /* Like Claude's thinking mark: fades out completely, then comes back. */
