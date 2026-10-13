@@ -23,6 +23,7 @@
     "express": "^4.21.2",
     "imapflow": "^1.7.8",
     "mailparser": "^3.9.38",
+    "node-ical": "^0.27.3",
     "nodemailer": "^10.1.0",
     "qrcode-terminal": "^0.12.0",
     "react": "^18.3.1",

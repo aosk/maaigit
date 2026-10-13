@@ -99,6 +99,7 @@ export const api = {
   replied: (id: string) => call<InboxMessage>('POST', `/inbox/${id}/replied`, {}),
   deleteMessage: (id: string) => call<void>('DELETE', `/inbox/${id}`),
 
+  mailCount: () => call<{ unread: number | null; total?: number }>('GET', '/mail/count'),
   mailDigest: (lang: Lang, refresh = false) => call<MailDigest>('GET', `/mail/digest?lang=${lang}${refresh ? '&refresh=1' : ''}`),
   notify: () => call<NotifyStatus>('GET', '/notify'),
   setNotifyPrefs: (p: Partial<NotifyPrefs>) => call<NotifyPrefs>('PATCH', '/notify/prefs', p),

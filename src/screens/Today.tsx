@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Briefing, CalendarEvent } from '../../shared/types';
 import { api, type TodayData } from '../api';
 import { dayHeading, dayTime, hijri, sameDay, time } from '../format';
 import { useSettings } from '../settings';
 import { speak, stopSpeaking } from '../speech';
-import { Bell, Mic, Speaker, Sun } from '../components/Icons';
-import { go } from '../App';
+import { Bell, Mic, Send, Speaker, Sun } from '../components/Icons';
+import { LISTEN_KEY, go } from '../App';
 import { Logo } from '../components/Logo';
 
 type Row =
@@ -39,6 +39,11 @@ export function Today() {
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [now, setNow] = useState(() => new Date());
+  const [showPast, setShowPast] = useState(false);
+  const [unread, setUnread] = useState<number | null>(null);
+  useEffect(() => {
+    api.mailCount().then((c) => setUnread(c.unread)).catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     api.today().then(setData).catch((e: Error) => setError(e.message));
@@ -59,11 +64,26 @@ export function Today() {
 
   const rows = useMemo<Row[]>(() => {
     if (!data) return [];
-    const events: Row[] = data.events.filter((e) => sameDay(e.start, now)).map((e) => ({ kind: 'event', at: e.start, event: e }));
+    const events: Row[] = data.events.filter((e) => !e.allDay && sameDay(e.start, now)).map((e) => ({ kind: 'event', at: e.start, event: e }));
     const prayers: Row[] = data.prayers.map((p) => ({ kind: 'prayer', at: p.time, name: p.name }));
     return [...events, ...prayers].sort((a, b) => a.at.localeCompare(b.at));
   }, [data, now]);
 
+  const allDay = useMemo(() => (data?.events ?? []).filter((e) => {
+    if (!e.allDay) return false;
+    const start = new Date(e.start).getTime();
+    return start <= now.getTime() && start + e.minutes * 60_000 > now.getTime();
+  }), [data, now]);
+  // Items that have finished (a prayer counts as finished 20 minutes after it starts).
+  const pastCount = useMemo(() => {
+    let n = 0;
+    for (const row of rows) {
+      const end = row.kind === 'prayer' ? new Date(row.at).getTime() + 20 * 60_000 : new Date(row.at).getTime() + row.event.minutes * 60_000;
+      if (end < now.getTime()) n++;
+      else break;
+    }
+    return n;
+  }, [rows, now]);
   const upcoming = useMemo(() => (data?.events ?? []).filter((e) => !sameDay(e.start, now) && new Date(e.start) > now).slice(0, 3), [data, now]);
   const gap = data && !dismissed ? focusGap(data) : null;
   const next = data?.nextPrayer;
@@ -97,19 +117,23 @@ export function Today() {
     <div className="screen">
       <div className="top">
         <div>
-          <div className="eyebrow">{dayHeading(now, lang)} · {hijri(now, lang)}</div>
-          <h1 className="title">{t.today}</h1>
+          <div className="eyebrow">{dayHeading(now, lang)}</div>
+          <div className="eyebrow hijri">{hijri(now, lang)}</div>
+          <h1 className="title row" style={{ gap: 10 }}>
+            <span style={{ color: 'var(--tint-text)', display: 'inline-flex' }}><Logo size={30} /></span>
+            {t.today}
+          </h1>
         </div>
-        <a className="icon-btn" href="#/settings" aria-label={t.profile} style={{ textDecoration: 'none' }}>
-          <Logo size={28} />
-        </a>
+        <button className="icon-btn mic-head" aria-label={t.talkToMaai} onClick={() => { sessionStorage.setItem(LISTEN_KEY, '1'); go('assistant'); }}>
+          <Mic size={24} />
+        </button>
       </div>
 
       {error && <div className="error" role="alert">{error}</div>}
 
       <section className="card" aria-label={t.morningBriefing}>
         <div className="card-label"><Sun size={20} />{t.morningBriefing}</div>
-        <p aria-live="polite">{brief ? brief.text : '…'}</p>
+        {brief ? <p aria-live="polite">{brief.text}</p> : <div className="skeleton" aria-label={t.loading}><span /><span /></div>}
         <div className="row">
           <button className="btn primary grow" onClick={toggleListen} disabled={!brief}>
             <Speaker size={18} />{speaking ? t.stop : t.listen}
@@ -125,16 +149,48 @@ export function Today() {
         )}
       </div>
 
+      {allDay.length > 0 && (
+        <div className="row wrap" aria-label={t.allDay}>
+          {allDay.map((e) => (
+            <span key={e.id} className="pill">{t.allDay}: {e.title}</span>
+          ))}
+        </div>
+      )}
+
+      {unread !== null && unread > 0 && (
+        <a className="card soft mail-teaser" href="#/inbox">
+          <span className="alert-icon"><Send size={18} /></span>
+          <span style={{ flex: 1 }}>
+            <strong>{t.unreadEmails(unread)}</strong>
+            <span className="sub" style={{ display: 'block' }}>{t.unreadEmailsHint}</span>
+          </span>
+          <span aria-hidden="true" className="chev">›</span>
+        </a>
+      )}
+
       <section className="card flush" aria-label={t.schedule}>
         {rows.length === 0 && <div className="slot"><span className="sub">{t.nothingToday}</span></div>}
-        {rows.map((row) => {
+        {pastCount > 0 && (
+          <button className="slot earlier" onClick={() => setShowPast((v) => !v)} aria-expanded={showPast}>
+            <span className="sub">{showPast ? t.hideEarlier : t.earlierToday(pastCount)}</span>
+          </button>
+        )}
+        {rows.map((row, i) => {
+          const isPast = i < pastCount;
+          if (isPast && !showPast) return null;
+          const nowLine = i === pastCount && pastCount > 0 ? (
+            <div key="now" className="now-line" aria-label={t.now}><span>{t.now} · {time(now, lang)}</span></div>
+          ) : null;
           if (row.kind === 'prayer') {
             return (
-              <div key={`p-${row.name}`} className={`slot prayer${new Date(row.at) < now ? ' past' : ''}`}>
-                <div className="slot-time">{time(row.at, lang)}</div>
-                <div className="slot-bar" />
-                <div><div className="slot-title">{t.prayers[row.name]}</div><div className="slot-meta">{t.protectedTime}</div></div>
-              </div>
+              <Fragment key={`p-${row.name}`}>
+                {nowLine}
+                <div className={`slot prayer${isPast ? ' past' : ''}`}>
+                  <div className="slot-time">{time(row.at, lang)}</div>
+                  <div className="slot-bar" />
+                  <div><div className="slot-title">{t.prayers[row.name]}</div><div className="slot-meta">{t.protectedTime}</div></div>
+                </div>
+              </Fragment>
             );
           }
           const e = row.event;
@@ -144,11 +200,20 @@ export function Today() {
             ? t.leaveAt(time(leave, lang), e.travelMinutes!)
             : [e.place, e.bookedByMaai ? t.bookedByMaai : t.minutesShort(e.minutes)].filter(Boolean).join(' · ');
           return (
-            <div key={e.id} className={`slot${leave ? ' warn' : ''}${end < now.getTime() ? ' past' : ''}`}>
-              <div className="slot-time">{time(e.start, lang)}</div>
-              <div className="slot-bar" />
-              <div><div className="slot-title">{e.title}</div><div className="slot-meta">{meta}</div></div>
-            </div>
+            <Fragment key={e.id}>
+              {nowLine}
+              <div className={`slot${leave ? ' warn' : ''}${end < now.getTime() ? ' past' : ''}${e.source === 'google' ? ' google' : ''}`}>
+                <div className="slot-time">{time(e.start, lang)}</div>
+                <div className="slot-bar" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="slot-title">
+                    {e.title}
+                    {e.source === 'google' && <span className="g-tag" title={t.fromGoogle} aria-label={t.fromGoogle}>G</span>}
+                  </div>
+                  <div className="slot-meta">{meta}</div>
+                </div>
+              </div>
+            </Fragment>
           );
         })}
       </section>
@@ -195,7 +260,6 @@ export function Today() {
         </>
       )}
 
-      <a className="fab" href="#/assistant" aria-label={t.talkToMaai}><Mic size={28} /></a>
     </div>
   );
 }

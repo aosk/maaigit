@@ -4,7 +4,7 @@ import webpush, { type PushSubscription } from 'web-push';
 import type { AppAlert, CalendarEvent, Lang, NotifyPrefs, PrayerName, Reminder } from '../shared/types.js';
 import { prayersFor } from '../shared/prayer.js';
 import { config } from './config.js';
-import { id, save, state } from './store.js';
+import { allEvents, id, save, state } from './store.js';
 
 /**
  * Alerts: reminders, "time to leave", heads-ups before events and prayers.
@@ -188,7 +188,7 @@ export function unsubscribe(endpoint: string) {
 /** Checks every 30 seconds for anything due. */
 export function startScheduler() {
   const tick = async () => {
-    const due = dueAlerts(new Date(), state, state.notifyPrefs, config.latitude, config.longitude).filter((d) => !state.sentAlerts.includes(d.key));
+    const due = dueAlerts(new Date(), { reminders: state.reminders, events: allEvents().filter((e) => !e.allDay) }, state.notifyPrefs, config.latitude, config.longitude).filter((d) => !state.sentAlerts.includes(d.key));
     for (const d of due) {
       state.sentAlerts.push(d.key);
       await deliver(d);

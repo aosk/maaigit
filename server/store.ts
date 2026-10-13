@@ -3,6 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type Anthropic from '@anthropic-ai/sdk';
 import { config } from './config.js';
+import { googleEvents } from './gcal.js';
 import type {
   AgentSetting,
   AppAlert,
@@ -134,4 +135,9 @@ export function audit(event: string, who: string, outcome: AuditEntry['outcome']
 
 export function agentEnabled(agentId: AgentSetting['id']): boolean {
   return state.agents.find((a) => a.id === agentId)?.enabled ?? true;
+}
+
+/** MAAI's own events plus those read from Google Calendar, in time order. */
+export function allEvents(): CalendarEvent[] {
+  return [...state.events, ...googleEvents()].sort((a, b) => a.start.localeCompare(b.start));
 }

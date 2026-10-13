@@ -93,6 +93,23 @@ or deleted), emails are kept in memory only, and their text is sent to Claude to
 summarise. You can also ask the assistant about an email ("what did Sara want?").
 Set `MAAI_DEMO_INBOX=1` to try the screen with sample emails before connecting Gmail.
 
+### Show your Google Calendar
+
+MAAI can show your Google Calendar events on Today, warn you before them and
+plan around them. It reads them through the calendar's private address
+(read-only: meetings MAAI books stay in MAAI and don't appear in Google).
+
+1. Open Google Calendar on a computer → gear → **Settings**.
+2. On the left under **Settings for my calendars**, click your calendar.
+3. Scroll to **Integrate calendar** → copy **Secret address in iCal format**.
+4. Add it as `GOOGLE_CALENDAR_ICS_URL` in `.env`, or on Render under
+   **Environment**. For several calendars, put the addresses one after another
+   separated by spaces.
+
+Keep this address private: anyone with it can see your calendar. Google events
+show a small **G** on Today, and Settings → Connections shows the sync status.
+They refresh every 10 minutes.
+
 ## Put it online (Render)
 
 Online, MAAI runs all the time at a real `https://` address: it works away from
@@ -140,6 +157,7 @@ server/      Express API (one process serves the app and /api)
   notify.ts  Alert timing and Web Push (reminders, time to leave, prayers)
   mail.ts    Sending email through Gmail
   gmail-inbox.ts  Reading the Gmail inbox (IMAP, read-only)
+  gcal.ts    Reading Google Calendar (secret iCal address, read-only)
 shared/      Types and prayer times (Umm al-Qura), used by both sides
 src/         React app
   screens/   Today, Assistant, Inbox, Settings
@@ -167,6 +185,6 @@ Other settings in `.env`: `PORT`, `MAAI_DATA_DIR` (where data is kept), and `MAA
 
 ## Not built yet
 
-Connecting real Google / Outlook calendars, accounts for more than
-one person, and a native iPhone app. The old StockPlay
+Adding events to Google Calendar (it's read-only for now), Outlook, accounts
+for more than one person, and a native iPhone app. The old StockPlay
 project is kept in `archive/stockplay`.

@@ -5,7 +5,7 @@ import { dayTime } from '../format';
 import { useSettings } from '../settings';
 import { canListen, listen, speak, stopSpeaking, type ListenProblem } from '../speech';
 import { Bell, Calendar, Mic, Plus, Send } from '../components/Icons';
-import { PROMPT_KEY } from '../App';
+import { LISTEN_KEY, PROMPT_KEY } from '../App';
 import { Logo } from '../components/Logo';
 import { EmailCard } from '../components/EmailCard';
 import { WorkingBubble, emptyProgress, type Progress } from '../components/WorkingBubble';
@@ -121,6 +121,8 @@ export function Assistant() {
         const queued = sessionStorage.getItem(PROMPT_KEY);
         sessionStorage.removeItem(PROMPT_KEY);
         if (queued) void send(queued);
+        else if (sessionStorage.getItem(LISTEN_KEY)) toggleMic();
+        sessionStorage.removeItem(LISTEN_KEY);
       })
       .catch((e: Error) => setError(e.message));
     return () => {

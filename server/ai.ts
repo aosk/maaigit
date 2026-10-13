@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Lang, MailDigest, MailInsight, MailItem, PrayerName, Proposal, Tone } from '../shared/types.js';
 import { clashesWithPrayer, prayersFor } from '../shared/prayer.js';
-import { agentEnabled, audit, id, save, state, type Conversation } from './store.js';
+import { agentEnabled, allEvents, audit, id, save, state, type Conversation } from './store.js';
 import { config } from './config.js';
 import { isEmail, mailConfigured } from './mail.js';
 import { cachedInbox, fetchInbox, getEmail, inboxConfigured } from './gmail-inbox.js';
@@ -33,11 +33,11 @@ function inboxOverview(): string {
 
 function contextNote(): string {
   const now = new Date();
-  const upcoming = state.events
+  const upcoming = allEvents()
     .filter((e) => new Date(e.start).getTime() + e.minutes * 60_000 > now.getTime())
     .sort((a, b) => a.start.localeCompare(b.start))
     .slice(0, 25)
-    .map((e) => `- ${dayTime(e.start)} (${e.minutes} min): ${e.title}${e.place ? ` @ ${e.place}` : ''}`);
+    .map((e) => `- ${e.allDay ? `${fmt(e.start, { weekday: 'short', day: 'numeric', month: 'short' })} (all day)` : `${dayTime(e.start)} (${e.minutes} min)`}: ${e.title}${e.place ? ` @ ${e.place}` : ''}${e.source === 'google' ? ' [Google Calendar]' : ''}`);
   const prayers = [0, 1, 2].flatMap((offset) => {
     const d = new Date(now);
     d.setDate(d.getDate() + offset);
@@ -539,7 +539,7 @@ export async function briefing(lang: Lang): Promise<{ text: string; source: 'cla
 
 function todayEvents() {
   const today = new Date().toDateString();
-  return state.events.filter((e) => new Date(e.start).toDateString() === today);
+  return allEvents().filter((e) => new Date(e.start).toDateString() === today);
 }
 
 function demoBriefing(lang: Lang): string {
@@ -556,7 +556,7 @@ function nextFreeMornings(minutes: number): { start: string; note?: string }[] {
     const d = new Date();
     d.setDate(d.getDate() + day);
     d.setHours(9 + (day % 2), day % 3 === 0 ? 30 : 0, 0, 0);
-    const busy = state.events.some((e) => {
+    const busy = allEvents().some((e) => {
       const s = new Date(e.start).getTime();
       return d.getTime() < s + e.minutes * 60_000 && d.getTime() + minutes * 60_000 > s;
     });

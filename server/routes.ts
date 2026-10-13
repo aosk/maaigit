@@ -4,9 +4,10 @@ import type { AdminOverview, Lang, StatusInfo, Tone } from '../shared/types.js';
 import { nextPrayer, prayersFor } from '../shared/prayer.js';
 import { MODEL, apiErrorMessage, briefing, chat, client, digestInbox, draftReply } from './ai.js';
 import { MailError, isEmail, mailConfigured, mailFrom, sendMail } from './mail.js';
-import { inboxConfigured } from './gmail-inbox.js';
+import { fetchInbox, inboxConfigured } from './gmail-inbox.js';
 import { config } from './config.js';
-import { audit, id, save, state, type Conversation } from './store.js';
+import { allEvents, audit, id, save, state, type Conversation } from './store.js';
+import { calendarStatus, refreshCalendar } from './gcal.js';
 import { DEFAULT_PREFS, publicKey, sendTest, subscribe, unsubscribe } from './notify.js';
 
 export const api = Router();
@@ -23,6 +24,7 @@ function status(): StatusInfo {
   return {
     aiConfigured: Boolean(client),
     mail: { configured: mailConfigured, from: mailFrom, inbox: inboxConfigured },
+    calendar: calendarStatus(),
     model: MODEL,
     location: { latitude: config.latitude, longitude: config.longitude, timezone: config.timezone },
   };
@@ -32,11 +34,12 @@ api.get('/status', (_req, res) => res.json({ ...status(), auth: res.locals.auth 
 
 // ---------- Today ----------
 
-api.get('/today', (_req, res) => {
+api.get('/today', wrap(async (_req, res) => {
+  await refreshCalendar();
   const now = new Date();
   const horizon = now.getTime() + 7 * 86_400_000;
   res.json({
-    events: state.events
+    events: allEvents()
       .filter((e) => {
         const t = new Date(e.start).getTime();
         return t + e.minutes * 60_000 > now.getTime() - 12 * 3_600_000 && t < horizon;
@@ -46,7 +49,7 @@ api.get('/today', (_req, res) => {
     prayers: prayersFor(now, config.latitude, config.longitude).map((p) => ({ name: p.name, time: p.time.toISOString() })),
     nextPrayer: (({ name, time }) => ({ name, time: time.toISOString() }))(nextPrayer(now, config.latitude, config.longitude)),
   });
-});
+}));
 
 api.get('/briefing', wrap(async (req, res) => res.json(await briefing(lang(req.query.lang)))));
 
@@ -239,6 +242,17 @@ api.delete('/inbox/:id', (req, res) => {
 
 // ---------- Gmail inbox (read-only) ----------
 
+// Unread count for badges: reads the inbox (cached 5 minutes) without calling Claude.
+api.get('/mail/count', wrap(async (_req, res) => {
+  if (!inboxConfigured) return res.json({ unread: null });
+  try {
+    const mails = await fetchInbox();
+    res.json({ unread: mails.filter((m) => m.unread).length, total: mails.length });
+  } catch {
+    res.json({ unread: null });
+  }
+}));
+
 api.get('/mail/digest', wrap(async (req, res) => {
   try {
     res.json(await digestInbox(lang(req.query.lang), req.query.refresh === '1'));
@@ -300,7 +314,7 @@ api.get('/admin', (_req, res) => {
   const cancelled = state.proposals.filter((p) => p.status === 'cancelled').length;
   const overview: AdminOverview = {
     counts: {
-      events: state.events.length,
+      events: allEvents().length,
       reminders: state.reminders.length,
       proposals: state.proposals.length,
       approved,

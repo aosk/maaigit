@@ -42,6 +42,41 @@ export function SettingsScreen() {
         </div>
       </section>
 
+      <div className="section-label">{t.connections}</div>
+      <section className="card" aria-label={t.connections}>
+        {status ? (
+          <>
+            <div className="conn">
+              <span className={`conn-dot ${status.aiConfigured ? 'on' : 'off'}`} aria-hidden="true" />
+              <span><strong>Claude AI: </strong>{status.aiConfigured ? t.aiConnected(status.model) : t.aiDemo}</span>
+            </div>
+            <div className="conn">
+              <span className={`conn-dot ${status.mail?.configured ? 'on' : 'off'}`} aria-hidden="true" />
+              <span><strong>{t.gmail}: </strong>{status.mail?.configured ? t.gmailConnected(status.mail.from) : t.gmailOff}</span>
+            </div>
+            <div className="conn">
+              <span className={`conn-dot ${status.calendar?.error ? 'bad' : status.calendar?.configured ? 'on' : 'off'}`} aria-hidden="true" />
+              <span>
+                <strong>{t.googleCalendar}: </strong>
+                {status.calendar?.error
+                  ? t.calendarError(status.calendar.error)
+                  : status.calendar?.configured
+                    ? t.calendarConnected(status.calendar.events)
+                    : t.calendarOff}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="skeleton"><span /><span /></div>
+        )}
+        <div className="row wrap">
+          <a href="#/admin" className="btn secondary grow" style={{ textDecoration: 'none' }}>{t.adminPortal}</a>
+          {status?.auth && status.auth !== 'none' && (
+            <button className="btn danger" onClick={() => api.logout().finally(() => window.location.reload())}>{t.signOut}</button>
+          )}
+        </div>
+      </section>
+
       <NotificationSettings />
 
       <div className="section-label">{t.accessibility} · {t.howYouUse}</div>
@@ -63,20 +98,6 @@ export function SettingsScreen() {
       </section>
       <p className="sub">{t.followsDevice}</p>
 
-      <div className="section-label">{t.aboutAi}</div>
-      <section className="card">
-        <p style={{ fontSize: '0.88em' }}>{status ? (status.aiConfigured ? t.aiConnected(status.model) : t.aiDemo) : '…'}</p>
-        {status && (
-          <p style={{ fontSize: '0.88em' }}>
-            <strong>{t.gmail}: </strong>
-            {status.mail?.configured ? t.gmailConnected(status.mail.from) : t.gmailOff}
-          </p>
-        )}
-        <a href="#/admin" className="btn secondary" style={{ textDecoration: 'none' }}>{t.adminPortal}</a>
-        {status?.auth && status.auth !== 'none' && (
-          <button className="btn danger" onClick={() => api.logout().finally(() => window.location.reload())}>{t.signOut}</button>
-        )}
-      </section>
     </div>
   );
 }

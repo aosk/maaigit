@@ -7,7 +7,7 @@ import { Inbox } from './screens/Inbox';
 import { SettingsScreen } from './screens/Settings';
 import { Admin } from './admin/Admin';
 import { Unlock } from './screens/Unlock';
-import { LOCKED_EVENT } from './api';
+import { LOCKED_EVENT, api } from './api';
 import { AlertBanner } from './components/AlertBanner';
 import { worker } from './push';
 
@@ -31,11 +31,22 @@ export function go(route: Route, prompt?: string) {
 
 /** A request another screen asked the assistant to send on arrival. */
 export const PROMPT_KEY = 'maai.prompt';
+/** Set by the mic button on Today: the assistant starts listening on arrival. */
+export const LISTEN_KEY = 'maai.listen';
 
 export function App() {
   const { t } = useSettings();
   const [route, setRoute] = useState<Route>(readRoute);
   const [locked, setLocked] = useState<'pin' | 'password' | null>(null);
+  const [unread, setUnread] = useState<number | null>(null);
+
+  // Unread email count for the Inbox tab badge, checked every 5 minutes (no AI involved).
+  useEffect(() => {
+    const check = () => api.mailCount().then((c) => setUnread(c.unread)).catch(() => {});
+    void check();
+    const timer = setInterval(check, 5 * 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // The service worker shows notifications; register it early so they work with the app closed.
   useEffect(() => {
@@ -85,6 +96,7 @@ export function App() {
           <a key={tab.route} className="tab" href={`#/${tab.route}`} aria-current={route === tab.route ? 'page' : undefined}>
             {tab.icon}
             {tab.label}
+            {tab.route === 'inbox' && unread ? <span className="tab-badge" aria-label={t.unreadEmails(unread)}>{unread > 99 ? '99+' : unread}</span> : null}
           </a>
         ))}
       </nav>

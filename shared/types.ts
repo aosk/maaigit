@@ -12,6 +12,10 @@ export interface CalendarEvent {
   place?: string;
   /** Minutes of travel before it starts; drives the "leave by" hint. */
   travelMinutes?: number;
+  /** Where it comes from: MAAI's own calendar, or read from Google Calendar. */
+  source?: 'maai' | 'google';
+  /** An all-day event (no set time). */
+  allDay?: boolean;
   /** Set when MAAI booked it on the user's behalf. */
   bookedByMaai?: boolean;
 }
@@ -112,6 +116,8 @@ export interface StatusInfo {
   aiConfigured: boolean;
   /** Gmail connected for sending, and from which address. */
   mail?: { configured: boolean; from: string; inbox?: boolean };
+  /** Google Calendar, read through its private iCal address. */
+  calendar?: CalendarStatus;
   /** How this device signed in: not at all on the computer itself, a PIN at home, a password online. */
   auth?: 'none' | 'pin' | 'password';
   model: string;
@@ -191,4 +197,11 @@ export interface MailDigest {
   summary: string;
   source: 'claude' | 'demo';
   emails: (MailItem & { insight?: MailInsight })[];
+}
+
+export interface CalendarStatus {
+  configured: boolean;
+  events: number;
+  lastSync?: string;
+  error?: string;
 }

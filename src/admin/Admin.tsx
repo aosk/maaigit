@@ -159,7 +159,12 @@ export function Admin() {
               { name: 'Prayer times (Umm al-Qura)', ok: true, okText: data ? data.status.location.timezone : '…', offText: '' },
               { name: 'WhatsApp hand-off', ok: true, okText: 'Ready (wa.me link)', offText: '' },
               { name: 'Voice input', ok: true, okText: 'In Chrome / Edge', offText: '' },
-              { name: 'Google / Outlook calendar', ok: false, okText: '', offText: 'Not connected yet' },
+              {
+                name: 'Google Calendar (read-only)',
+                ok: data?.status.calendar?.configured && !data.status.calendar.error,
+                okText: `${data?.status.calendar?.events ?? 0} events`,
+                offText: data?.status.calendar?.error ? 'Sync failed' : 'Not connected',
+              },
             ].map((i) => (
               <div key={i.name} className="between" style={{ minHeight: 44, gap: 16, borderBottom: '1px solid var(--sep)' }}>
                 <span>{i.name}</span>

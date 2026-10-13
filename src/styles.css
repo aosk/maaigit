@@ -237,3 +237,24 @@ a { color: var(--tint-text); }
 .link-btn { background: none; border: none; padding: 0; color: var(--tint-text); font-size: 0.8em; font-weight: 600; text-decoration: underline; }
 .thinking-text { margin-top: 6px; font-size: 0.8em; color: var(--text2); white-space: pre-wrap; max-height: 180px; overflow-y: auto; border-inline-start: 3px solid var(--tint-soft); padding-inline-start: 10px; }
 .working-text { white-space: pre-wrap; }
+
+/* ---------- Today refinements ---------- */
+.eyebrow.hijri { font-weight: 500; text-transform: none; letter-spacing: 0; margin-top: 2px; }
+.mic-head { width: 52px; height: 52px; border-radius: 26px; background: var(--tint); color: var(--on-tint); box-shadow: 0 4px 14px var(--shadow); }
+.skeleton { display: flex; flex-direction: column; gap: 8px; padding: 4px 0; }
+.skeleton span { display: block; height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--raised) 25%, var(--sep) 50%, var(--raised) 75%); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+.skeleton span:last-child { width: 65%; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.slot.earlier { width: 100%; background: transparent; border: none; border-bottom: 1px solid var(--sep); justify-content: center; min-height: 44px; }
+.now-line { display: flex; align-items: center; gap: 8px; padding: 2px 16px; color: var(--danger); font-size: 0.72em; font-weight: 700; }
+.now-line::after { content: ''; flex: 1; height: 2px; background: var(--danger); border-radius: 1px; }
+.g-tag { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-inline-start: 6px; border-radius: 5px; background: var(--tint-soft); color: var(--tint-text); font-size: 0.6em; font-weight: 800; vertical-align: middle; }
+.mail-teaser { flex-direction: row; align-items: center; gap: 12px; text-decoration: none; color: var(--text); }
+.chev { font-size: 1.6em; color: var(--text2); line-height: 1; }
+.tab { position: relative; }
+.tab-badge { position: absolute; top: -2px; inset-inline-end: 14px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.conn { display: flex; align-items: flex-start; gap: 10px; font-size: 0.88em; }
+.conn-dot { width: 10px; height: 10px; border-radius: 5px; margin-top: 5px; flex: none; }
+.conn-dot.on { background: var(--success); }
+.conn-dot.off { background: var(--switch-off); }
+.conn-dot.bad { background: var(--danger); }
