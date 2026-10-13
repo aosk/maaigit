@@ -4,10 +4,11 @@ import { api } from '../api';
 import { time } from '../format';
 import { useSettings } from '../settings';
 import { Back, Chat, Send, Trash } from '../components/Icons';
+import { mailtoLink } from '../components/EmailCard';
 
 const TONES: Tone[] = ['short', 'friendly', 'formal', 'arabic'];
 
-function Reply({ message, onBack, onChanged }: { message: InboxMessage; onBack: () => void; onChanged: () => void }) {
+function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; gmail: boolean; onBack: () => void; onChanged: () => void }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   const [tone, setTone] = useState<Tone>(lang === 'ar' ? 'arabic' : 'friendly');
@@ -46,6 +47,22 @@ function Reply({ message, onBack, onChanged }: { message: InboxMessage; onBack: 
   }
 
   const waLink = `https://wa.me/${message.phone ?? ''}?text=${encodeURIComponent(draft)}`;
+  const replySubject = `Re: ${message.text.slice(0, 60)}`;
+  const [emailing, setEmailing] = useState(false);
+
+  async function emailIt() {
+    if (!message.email) return;
+    setEmailing(true);
+    setError('');
+    try {
+      await api.emailReply(message.id, { to: message.email, subject: replySubject, body: draft });
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setEmailing(false);
+    }
+  }
 
   async function sent() {
     await api.replied(message.id);
@@ -101,6 +118,21 @@ function Reply({ message, onBack, onChanged }: { message: InboxMessage; onBack: 
 
       {error && <div className="error" role="alert">{error}</div>}
 
+      {message.email && (
+        <section className="card" aria-label={t.sendByEmail}>
+          {gmail ? (
+            <button className="btn primary big" onClick={emailIt} disabled={busy || !draft || emailing}>
+              <Send size={20} />{emailing ? t.sending : `${t.sendByEmail} · ${message.email}`}
+            </button>
+          ) : (
+            <a className="btn primary big" href={mailtoLink(message.email, replySubject, draft)} style={{ textDecoration: 'none' }}>
+              {t.openMailApp}
+            </a>
+          )}
+          <div className="sub" style={{ textAlign: 'center' }}>{gmail ? t.emailFromGmail : t.gmailNotConnected}</div>
+        </section>
+      )}
+
       <section className="card">
         <a className="btn primary big" href={waLink} target="_blank" rel="noreferrer" onClick={sent} aria-disabled={busy || !draft} style={{ textDecoration: 'none' }}>
           <Send size={20} />{t.openWhatsApp}
@@ -119,7 +151,11 @@ export function Inbox() {
   const { t, settings } = useSettings();
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [open, setOpen] = useState<string | null>(null);
-  const [form, setForm] = useState({ from: '', phone: '', text: '' });
+  const [form, setForm] = useState({ from: '', phone: '', email: '', text: '' });
+  const [gmail, setGmail] = useState(false);
+  useEffect(() => {
+    api.status().then((s) => setGmail(Boolean(s.mail?.configured))).catch(() => {});
+  }, []);
   const [error, setError] = useState('');
 
   const load = useCallback(() => {
@@ -128,14 +164,14 @@ export function Inbox() {
   useEffect(load, [load]);
 
   const current = messages.find((m) => m.id === open);
-  if (current) return <Reply message={current} onBack={() => setOpen(null)} onChanged={load} />;
+  if (current) return <Reply message={current} gmail={gmail} onBack={() => setOpen(null)} onChanged={load} />;
 
   async function add(e: FormEvent) {
     e.preventDefault();
     setError('');
     try {
       const m = await api.addMessage(form);
-      setForm({ from: '', phone: '', text: '' });
+      setForm({ from: '', phone: '', email: '', text: '' });
       load();
       setOpen(m.id);
     } catch (err) {
@@ -181,6 +217,10 @@ export function Inbox() {
         <div className="field">
           <label htmlFor="m-phone">{t.phoneOptional}</label>
           <input id="m-phone" inputMode="tel" dir="ltr" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="9665XXXXXXXX" />
+        </div>
+        <div className="field">
+          <label htmlFor="m-email">{t.emailOptional}</label>
+          <input id="m-email" type="email" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@example.com" />
         </div>
         <div className="field">
           <label htmlFor="m-text">{t.message}</label>

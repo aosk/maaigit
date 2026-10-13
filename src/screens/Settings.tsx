@@ -66,6 +66,12 @@ export function SettingsScreen() {
       <div className="section-label">{t.aboutAi}</div>
       <section className="card">
         <p style={{ fontSize: '0.88em' }}>{status ? (status.aiConfigured ? t.aiConnected(status.model) : t.aiDemo) : '…'}</p>
+        {status && (
+          <p style={{ fontSize: '0.88em' }}>
+            <strong>{t.gmail}: </strong>
+            {status.mail?.configured ? t.gmailConnected(status.mail.from) : t.gmailOff}
+          </p>
+        )}
         <a href="#/admin" className="btn secondary" style={{ textDecoration: 'none' }}>{t.adminPortal}</a>
         {status?.auth && status.auth !== 'none' && (
           <button className="btn danger" onClick={() => api.logout().finally(() => window.location.reload())}>{t.signOut}</button>

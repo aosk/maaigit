@@ -125,6 +125,7 @@ export function Admin() {
             <h2 className="h2" style={{ fontSize: 18 }}>Integrations</h2>
             {[
               { name: 'Claude API', ok: data?.status.aiConfigured, okText: 'Connected', offText: 'Not set (demo mode)' },
+              { name: 'Gmail (sending)', ok: data?.status.mail?.configured, okText: data?.status.mail?.from ?? 'Connected', offText: 'Not connected' },
               { name: 'Prayer times (Umm al-Qura)', ok: true, okText: data ? data.status.location.timezone : '…', offText: '' },
               { name: 'WhatsApp hand-off', ok: true, okText: 'Ready (wa.me link)', offText: '' },
               { name: 'Voice input', ok: true, okText: 'In Chrome / Edge', offText: '' },

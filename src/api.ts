@@ -53,10 +53,12 @@ export const api = {
   send: (text: string, lang: Lang) => call<{ reply: string; proposals: Proposal[] }>('POST', '/chat', { text, lang }),
   resetChat: () => call<void>('POST', '/chat/reset'),
   approve: (id: string, start?: string) => call<Proposal>('POST', `/proposals/${id}/approve`, { start }),
+  approveEmail: (id: string, mail: { to: string; subject: string; body: string }) => call<Proposal>('POST', `/proposals/${id}/approve`, mail),
   cancel: (id: string) => call<Proposal>('POST', `/proposals/${id}/cancel`, {}),
 
   inbox: () => call<InboxMessage[]>('GET', '/inbox'),
-  addMessage: (m: { from: string; phone?: string; text: string }) => call<InboxMessage>('POST', '/inbox', m),
+  addMessage: (m: { from: string; phone?: string; email?: string; text: string }) => call<InboxMessage>('POST', '/inbox', m),
+  emailReply: (id: string, mail: { to: string; subject: string; body: string }) => call<InboxMessage>('POST', `/inbox/${id}/email`, mail),
   draft: (id: string, tone: Tone, lang: Lang) => call<{ draft: string; summary: string }>('POST', `/inbox/${id}/draft`, { tone, lang }),
   replied: (id: string) => call<InboxMessage>('POST', `/inbox/${id}/replied`, {}),
   deleteMessage: (id: string) => call<void>('DELETE', `/inbox/${id}`),

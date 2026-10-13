@@ -79,6 +79,7 @@ function seed(): State {
       {
         id: id(),
         from: 'Noura (HR)',
+        email: 'noura.hr@example.com',
         channel: 'email',
         text: 'Please confirm your attendance for the training session next Sunday at 10am.',
         receivedAt: at(0, 7, 40),
@@ -92,7 +93,7 @@ function seed(): State {
       { id: 'assistant', name: 'Assistant', needsApprovalFor: '—', enabled: true },
       { id: 'booking', name: 'Booking', needsApprovalFor: 'Every booking and invite', enabled: true },
       { id: 'reminders', name: 'Reminders', needsApprovalFor: 'Every new reminder', enabled: true },
-      { id: 'messaging', name: 'Messaging', needsApprovalFor: 'Every message (you tap Send)', enabled: true },
+      { id: 'messaging', name: 'Messaging', needsApprovalFor: 'Every message and email (you tap Send)', enabled: true },
       { id: 'planner', name: 'Day planner', needsApprovalFor: 'Adding suggested blocks', enabled: true },
     ],
     drafts: 0,

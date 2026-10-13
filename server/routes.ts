@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { AdminOverview, Lang, StatusInfo, Tone } from '../shared/types.js';
 import { nextPrayer, prayersFor } from '../shared/prayer.js';
 import { MODEL, apiErrorMessage, briefing, chat, client, draftReply } from './ai.js';
+import { MailError, isEmail, mailConfigured, mailFrom, sendMail } from './mail.js';
 import { config } from './config.js';
 import { audit, id, save, state, type Conversation } from './store.js';
 import { DEFAULT_PREFS, publicKey, sendTest, subscribe, unsubscribe } from './notify.js';
@@ -20,6 +21,7 @@ const text = (value: unknown, max = 4000) => (typeof value === 'string' ? value.
 function status(): StatusInfo {
   return {
     aiConfigured: Boolean(client),
+    mail: { configured: mailConfigured, from: mailFrom },
     model: MODEL,
     location: { latitude: config.latitude, longitude: config.longitude, timezone: config.timezone },
   };
@@ -107,22 +109,35 @@ api.post('/chat/reset', (_req, res) => {
   res.status(204).end();
 });
 
-api.post('/proposals/:id/approve', (req, res) => {
+api.post('/proposals/:id/approve', wrap(async (req, res) => {
   const p = state.proposals.find((x) => x.id === req.params.id);
   if (!p) return res.status(404).json({ error: 'Not found' });
   if (p.status !== 'pending') return res.status(409).json({ error: `Already ${p.status}` });
+  if (p.kind === 'email') {
+    // The card is editable: send exactly what the user approved.
+    const mail = { to: text(req.body.to, 320) || p.to, subject: text(req.body.subject, 300) || p.subject, body: text(req.body.body, 20_000) || p.body };
+    try {
+      await sendMail(mail);
+    } catch (error) {
+      if (error instanceof MailError) return res.status(400).json({ error: error.message });
+      throw error;
+    }
+    Object.assign(p, mail, { title: mail.subject, status: 'approved' });
+    audit(`Emailed ${mail.to}: ${mail.subject}`, 'User', 'approved');
+    return res.json(p);
+  }
   if (p.kind === 'meeting') {
     const start = text(req.body.start, 40);
     const option = p.options.find((o) => o.start === start) ?? p.options[0];
     p.chosen = option.start;
     state.events.push({ id: id(), title: p.title, start: option.start, minutes: p.minutes, place: p.attendeeEmail, bookedByMaai: true });
-  } else {
+  } else if (p.kind === 'reminder') {
     state.reminders.push({ id: id(), title: p.title, when: p.when, at: p.at, prayer: p.prayer, offsetMinutes: p.offsetMinutes, repeat: p.repeat, done: false });
   }
   p.status = 'approved';
   audit(`${p.kind === 'meeting' ? 'Booked' : 'Saved reminder'}: ${p.title}`, 'User', 'approved');
   res.json(p);
-});
+}));
 
 api.post('/proposals/:id/cancel', (req, res) => {
   const p = state.proposals.find((x) => x.id === req.params.id);
@@ -143,7 +158,9 @@ api.post('/inbox', (req, res) => {
   const body = text(req.body.text, 4000);
   if (!from || !body) return res.status(400).json({ error: 'Who it is from and the message are both needed' });
   const phone = text(req.body.phone, 20).replace(/\D/g, '') || undefined;
-  const message = { id: id(), from, phone, channel: 'whatsapp' as const, text: body, receivedAt: new Date().toISOString(), replied: false };
+  const email = text(req.body.email, 320);
+  if (email && !isEmail(email)) return res.status(400).json({ error: `"${email}" is not a valid email address` });
+  const message = { id: id(), from, phone, email: email || undefined, channel: email && !phone ? ('email' as const) : ('whatsapp' as const), text: body, receivedAt: new Date().toISOString(), replied: false };
   state.inbox.push(message);
   save();
   res.status(201).json(message);
@@ -154,6 +171,24 @@ api.post('/inbox/:id/draft', wrap(async (req, res) => {
   if (!message) return res.status(404).json({ error: 'Not found' });
   const tone = (['short', 'friendly', 'formal', 'arabic'] as Tone[]).includes(req.body.tone) ? (req.body.tone as Tone) : 'friendly';
   res.json(await draftReply({ from: message.from, text: message.text, tone, lang: lang(req.body.lang) }));
+}));
+
+api.post('/inbox/:id/email', wrap(async (req, res) => {
+  const message = state.inbox.find((m) => m.id === req.params.id);
+  if (!message) return res.status(404).json({ error: 'Not found' });
+  const to = text(req.body.to, 320) || message.email || '';
+  const body = text(req.body.body, 20_000);
+  if (!body) return res.status(400).json({ error: 'The reply is empty' });
+  const subject = text(req.body.subject, 300) || `Re: ${message.text.slice(0, 60)}`;
+  try {
+    await sendMail({ to, subject, body });
+  } catch (error) {
+    if (error instanceof MailError) return res.status(400).json({ error: error.message });
+    throw error;
+  }
+  message.replied = true;
+  audit(`Emailed a reply to ${message.from} (${to})`, 'User', 'approved');
+  res.json(message);
 }));
 
 api.post('/inbox/:id/replied', (req, res) => {

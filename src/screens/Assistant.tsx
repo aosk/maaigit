@@ -7,8 +7,14 @@ import { canListen, listen, speak, stopSpeaking, type ListenProblem } from '../s
 import { Bell, Calendar, Mic, Plus, Send } from '../components/Icons';
 import { PROMPT_KEY } from '../App';
 import { Logo } from '../components/Logo';
+import { EmailCard } from '../components/EmailCard';
 
-function ProposalCard({ proposal, onChange }: { proposal: Proposal; onChange: (p: Proposal) => void }) {
+function ProposalCard({ proposal, gmail, onChange }: { proposal: Proposal; gmail: boolean; onChange: (p: Proposal) => void }) {
+  if (proposal.kind === 'email') return <EmailCard proposal={proposal} gmail={gmail} onChange={onChange} />;
+  return <PlanCard proposal={proposal} onChange={onChange} />;
+}
+
+function PlanCard({ proposal, onChange }: { proposal: Exclude<Proposal, { kind: 'email' }>; onChange: (p: Proposal) => void }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   const [picked, setPicked] = useState(proposal.kind === 'meeting' ? proposal.chosen ?? proposal.options[0]?.start : undefined);
@@ -216,7 +222,7 @@ export function Assistant() {
             )}
             {turn.proposalIds?.map((pid) =>
               proposals[pid] ? (
-                <ProposalCard key={pid} proposal={proposals[pid]} onChange={(p) => setProposals((ps) => ({ ...ps, [p.id]: p }))} />
+                <ProposalCard key={pid} proposal={proposals[pid]} gmail={Boolean(status?.mail?.configured)} onChange={(p) => setProposals((ps) => ({ ...ps, [p.id]: p }))} />
               ) : null,
             )}
           </div>

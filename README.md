@@ -69,6 +69,21 @@ try every screen. For real answers:
 The terminal says `Claude connected` when the key is picked up. Keep `.env`
 private: it is excluded from Git so it never gets uploaded.
 
+### Send email from your Gmail
+
+Ask MAAI *"Email ahmed@example.com that I'll be 15 minutes late"*: it shows an
+editable email card and sends only when you tap **Send**. Replies in the Inbox
+can go by email too. Mail goes out from your own Gmail and shows in **Sent**.
+
+1. Turn on 2-Step Verification: myaccount.google.com → Security.
+2. Create an App Password at <https://myaccount.google.com/apppasswords> (name it MAAI).
+3. Add `GMAIL_USER` (your address) and `GMAIL_APP_PASSWORD` (the 16 letters) to
+   `.env`, or on Render under **Environment**. Settings in the app shows
+   "Sending email as …" once it is connected.
+
+Without them, the card opens your mail app with the email filled in instead.
+Delete the App Password in your Google account at any time to cut MAAI off.
+
 ## Put it online (Render)
 
 Online, MAAI runs all the time at a real `https://` address: it works away from
@@ -114,6 +129,7 @@ server/      Express API (one process serves the app and /api)
   auth.ts    Sign-in: PIN on the home Wi-Fi, password online
   phone.ts   HTTPS certificate, PIN and QR code for phone access
   notify.ts  Alert timing and Web Push (reminders, time to leave, prayers)
+  mail.ts    Sending email through Gmail
 shared/      Types and prayer times (Umm al-Qura), used by both sides
 src/         React app
   screens/   Today, Assistant, Inbox, Settings
@@ -121,8 +137,8 @@ src/         React app
 ```
 
 The AI uses Claude (`claude-opus-5-5`) through the official Anthropic SDK. Its
-only tools are `propose_meeting` and `propose_reminder`, and both just create a
-pending card; the server books or saves only when you approve. Requests use the
+tools are `propose_meeting`, `propose_reminder` and `propose_email`, and each just
+creates a pending card; the server books, saves or sends only when you approve. Requests use the
 API's server-side fallback, so if a safety check declines a request it is
 retried on a suitable model instead of failing.
 

@@ -33,6 +33,8 @@ export interface Reminder {
 export interface InboxMessage {
   id: string;
   from: string;
+  /** Email address, for replying by email. */
+  email?: string;
   /** Phone number in international format, digits only, for the WhatsApp hand-off. */
   phone?: string;
   channel: 'whatsapp' | 'email' | 'sms';
@@ -66,6 +68,16 @@ export type Proposal =
       prayer?: PrayerName;
       offsetMinutes?: number;
       repeat: Reminder['repeat'];
+    }
+  | {
+      id: string;
+      kind: 'email';
+      status: ProposalStatus;
+      title: string;
+      to: string;
+      toName?: string;
+      subject: string;
+      body: string;
     };
 
 export type ProposalStatus = 'pending' | 'approved' | 'cancelled';
@@ -98,6 +110,8 @@ export interface Briefing {
 
 export interface StatusInfo {
   aiConfigured: boolean;
+  /** Gmail connected for sending, and from which address. */
+  mail?: { configured: boolean; from: string };
   /** How this device signed in: not at all on the computer itself, a PIN at home, a password online. */
   auth?: 'none' | 'pin' | 'password';
   model: string;
