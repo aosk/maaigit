@@ -173,20 +173,44 @@ function track(usage: Anthropic.Beta.Messages.BetaUsage) {
   state.usage.requests += 1;
 }
 
+/** Claude's own explanation from an API error, e.g. "Your credit balance is too low…". */
+export function apiErrorMessage(error: unknown): string {
+  const body = (error as { error?: { error?: { message?: unknown } } }).error;
+  const message = body?.error?.message;
+  return typeof message === 'string' ? message : error instanceof Error ? error.message : String(error);
+}
+
+// The optional extras (server-side fallback, automatic caching). If an account turns them
+// down with a 400, MAAI carries on without them rather than failing every request.
+let useExtras = true;
+
 async function create(params: { system: string; messages: MessageParam[]; tools?: Tool[]; effort: 'low' | 'medium'; maxTokens: number }) {
   if (!client) throw new Error('No API key');
-  const response = await client.beta.messages.create({
+  const base = {
     model: MODEL,
     max_tokens: params.maxTokens,
     system: params.system,
     messages: params.messages,
     tools: params.tools,
     output_config: { effort: params.effort },
+  };
+  const extras = {
     // If a safety check declines a request, the API retries it on a suitable model.
     betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    cache_control: { type: 'ephemeral' },
-  });
+    fallbacks: 'default' as const,
+    cache_control: { type: 'ephemeral' as const },
+  };
+  let response;
+  try {
+    response = await client.beta.messages.create(useExtras ? { ...base, ...extras } : base);
+  } catch (error) {
+    const message = apiErrorMessage(error);
+    const aboutExtras = /fallback|beta|cache_control/i.test(message);
+    if (!(error instanceof Anthropic.BadRequestError) || !useExtras || !aboutExtras) throw error;
+    console.warn(`Claude refused an optional feature (${message}); continuing without it.`);
+    useExtras = false;
+    response = await client.beta.messages.create(base);
+  }
   track(response.usage);
   return response;
 }

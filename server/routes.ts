@@ -2,7 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import Anthropic from '@anthropic-ai/sdk';
 import type { AdminOverview, Lang, StatusInfo, Tone } from '../shared/types.js';
 import { nextPrayer, prayersFor } from '../shared/prayer.js';
-import { MODEL, briefing, chat, client, draftReply } from './ai.js';
+import { MODEL, apiErrorMessage, briefing, chat, client, draftReply } from './ai.js';
 import { config } from './config.js';
 import { audit, id, save, state, type Conversation } from './store.js';
 import { DEFAULT_PREFS, publicKey, sendTest, subscribe, unsubscribe } from './notify.js';
@@ -257,8 +257,12 @@ api.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     return res.status(503).json({ error: 'Claude is busy right now. Try again in a moment.' });
   }
   if (error instanceof Anthropic.APIError) {
-    console.error('Claude API error', error.status, error.message);
-    return res.status(502).json({ error: `Claude could not answer (${error.status ?? 'network'}). Try again.` });
+    const message = apiErrorMessage(error);
+    console.error('Claude API error', error.status, message);
+    if (/credit balance/i.test(message)) {
+      return res.status(502).json({ error: 'Your Claude account has no credit left. Add credit at console.anthropic.com → Billing, then try again.' });
+    }
+    return res.status(502).json({ error: `Claude could not answer (${error.status ?? 'network'}): ${message}` });
   }
   console.error(error);
   res.status(500).json({ error: error instanceof Error ? error.message : 'Something went wrong' });
