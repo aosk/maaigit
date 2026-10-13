@@ -225,3 +225,15 @@ a { color: var(--tint-text); }
 .mail-actions { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 14px; }
 .mail-body { margin: 0 16px 14px; padding: 12px; border-radius: 12px; background: var(--raised); font-size: 0.85em; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; }
 .badge-high { font-size: 0.7em; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--danger-soft); color: var(--danger); }
+
+/* ---------- Live progress while MAAI works ---------- */
+.bubble.working { display: flex; flex-direction: column; gap: 8px; min-width: 60%; }
+.working-head { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--tint-text); font-size: 0.9em; }
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--tint-soft); border-top-color: var(--tint); animation: spin 0.8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.82em; }
+.steps li { display: flex; gap: 8px; color: var(--text2); }
+.steps li.done > span:first-child { color: var(--success); }
+.link-btn { background: none; border: none; padding: 0; color: var(--tint-text); font-size: 0.8em; font-weight: 600; text-decoration: underline; }
+.thinking-text { margin-top: 6px; font-size: 0.8em; color: var(--text2); white-space: pre-wrap; max-height: 180px; overflow-y: auto; border-inline-start: 3px solid var(--tint-soft); padding-inline-start: 10px; }
+.working-text { white-space: pre-wrap; }

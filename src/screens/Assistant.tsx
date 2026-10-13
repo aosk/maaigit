@@ -8,6 +8,7 @@ import { Bell, Calendar, Mic, Plus, Send } from '../components/Icons';
 import { PROMPT_KEY } from '../App';
 import { Logo } from '../components/Logo';
 import { EmailCard } from '../components/EmailCard';
+import { WorkingBubble, emptyProgress, type Progress } from '../components/WorkingBubble';
 
 function ProposalCard({ proposal, gmail, onChange }: { proposal: Proposal; gmail: boolean; onChange: (p: Proposal) => void }) {
   if (proposal.kind === 'email') return <EmailCard proposal={proposal} gmail={gmail} onChange={onChange} />;
@@ -107,6 +108,7 @@ export function Assistant() {
   const stopRef = useRef<() => void>();
   const inputRef = useRef<HTMLInputElement>(null);
   const [voiceNote, setVoiceNote] = useState('');
+  const [progress, setProgress] = useState<Progress>(emptyProgress);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -139,7 +141,24 @@ export function Assistant() {
     setBusy(true);
     setTurns((ts) => [...ts, { role: 'user', text: message }]);
     try {
-      const res = await api.send(message, lang);
+      setProgress(emptyProgress());
+      const res = await api.sendStream(message, lang, (e) =>
+        setProgress((p) => {
+          if (e.type === 'thinking') return { ...p, thinking: p.thinking + e.text };
+          if (e.type === 'text') return { ...p, text: p.text + e.text };
+          if (e.type === 'step') {
+            // "read_email" starts a step; "read_email:done" finishes the oldest open one of that kind.
+            const [tool, done] = e.tool.split(':');
+            if (!done) return { ...p, steps: [...p.steps, { tool, done: false }] };
+            const i = p.steps.findIndex((s) => s.tool === tool && !s.done);
+            if (i < 0) return p;
+            const steps = [...p.steps];
+            steps[i] = { ...steps[i], done: true, detail: e.detail };
+            return { ...p, steps };
+          }
+          return p;
+        }),
+      );
       setProposals((ps) => ({ ...ps, ...Object.fromEntries(res.proposals.map((p) => [p.id, p])) }));
       setTurns((ts) => [...ts, { role: 'assistant', text: res.reply, proposalIds: res.proposals.map((p) => p.id) }]);
       if (settings.toggles.speakReplies) speak(res.reply, lang, settings.toggles.slow);
@@ -229,7 +248,7 @@ export function Assistant() {
           </div>
         ))}
 
-        {busy && <div className="bubble assistant pending">{t.thinking}</div>}
+        {busy && <WorkingBubble progress={progress} />}
         {error && <div className="error" role="alert">{error}</div>}
         <div ref={endRef} className="chat-end" />
       </div>

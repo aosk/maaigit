@@ -92,6 +92,37 @@ api.get('/chat', (_req, res) => {
   res.json({ turns: c.turns, proposals: state.proposals.filter((p) => ids.has(p.id)) });
 });
 
+/**
+ * The same as POST /chat, but streamed as server-sent events so the app can show
+ * what MAAI is doing: its thinking, each step, and the reply as it is written.
+ */
+api.post('/chat/stream', async (req, res) => {
+  const message = text(req.body.text, 4000);
+  if (!message) return res.status(400).json({ error: 'Say or type something first' });
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  const send = (event: object) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+  // A comment line every 15 s keeps proxies from closing a long, quiet connection.
+  const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15_000);
+  try {
+    const c = conversation();
+    const reply = await chat(c, message, lang(req.body.lang), send);
+    c.turns.push({ role: 'user', text: message });
+    c.turns.push({ role: 'assistant', text: reply.text, proposalIds: reply.proposals.map((p) => p.id) });
+    save();
+    send({ type: 'done', reply: reply.text, proposals: reply.proposals });
+  } catch (error) {
+    send({ type: 'error', error: explain(error).error });
+  } finally {
+    clearInterval(keepAlive);
+    res.end();
+  }
+});
+
 api.post('/chat', wrap(async (req, res) => {
   const message = text(req.body.text, 4000);
   if (!message) return res.status(400).json({ error: 'Say or type something first' });
@@ -296,21 +327,25 @@ api.patch('/admin/agents/:id', (req, res) => {
 
 // ---------- Errors: plain words the app can show ----------
 
-api.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+/** An error in words the app can show, with the HTTP status to use. */
+function explain(error: unknown): { status: number; error: string } {
   if (error instanceof Anthropic.AuthenticationError) {
-    return res.status(502).json({ error: 'The Claude API key in .env is not valid. Check it at console.anthropic.com.' });
+    return { status: 502, error: 'The Claude API key is not valid. Check it at console.anthropic.com.' };
   }
-  if (error instanceof Anthropic.RateLimitError) {
-    return res.status(503).json({ error: 'Claude is busy right now. Try again in a moment.' });
-  }
+  if (error instanceof Anthropic.RateLimitError) return { status: 503, error: 'Claude is busy right now. Try again in a moment.' };
   if (error instanceof Anthropic.APIError) {
     const message = apiErrorMessage(error);
     console.error('Claude API error', error.status, message);
     if (/credit balance/i.test(message)) {
-      return res.status(502).json({ error: 'Your Claude account has no credit left. Add credit at console.anthropic.com → Billing, then try again.' });
+      return { status: 502, error: 'Your Claude account has no credit left. Add credit at console.anthropic.com → Billing, then try again.' };
     }
-    return res.status(502).json({ error: `Claude could not answer (${error.status ?? 'network'}): ${message}` });
+    return { status: 502, error: `Claude could not answer (${error.status ?? 'network'}): ${message}` };
   }
   console.error(error);
-  res.status(500).json({ error: error instanceof Error ? error.message : 'Something went wrong' });
+  return { status: 500, error: error instanceof Error ? error.message : 'Something went wrong' };
+}
+
+api.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const { status, error: message } = explain(error);
+  res.status(status).json({ error: message });
 });

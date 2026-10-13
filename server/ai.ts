@@ -164,6 +164,15 @@ interface ReminderInput {
 }
 
 /** Turns a tool call into a pending proposal, or explains why it can't. */
+/** A few words about what a finished step did, for the progress list. */
+function stepDetail(block: Anthropic.Beta.Messages.BetaToolUseBlock, created: Proposal[]): string | undefined {
+  if (block.name === 'read_email') {
+    const mail = cachedInbox().find((m) => m.uid === (block.input as { uid: number }).uid);
+    return mail ? `${mail.fromName}: ${mail.subject}` : undefined;
+  }
+  return created[created.length - 1]?.title;
+}
+
 async function runTool(block: Anthropic.Beta.Messages.BetaToolUseBlock, created: Proposal[]): Promise<{ text: string; isError?: boolean }> {
   if (block.name === 'read_email') {
     const { uid } = block.input as { uid: number };
@@ -244,6 +253,13 @@ function track(usage: Anthropic.Beta.Messages.BetaUsage) {
   state.usage.requests += 1;
 }
 
+/** Live progress for the app while MAAI works: its thinking, steps it takes, and the reply as it is written. */
+export type ChatEvent =
+  | { type: 'thinking'; text: string }
+  | { type: 'step'; tool: string; detail?: string }
+  | { type: 'text'; text: string };
+export type OnEvent = (event: ChatEvent) => void;
+
 /** Claude's own explanation from an API error, e.g. "Your credit balance is too low…". */
 export function apiErrorMessage(error: unknown): string {
   const body = (error as { error?: { error?: { message?: unknown } } }).error;
@@ -286,6 +302,53 @@ async function create(params: { system: string; messages: MessageParam[]; tools?
   return response;
 }
 
+/** Like create(), but streams: thinking summaries, tool starts and reply text arrive as they happen. */
+async function createStreaming(
+  params: { system: string; messages: MessageParam[]; tools?: Tool[]; effort: 'low' | 'medium'; maxTokens: number },
+  onEvent: OnEvent,
+) {
+  if (!client) throw new Error('No API key');
+  const base = {
+    model: MODEL,
+    max_tokens: params.maxTokens,
+    system: params.system,
+    messages: params.messages,
+    tools: params.tools,
+    output_config: { effort: params.effort },
+    // A readable summary of the reasoning, shown to the user as "what MAAI is thinking".
+    thinking: { type: 'adaptive' as const, display: 'summarized' as const },
+  };
+  const extras = {
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default' as const,
+    cache_control: { type: 'ephemeral' as const },
+  };
+  const run = async (withExtras: boolean) => {
+    const stream = client!.beta.messages.stream(withExtras ? { ...base, ...extras } : base);
+    for await (const event of stream) {
+      if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+        onEvent({ type: 'step', tool: event.content_block.name });
+      } else if (event.type === 'content_block_delta') {
+        if (event.delta.type === 'thinking_delta') onEvent({ type: 'thinking', text: event.delta.thinking });
+        else if (event.delta.type === 'text_delta') onEvent({ type: 'text', text: event.delta.text });
+      }
+    }
+    return stream.finalMessage();
+  };
+  let response;
+  try {
+    response = await run(useExtras);
+  } catch (error) {
+    const message = apiErrorMessage(error);
+    if (!(error instanceof Anthropic.BadRequestError) || !useExtras || !/fallback|beta|cache_control/i.test(message)) throw error;
+    console.warn(`Claude refused an optional feature (${message}); continuing without it.`);
+    useExtras = false;
+    response = await run(false);
+  }
+  track(response.usage);
+  return response;
+}
+
 const textOf = (content: Anthropic.Beta.Messages.BetaContentBlock[]) =>
   content
     .filter((b): b is Anthropic.Beta.Messages.BetaTextBlock => b.type === 'text')
@@ -302,7 +365,7 @@ function decisionsSince(conversation: Conversation): string {
   return lines.length ? `[Approval cards so far: ${lines.join('; ')}]\n\n` : '';
 }
 
-export async function chat(conversation: Conversation, userText: string, lang: Lang): Promise<{ text: string; proposals: Proposal[] }> {
+export async function chat(conversation: Conversation, userText: string, lang: Lang, onEvent: OnEvent = () => {}): Promise<{ text: string; proposals: Proposal[] }> {
   if (!agentEnabled('assistant')) {
     return { text: lang === 'ar' ? 'المساعد متوقف حالياً من قبل المشرف.' : 'The assistant is switched off by the admin right now.', proposals: [] };
   }
@@ -316,7 +379,7 @@ export async function chat(conversation: Conversation, userText: string, lang: L
   const before = messages.length - 1;
   let reply = '';
   try {
-    reply = await runLoop(system, messages, created, lang);
+    reply = await runLoop(system, messages, created, lang, onEvent);
   } catch (error) {
     // Roll back so a failed turn never leaves half a tool exchange in the history.
     messages.length = before;
@@ -329,10 +392,10 @@ export async function chat(conversation: Conversation, userText: string, lang: L
   return { text: reply || (lang === 'ar' ? 'تم.' : 'Done.'), proposals: created };
 }
 
-async function runLoop(system: string, messages: MessageParam[], created: Proposal[], lang: Lang): Promise<string> {
+async function runLoop(system: string, messages: MessageParam[], created: Proposal[], lang: Lang, onEvent: OnEvent): Promise<string> {
   let reply = '';
   for (let step = 0; step < 6; step++) {
-    const response = await create({ system, messages, tools, effort: 'medium', maxTokens: 16000 });
+    const response = await createStreaming({ system, messages, tools, effort: 'medium', maxTokens: 16000 }, onEvent);
     messages.push({ role: 'assistant', content: response.content });
     reply = textOf(response.content) || reply;
 
@@ -348,6 +411,7 @@ async function runLoop(system: string, messages: MessageParam[], created: Propos
         .filter((b): b is Anthropic.Beta.Messages.BetaToolUseBlock => b.type === 'tool_use')
         .map(async (block) => {
           const result = await runTool(block, created);
+          onEvent({ type: 'step', tool: `${block.name}:done`, detail: stepDetail(block, created) });
           return { type: 'tool_result' as const, tool_use_id: block.id, content: result.text, is_error: result.isError };
         }),
     );
