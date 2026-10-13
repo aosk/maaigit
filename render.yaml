@@ -38,3 +38,6 @@ services:
         sync: false
       - key: GOOGLE_CALENDAR_ICS_URL
         sync: false
+      # Optional: Asana personal access token.
+      - key: ASANA_TOKEN
+        sync: false

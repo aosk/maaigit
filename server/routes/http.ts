@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { Lang } from '../../shared/types.js';
 import { apiErrorMessage } from '../ai/claude.js';
 import { MailError } from '../mail.js';
+import { AsanaError } from '../asana.js';
 
 /** Small helpers shared by every route file. */
 
@@ -36,7 +37,7 @@ export function find<T extends { id: string }>(items: T[], id: string): T {
 /** An error in words the app can show, with the HTTP status to use. */
 export function explain(error: unknown): { status: number; error: string } {
   if (error instanceof HttpError) return { status: error.status, error: error.message };
-  if (error instanceof MailError) return { status: 400, error: error.message };
+  if (error instanceof MailError || error instanceof AsanaError) return { status: 400, error: error.message };
   if (error instanceof Anthropic.AuthenticationError) {
     return { status: 502, error: 'The Claude API key is not valid. Check it at console.anthropic.com.' };
   }

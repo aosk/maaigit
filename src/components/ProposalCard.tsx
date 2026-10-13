@@ -6,14 +6,16 @@ import { useSettings } from '../settings';
 import { useAction } from '../useAction';
 import { Bell, Calendar } from './Icons';
 import { EmailCard } from './EmailCard';
+import { AsanaCard } from './AsanaCard';
 
 /** An approval card from the assistant: nothing happens until the user approves it. */
 export function ProposalCard({ proposal, gmail, onChange }: { proposal: Proposal; gmail: boolean; onChange: (p: Proposal) => void }) {
   if (proposal.kind === 'email') return <EmailCard proposal={proposal} gmail={gmail} onChange={onChange} />;
+  if (proposal.kind === 'asana') return <AsanaCard proposal={proposal} onChange={onChange} />;
   return <PlanCard proposal={proposal} onChange={onChange} />;
 }
 
-function PlanCard({ proposal, onChange }: { proposal: Exclude<Proposal, { kind: 'email' }>; onChange: (p: Proposal) => void }) {
+function PlanCard({ proposal, onChange }: { proposal: Exclude<Proposal, { kind: 'email' | 'asana' }>; onChange: (p: Proposal) => void }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   const [picked, setPicked] = useState(proposal.kind === 'meeting' ? proposal.chosen ?? proposal.options[0]?.start : undefined);

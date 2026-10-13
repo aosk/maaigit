@@ -1,7 +1,7 @@
 import type { Lang, Proposal } from '../../shared/types.js';
 import { agentEnabled, audit, save, state, type Conversation } from '../store.js';
 import { client, stream, textOf, type MessageParam, type OnEvent, type ToolUse } from './claude.js';
-import { dayTime, withContext } from './context.js';
+import { dayTime, refreshContext, withContext } from './context.js';
 import { runTool, tools } from './tools.js';
 import { demoChat } from './demo.js';
 
@@ -49,6 +49,7 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
   }
   if (!client) return demoChat(userText, lang);
 
+  await refreshContext();
   const messages = conversation.apiMessages;
   const before = messages.length;
   messages.push({ role: 'user', content: `${decisionsSince(conversation)}${withContext(userText)}` });

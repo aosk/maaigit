@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Proposal, StreamEvent } from '../../shared/types.js';
 import { chat } from '../ai/chat.js';
 import { sendMail } from '../mail.js';
+import { updateTask } from '../asana.js';
 import { audit, id, save, state, type Conversation } from '../store.js';
 import { HttpError, explain, find, lang, text, wrap } from './http.js';
 
@@ -66,6 +67,15 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
       p.chosen = option.start;
       state.events.push({ id: id(), title: p.title, start: option.start, minutes: p.minutes, place: p.attendeeEmail, bookedByMaai: true });
       return `Booked: ${p.title}`;
+    }
+    case 'asana': {
+      // The card is editable: apply exactly what the user approved.
+      const change = { comment: text(body.comment, 5000), complete: body.complete === true, dueOn: text(body.dueOn, 10) };
+      if (change.dueOn && !/^\d{4}-\d{2}-\d{2}$/.test(change.dueOn)) throw new HttpError(400, 'The due date must look like 2026-10-20.');
+      if (!change.comment && !change.complete && !change.dueOn) throw new HttpError(400, 'Nothing to change: add a comment, mark it done, or set a date.');
+      await updateTask(p.taskGid, change);
+      Object.assign(p, change);
+      return `Updated Asana task: ${p.taskName}`;
     }
     case 'reminder':
       state.reminders.push({ id: id(), title: p.title, when: p.when, at: p.at, prayer: p.prayer, offsetMinutes: p.offsetMinutes, repeat: p.repeat, done: false });

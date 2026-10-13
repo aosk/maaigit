@@ -1,7 +1,9 @@
+import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import type { Lang, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings, type Look, type ToggleId } from '../settings';
+import { CalendarFeed } from '../components/CalendarFeed';
 import { NotificationSettings } from '../components/NotificationSettings';
 
 export function SettingsScreen() {
@@ -46,25 +48,30 @@ export function SettingsScreen() {
       <section className="card" aria-label={t.connections}>
         {status ? (
           <>
-            <div className="conn">
-              <span className={`conn-dot ${status.aiConfigured ? 'on' : 'off'}`} aria-hidden="true" />
-              <span><strong>Claude AI: </strong>{status.aiConfigured ? t.aiConnected(status.model) : t.aiDemo}</span>
-            </div>
-            <div className="conn">
-              <span className={`conn-dot ${status.mail?.configured ? 'on' : 'off'}`} aria-hidden="true" />
-              <span><strong>{t.gmail}: </strong>{status.mail?.configured ? t.gmailConnected(status.mail.from) : t.gmailOff}</span>
-            </div>
-            <div className="conn">
-              <span className={`conn-dot ${status.calendar?.error ? 'bad' : status.calendar?.configured ? 'on' : 'off'}`} aria-hidden="true" />
-              <span>
-                <strong>{t.googleCalendar}: </strong>
-                {status.calendar?.error
-                  ? t.calendarError(status.calendar.error)
-                  : status.calendar?.configured
-                    ? t.calendarConnected(status.calendar.events)
-                    : t.calendarOff}
-              </span>
-            </div>
+            <Conn state={status.aiConfigured ? 'on' : 'off'} name="Claude AI">{status.aiConfigured ? t.aiConnected(status.model) : t.aiDemo}</Conn>
+            <Conn state={status.mail?.configured ? 'on' : 'off'} name={t.gmail}>{status.mail?.configured ? t.gmailConnected(status.mail.from) : t.gmailOff}</Conn>
+            <Conn state={status.calendar?.error ? 'bad' : status.calendar?.configured ? 'on' : 'off'} name={t.calendars}>
+              {status.calendar?.configured ? (
+                <>
+                  {status.calendar.sources?.map((c) => (
+                    <span key={c.name} style={{ display: 'block' }}>
+                      {c.error ? '✗' : '✓'} {t.calendarSource(c.name, c.events)}
+                      {c.error && <span className="sub" style={{ display: 'block' }}>{t.calendarError(c.error)}</span>}
+                    </span>
+                  ))}
+                  {status.calendar.merged ? <span className="sub" style={{ display: 'block' }}>{t.calendarMerged(status.calendar.merged)}</span> : null}
+                </>
+              ) : (
+                t.calendarOff
+              )}
+            </Conn>
+            <Conn state={status.asana?.error ? 'bad' : status.asana?.configured ? 'on' : 'off'} name={t.asana}>
+              {status.asana?.error
+                ? t.asanaError(status.asana.error)
+                : status.asana?.configured
+                  ? t.asanaConnected(status.asana.open, status.asana.overdue)
+                  : t.asanaOff}
+            </Conn>
           </>
         ) : (
           <div className="skeleton"><span /><span /></div>
@@ -76,6 +83,8 @@ export function SettingsScreen() {
           )}
         </div>
       </section>
+
+      <CalendarFeed />
 
       <NotificationSettings />
 
@@ -98,6 +107,16 @@ export function SettingsScreen() {
       </section>
       <p className="sub">{t.followsDevice}</p>
 
+    </div>
+  );
+}
+
+/** One line in the Connections card: a dot (green working, red failing, grey off), the service, and its status. */
+function Conn({ state, name, children }: { state: 'on' | 'off' | 'bad'; name: string; children: ReactNode }) {
+  return (
+    <div className="conn">
+      <span className={`conn-dot ${state}`} aria-hidden="true" />
+      <span><strong>{name}: </strong>{children}</span>
     </div>
   );
 }

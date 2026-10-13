@@ -4,6 +4,7 @@ import { agentEnabled, id } from '../store.js';
 import { config } from '../config.js';
 import { isEmail, mailConfigured } from '../mail.js';
 import { cachedInbox, getEmail } from '../gmail-inbox.js';
+import { AsanaError, asanaConfigured, cachedTasks, getTask } from '../asana.js';
 import { emailForClaude } from './context.js';
 import type { Tool, ToolResult, ToolUse } from './claude.js';
 
@@ -49,6 +50,66 @@ const read_email: ToolSpec<{ uid: number }> = {
     const mail = cachedInbox().find((m) => m.uid === uid);
     return mail ? `${mail.fromName}: ${mail.subject}` : undefined;
   },
+};
+
+const read_asana_task: ToolSpec<{ task_gid: string }> = {
+  definition: {
+    description: "Read one Asana task assigned to the user, with its notes and latest comments (task_gid is listed in the context). Read-only.",
+    input_schema: {
+      type: 'object',
+      properties: { task_gid: { type: 'string', description: 'The task id from the Asana list, e.g. 1209876543210.' } },
+      required: ['task_gid'],
+      additionalProperties: false,
+    },
+  },
+  async run({ task_gid }) {
+    if (!asanaConfigured) throw new ToolError('Asana is not connected.');
+    const { task, comments } = await getTask(task_gid).catch((error: Error) => {
+      throw new ToolError(error.message);
+    });
+    const thread = comments.map((c) => `- ${c.by}: ${c.text}`).join('\n') || '- no comments yet';
+    return `<asana_task>\nTask ${task.gid}: ${task.name}${task.project ? ` (${task.project})` : ''}\nDue: ${task.dueOn ?? 'no date'}\nNotes: ${task.notes ?? 'none'}\nRecent comments:\n${thread}\n</asana_task>`;
+  },
+  detail: ({ task_gid }) => cachedTasks().find((t) => t.gid === task_gid)?.name,
+};
+
+const propose_asana_update: ToolSpec<{ task_gid: string; comment: string; complete: boolean; due_on: string }> = {
+  definition: {
+    description: 'Show the user an editable approval card to change an Asana task: post a comment, mark it done, or move its due date. Nothing changes in Asana until the user taps Approve.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        task_gid: { type: 'string', description: 'The task id from the Asana list.' },
+        comment: { type: 'string', description: 'A comment to post as the user, in first person, or an empty string for none.' },
+        complete: { type: 'boolean', description: 'true to mark the task done.' },
+        due_on: { type: 'string', description: 'A new due date as YYYY-MM-DD, or an empty string to keep the current one.' },
+      },
+      required: ['task_gid', 'comment', 'complete', 'due_on'],
+      additionalProperties: false,
+    },
+  },
+  run(input, created) {
+    requireAgent('messaging', 'Messaging is switched off by the admin.');
+    if (!asanaConfigured) throw new ToolError('Asana is not connected, so nothing can be changed there.');
+    const task = cachedTasks().find((t) => t.gid === input.task_gid);
+    if (!task) throw new ToolError(`No open task ${input.task_gid} in the Asana list. Use a task id from the context.`);
+    if (input.due_on && !/^\d{4}-\d{2}-\d{2}$/.test(input.due_on)) throw new ToolError('due_on must be YYYY-MM-DD.');
+    if (!input.comment && !input.complete && !input.due_on) throw new ToolError('Nothing to change: give a comment, complete, or a new due date.');
+    created.push({
+      id: id(),
+      kind: 'asana',
+      status: 'pending',
+      title: task.name,
+      taskGid: task.gid,
+      taskName: task.name,
+      taskUrl: task.url,
+      comment: input.comment,
+      complete: input.complete,
+      dueOn: input.due_on,
+    });
+    return 'Asana card shown. Nothing changed yet; waiting for the user to approve.';
+  },
+  detail: lastTitle,
 };
 
 const propose_email: ToolSpec<{ to: string; to_name: string; subject: string; body: string }> = {
@@ -178,7 +239,7 @@ const propose_reminder: ToolSpec<{ title: string; when: string; at: string; afte
   detail: lastTitle,
 };
 
-const SPECS: Record<string, ToolSpec<any>> = { read_email, propose_email, propose_meeting, propose_reminder };
+const SPECS: Record<string, ToolSpec<any>> = { read_email, read_asana_task, propose_asana_update, propose_email, propose_meeting, propose_reminder };
 
 export const tools: Tool[] = Object.entries(SPECS).map(([name, spec]) => ({ name, strict: true, ...spec.definition }) as Tool);
 
@@ -191,7 +252,7 @@ export async function runTool(block: ToolUse, created: Proposal[]): Promise<{ re
     const text = await spec.run(block.input, created);
     return { result: reply(text), detail: spec.detail?.(block.input, created) };
   } catch (error) {
-    if (error instanceof ToolError) return { result: reply(error.message, true) };
+    if (error instanceof ToolError || error instanceof AsanaError) return { result: reply((error as Error).message, true) };
     throw error;
   }
 }

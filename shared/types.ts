@@ -16,6 +16,8 @@ export interface CalendarEvent {
   source?: 'maai' | 'google';
   /** An all-day event (no set time). */
   allDay?: boolean;
+  /** Sample data from the first run; hidden once a real calendar is connected. */
+  demo?: boolean;
   /** Set when MAAI booked it on the user's behalf. */
   bookedByMaai?: boolean;
 }
@@ -82,6 +84,21 @@ export type Proposal =
       toName?: string;
       subject: string;
       body: string;
+    }
+  | {
+      id: string;
+      kind: 'asana';
+      status: ProposalStatus;
+      title: string;
+      taskGid: string;
+      taskName: string;
+      taskUrl?: string;
+      /** A comment to post on the task (empty for none). */
+      comment: string;
+      /** Mark the task done. */
+      complete: boolean;
+      /** A new due date, YYYY-MM-DD (empty for none). */
+      dueOn: string;
     };
 
 export type ProposalStatus = 'pending' | 'approved' | 'cancelled';
@@ -135,6 +152,8 @@ export interface StatusInfo {
   mail?: { configured: boolean; from: string; inbox?: boolean };
   /** Google Calendar, read through its private iCal address. */
   calendar?: CalendarStatus;
+  /** Asana, read through a personal access token. */
+  asana?: AsanaStatus;
   /** How this device signed in: not at all on the computer itself, a PIN at home, a password online. */
   auth?: 'none' | 'pin' | 'password';
   model: string;
@@ -221,4 +240,32 @@ export interface CalendarStatus {
   events: number;
   lastSync?: string;
   error?: string;
+  /** Each calendar MAAI reads, so a missing one is easy to spot. */
+  sources?: { name: string; events: number; error?: string }[];
+  /** Same event in two calendars, shown once. */
+  merged?: number;
+}
+
+/** An Asana task assigned to the user. */
+export interface AsanaTask {
+  gid: string;
+  name: string;
+  /** YYYY-MM-DD, if it has a due date. */
+  dueOn?: string;
+  notes?: string;
+  url: string;
+  project?: string;
+}
+
+export interface AsanaStatus {
+  configured: boolean;
+  open: number;
+  overdue: number;
+  dueToday: number;
+  error?: string;
+}
+
+/** GET /api/asana: the tasks that matter now, for Today. */
+export interface AsanaOverview extends AsanaStatus {
+  tasks: AsanaTask[];
 }

@@ -3,7 +3,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type Anthropic from '@anthropic-ai/sdk';
 import { config } from './config.js';
-import { googleEvents } from './gcal.js';
+import { calendarConfigured, googleEvents } from './gcal.js';
+import { dedupeEvents } from '../shared/schedule.js';
 import type {
   AgentSetting,
   AppAlert,
@@ -61,10 +62,10 @@ function at(dayOffset: number, hour: number, minute: number): string {
 function seed(): State {
   return {
     events: [
-      { id: id(), title: 'Team stand-up', start: at(0, 9, 0), minutes: 15, place: 'Microsoft Teams' },
-      { id: id(), title: 'Call with Sara', start: at(0, 11, 30), minutes: 30, place: 'Phone', bookedByMaai: true },
-      { id: id(), title: 'Dentist appointment', start: at(0, 16, 0), minutes: 45, place: 'Clinic', travelMinutes: 18 },
-      { id: id(), title: 'Q4 report review', start: at(1, 10, 0), minutes: 60, place: 'Office' },
+      { id: id(), title: 'Team stand-up', start: at(0, 9, 0), minutes: 15, place: 'Microsoft Teams' , demo: true },
+      { id: id(), title: 'Call with Sara', start: at(0, 11, 30), minutes: 30, place: 'Phone', bookedByMaai: true , demo: true },
+      { id: id(), title: 'Dentist appointment', start: at(0, 16, 0), minutes: 45, place: 'Clinic', travelMinutes: 18 , demo: true },
+      { id: id(), title: 'Q4 report review', start: at(1, 10, 0), minutes: 60, place: 'Office' , demo: true },
     ],
     reminders: [
       { id: id(), title: 'Pay the electricity bill', when: 'Today, 20:00', at: at(0, 20, 0), repeat: 'once', done: false },
@@ -108,9 +109,14 @@ function seed(): State {
   };
 }
 
+/** The first-run sample events, so copies saved before they were marked can still be recognised. */
+const SAMPLE_EVENTS = new Set(['Team stand-up|Microsoft Teams', 'Call with Sara|Phone', 'Dentist appointment|Clinic', 'Q4 report review|Office']);
+
 function load(): State {
   try {
-    return { ...seed(), ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) };
+    const saved = { ...seed(), ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) } as State;
+    for (const e of saved.events) if (SAMPLE_EVENTS.has(`${e.title}|${e.place}`)) e.demo = true;
+    return saved;
   } catch {
     return seed();
   }
@@ -139,7 +145,9 @@ export function agentEnabled(agentId: AgentSetting['id']): boolean {
   return state.agents.find((a) => a.id === agentId)?.enabled ?? true;
 }
 
-/** MAAI's own events plus those read from Google Calendar, in time order. */
+/** MAAI's own events plus those read from your calendars, in time order, each meeting once. */
 export function allEvents(): CalendarEvent[] {
-  return [...state.events, ...googleEvents()].sort((a, b) => a.start.localeCompare(b.start));
+  // The sample events only fill an empty app; a real calendar replaces them.
+  const own = state.events.filter((e) => !(e.demo && calendarConfigured));
+  return dedupeEvents([...own, ...googleEvents()]).events.sort((a, b) => a.start.localeCompare(b.start));
 }

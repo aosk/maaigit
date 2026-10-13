@@ -93,22 +93,46 @@ or deleted), emails are kept in memory only, and their text is sent to Claude to
 summarise. You can also ask the assistant about an email ("what did Sara want?").
 Set `MAAI_DEMO_INBOX=1` to try the screen with sample emails before connecting Gmail.
 
-### Show your Google Calendar
+### Keep your calendars matching
 
-MAAI can show your Google Calendar events on Today, warn you before them and
-plan around them. It reads them through the calendar's private address
-(read-only: meetings MAAI books stay in MAAI and don't appear in Google).
+MAAI shows one calendar made from three places, each meeting once:
 
-1. Open Google Calendar on a computer → gear → **Settings**.
-2. On the left under **Settings for my calendars**, click your calendar.
-3. Scroll to **Integrate calendar** → copy **Secret address in iCal format**.
-4. Add it as `GOOGLE_CALENDAR_ICS_URL` in `.env`, or on Render under
-   **Environment**. For several calendars, put the addresses one after another
-   separated by spaces.
+| Source | How it gets to MAAI | Direction |
+|---|---|---|
+| **Google (Gmail) Calendar** | Its private address, `GOOGLE_CALENDAR_ICS_URL` | Google → MAAI |
+| **iPhone calendar** | If the phone uses your Google account, it's the same calendar as above. For an iCloud calendar, share it publicly (below) and add that link too | Phone → MAAI |
+| **Meetings MAAI books** | A private link MAAI publishes (Settings → *MAAI calendar on your phone*) that the phone and Google subscribe to | MAAI → phone and Google |
 
-Keep this address private: anyone with it can see your calendar. Google events
-show a small **G** on Today, and Settings → Connections shows the sync status.
-They refresh every 10 minutes.
+1. **Google:** Google Calendar on a computer → gear → **Settings** → your calendar under
+   *Settings for my calendars* → **Integrate calendar** → copy **Secret address in iCal format**.
+2. **iPhone:** easiest is to make the phone use Google: iPhone Settings → Calendar → Accounts →
+   Add Account → Google, and switch Calendars on. Then the phone, Google and MAAI agree. For an
+   iCloud calendar instead: Calendar app → Calendars → (i) next to it → **Public Calendar** → copy
+   the link (it starts `webcal://`).
+3. Put every address in `GOOGLE_CALENDAR_ICS_URL` (`.env`, or Render → **Environment**), separated by
+   spaces. Settings → **Connections** then lists each calendar with its event count, a ✗ if one
+   can't be read, and how many repeated meetings were shown once.
+4. **MAAI → phone:** Settings → **Add to iPhone Calendar**. For Google Calendar: Settings → Add
+   calendar → From URL → paste the copied link (Google refreshes it about once a day).
+
+Reading is read-only and refreshes every 10 minutes. MAAI can't edit Google or iCloud events; changes
+there show in MAAI, and meetings MAAI books flow out through the link. Keep all these addresses
+private: anyone with one can see your calendar. The sample events from the first run are hidden as
+soon as a calendar is connected.
+
+### Asana
+
+MAAI lists the tasks assigned to you (overdue first) on Today, includes them in the morning briefing,
+and, when you ask, reads a task and its comments, and prepares a **comment**, **mark done** or **new due
+date** as an editable card. Nothing changes in Asana until you tap **Update in Asana**.
+
+1. In Asana: your profile picture → **My Settings** → **Apps** → **Developer apps** →
+   **Create new token**. Copy it once.
+2. Add it as `ASANA_TOKEN` in `.env`, or on Render → **Environment**. Settings → Connections shows
+   "Connected · N open tasks". Delete the token in Asana to cut MAAI off.
+
+Ask things like *"What's overdue in Asana?"*, *"Read the Q4 report task"*, or *"Comment on the Q4
+report task that I'll send it Thursday"*.
 
 ## Put it online (Render)
 
@@ -165,7 +189,9 @@ server/
   notify.ts       Alert timing and Web Push (reminders, time to leave, prayers)
   mail.ts         Sending email through Gmail
   gmail-inbox.ts  Reading the Gmail inbox (IMAP, read-only)
-  gcal.ts         Reading Google Calendar (secret iCal address, read-only)
+  gcal.ts         Reading calendars (Google, iPhone/iCloud) through their private iCal links
+  feed.ts         MAAI's own calendar as a private link the phone and Google subscribe to
+  asana.ts        Asana tasks (read; changes only after you approve a card)
 shared/           Types, prayer times (Umm al-Qura) and schedule rules, used by both sides
 src/              React app
   screens/        Today, Assistant, Inbox, Settings
@@ -196,6 +222,6 @@ Other settings in `.env`: `PORT`, `MAAI_DATA_DIR` (where data is kept), and `MAA
 
 ## Not built yet
 
-Adding events to Google Calendar (it's read-only for now), Outlook, accounts
-for more than one person, and a native iPhone app. The old StockPlay
+Writing events straight into Google Calendar (it flows through the link above
+instead), WhatsApp, Outlook, accounts for more than one person, and a native iPhone app. The old StockPlay
 project is kept in `archive/stockplay`.

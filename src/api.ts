@@ -1,6 +1,7 @@
 import type {
   AdminOverview,
   AgentSetting,
+  AsanaOverview,
   AppAlert,
   Briefing,
   ChatEvent,
@@ -79,6 +80,7 @@ export const api = {
   resetChat: () => call<void>('POST', '/chat/reset'),
   approve: (id: string, start?: string) => call<Proposal>('POST', `/proposals/${id}/approve`, { start }),
   approveEmail: (id: string, mail: { to: string; subject: string; body: string }) => call<Proposal>('POST', `/proposals/${id}/approve`, mail),
+  approveAsana: (id: string, change: { comment: string; complete: boolean; dueOn: string }) => call<Proposal>('POST', `/proposals/${id}/approve`, change),
   cancel: (id: string) => call<Proposal>('POST', `/proposals/${id}/cancel`, {}),
 
   inbox: () => call<InboxMessage[]>('GET', '/inbox'),
@@ -88,6 +90,8 @@ export const api = {
   replied: (id: string) => call<InboxMessage>('POST', `/inbox/${id}/replied`, {}),
   deleteMessage: (id: string) => call<void>('DELETE', `/inbox/${id}`),
 
+  calendarFeed: () => call<{ https: string; webcal: string }>('GET', '/calendar/feed'),
+  asana: () => call<AsanaOverview>('GET', '/asana'),
   mailCount: () => call<{ unread: number | null; total?: number }>('GET', '/mail/count'),
   mailDigest: (lang: Lang, refresh = false) => call<MailDigest>('GET', `/mail/digest?lang=${lang}${refresh ? '&refresh=1' : ''}`),
   notify: () => call<NotifyStatus>('GET', '/notify'),

@@ -9,6 +9,8 @@ import { api } from './routes/index.js';
 import { pinGuard, phoneSetup } from './phone.js';
 import { startScheduler } from './notify.js';
 import { refreshCalendar } from './gcal.js';
+import { openTasks } from './asana.js';
+import { feedRoutes } from './feed.js';
 import { createGuard } from './auth.js';
 
 const phoneMode = process.argv.includes('--phone') || process.env.MAAI_PHONE === '1';
@@ -26,6 +28,7 @@ if (config.production) {
   app.use(express.static(dist));
   app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
 } else {
+  app.use(feedRoutes);
   // One process, one port: Vite serves the app with hot reload, Express serves /api.
   // Live reload is off in phone mode: the phone can't reach Vite's reload socket over HTTPS.
   const { createServer } = await import('vite');
@@ -35,6 +38,7 @@ if (config.production) {
 
 startScheduler();
 void refreshCalendar(true);
+void openTasks(true).catch((e: Error) => console.error('Asana:', e.message));
 
 const ai = process.env.ANTHROPIC_API_KEY ? 'Claude connected' : 'demo mode (no ANTHROPIC_API_KEY in .env)';
 
@@ -53,6 +57,8 @@ if (config.production) {
   const site = express();
   // The hosting service checks this to know MAAI is up; it reveals nothing.
   site.get('/api/health', (_req, res) => res.json({ ok: true }));
+  // Calendar apps can't sign in; their link is a long random key (see feed.ts).
+  site.use(feedRoutes);
   site.use(express.json({ limit: '1mb' }));
   site.use(createGuard('password', config.password, fs.readFileSync(secretFile, 'utf8').trim()));
   site.use(app);

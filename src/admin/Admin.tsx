@@ -160,6 +160,12 @@ export function Admin() {
               { name: 'WhatsApp hand-off', ok: true, okText: 'Ready (wa.me link)', offText: '' },
               { name: 'Voice input', ok: true, okText: 'In Chrome / Edge', offText: '' },
               {
+                name: 'Asana',
+                ok: data?.status.asana?.configured && !data.status.asana.error,
+                okText: `${data?.status.asana?.open ?? 0} open tasks`,
+                offText: data?.status.asana?.error ? 'Sync failed' : 'Not connected',
+              },
+              {
                 name: 'Google Calendar (read-only)',
                 ok: data?.status.calendar?.configured && !data.status.calendar.error,
                 okText: `${data?.status.calendar?.events ?? 0} events`,
