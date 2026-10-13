@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The checkmark from the official Najiz logo (najiz-logo.svg), unchanged. -->
+<!-- The checkmark from the official Najiz logo, unchanged (the "ناجز najiz" lettering left out). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="86" height="70" viewBox="123 66 86 70">
 <defs>
-<clipPath id="clip-0">
-<path clip-rule="nonzero" d="M 99 117 L 105 117 L 105 140 L 99 140 Z M 99 117 "/>
-</clipPath>
 <clipPath id="clip-1">
 <path clip-rule="nonzero" d="M 150 68 L 205.601562 68 L 205.601562 134 L 150 134 Z M 150 68 "/>
 </clipPath>
