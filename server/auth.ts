@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 
 /**
@@ -6,10 +6,12 @@ import type { NextFunction, Request, Response } from 'express';
  * MAAI is online. The page itself always loads, so it can show the sign-in screen.
  * Mount it with `app.use('/api', guard)`: the paths it sees are relative to /api.
  */
-export type AuthKind = 'pin' | 'password';
+type AuthKind = 'pin' | 'password';
 
 const COOKIE = 'maai_session';
-const YEAR = 60 * 60 * 24 * 365;
+const DAY = 24 * 60 * 60;
+/** A session lasts 30 days, and is renewed on use once it has less than 15 days left. */
+const SESSION_DAYS = 30;
 
 function sameText(a: string, b: string): boolean {
   const x = Buffer.from(a);
@@ -23,10 +25,25 @@ function sameText(a: string, b: string): boolean {
  * passing it, whatever its capitalisation or shape. Everything not listed here is denied.
  */
 export function createGuard(kind: AuthKind, passcode: string, secret: string, now: () => number = Date.now) {
-  // The cookie holds a hash, never the passcode; changing the passcode signs everyone out.
   const hash = (value: string) => createHash('sha256').update(`${kind}:${value}:${secret}`).digest('hex');
-  const session = hash(passcode);
   const wrong = kind === 'pin' ? 'Wrong PIN' : 'Wrong password';
+
+  // The cookie is "expiry.signature": the signature covers the expiry and the passcode, so a
+  // cookie can't be altered, expires by itself, and stops working when the passcode changes.
+  // It never contains the passcode.
+  const passcodeHash = hash(passcode);
+  const sign = (expires: number) => createHmac('sha256', secret).update(`${kind}|${expires}|${passcodeHash}`).digest('hex');
+  const seconds = () => Math.floor(now() / 1000);
+  const issue = () => {
+    const expires = seconds() + SESSION_DAYS * DAY;
+    return `${COOKIE}=${expires}.${sign(expires)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_DAYS * DAY}`;
+  };
+  /** The expiry (in seconds) of a good cookie value, or 0. */
+  const check = (value: string): number => {
+    const [expiresText = '', signature = ''] = value.split('.');
+    const expires = /^\d{1,12}$/.test(expiresText) ? Number(expiresText) : 0;
+    return expires > seconds() && expires <= seconds() + SESSION_DAYS * DAY && sameText(signature, sign(expires)) ? expires : 0;
+  };
 
   // Five wrong tries lock sign-in, and each further round of five locks it twice as long
   // (1 minute, 2, 4 … up to an hour), so a passcode can't be guessed by trying them all.
@@ -42,7 +59,7 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
         return res.status(429).json({ error: `Too many wrong tries. Try again in ${Math.ceil(wait / 60_000)} minute${wait > 60_000 ? 's' : ''}.` });
       }
       const given = typeof req.body?.pin === 'string' ? req.body.pin.trim() : '';
-      if (!sameText(hash(given), session)) {
+      if (!sameText(hash(given), passcodeHash)) {
         failures += 1;
         if (failures >= 5) {
           failures = 0;
@@ -53,7 +70,7 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
       }
       failures = 0;
       rounds = 0;
-      res.setHeader('Set-Cookie', `${COOKIE}=${session}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${YEAR}`);
+      res.setHeader('Set-Cookie', issue());
       return res.status(204).end();
     }
 
@@ -62,8 +79,11 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
       return res.status(204).end();
     }
 
-    const cookie = (req.headers.cookie ?? '').match(new RegExp(`(?:^|;\\s*)${COOKIE}=([a-f0-9]+)`))?.[1] ?? '';
-    if (sameText(cookie, session)) {
+    const cookie = (req.headers.cookie ?? '').match(new RegExp(`(?:^|;\\s*)${COOKIE}=([0-9a-f.]+)`))?.[1] ?? '';
+    const expires = check(cookie);
+    if (expires) {
+      // Using the app keeps you signed in: renew once half the time is gone.
+      if (expires - seconds() < (SESSION_DAYS / 2) * DAY) res.setHeader('Set-Cookie', issue());
       res.locals.auth = kind;
       return next();
     }

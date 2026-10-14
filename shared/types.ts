@@ -127,7 +127,7 @@ export type Proposal =
       taskUrl?: string;
     };
 
-export type ProposalStatus = 'pending' | 'approved' | 'cancelled';
+type ProposalStatus = 'pending' | 'approved' | 'cancelled';
 
 export interface ChatTurn {
   role: 'user' | 'assistant';

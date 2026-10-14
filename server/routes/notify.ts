@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { DEFAULT_PREFS, audit, save, state } from '../store.js';
-import { publicKey, sendBriefingNow, sendTest, subscribe, unsubscribe } from '../notify.js';
+import { isPushServiceUrl, publicKey, sendBriefingNow, sendTest, subscribe, unsubscribe } from '../notify.js';
 import { HttpError, lang, text, wrap } from './http.js';
 
 export const notify = Router();
@@ -26,7 +26,7 @@ notify.patch('/notify/prefs', (req, res) => {
 
 notify.post('/notify/subscribe', (req, res) => {
   const s = req.body.subscription;
-  if (typeof s?.endpoint !== 'string' || !s.endpoint.startsWith('https://') || typeof s?.keys?.p256dh !== 'string' || typeof s?.keys?.auth !== 'string') {
+  if (typeof s?.endpoint !== 'string' || !isPushServiceUrl(s.endpoint) || typeof s?.keys?.p256dh !== 'string' || typeof s?.keys?.auth !== 'string') {
     throw new HttpError(400, 'Not a valid push subscription');
   }
   subscribe({ endpoint: s.endpoint, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } }, lang(req.body.lang));
@@ -45,7 +45,9 @@ notify.post('/notify/test', wrap(async (_req, res) => {
 }));
 
 notify.post('/notify/briefing', wrap(async (_req, res) => {
-  await sendBriefingNow();
+  await sendBriefingNow().catch(() => {
+    throw new HttpError(503, 'The briefing is not ready yet. Try again in a moment.');
+  });
   res.status(204).end();
 }));
 

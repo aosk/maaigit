@@ -5,7 +5,7 @@ import { strings, type Strings } from './i18n';
 export type Look = 'system' | 'light' | 'dark';
 export type ToggleId = keyof Strings['toggles'];
 
-export interface Settings {
+interface Settings {
   lang: Lang;
   look: Look;
   toggles: Record<ToggleId, boolean>;

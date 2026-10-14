@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomBytes, randomInt } from 'node:crypto';
 import { generate } from 'selfsigned';
 import { createGuard } from './auth.js';
+import { writePrivate } from './secure-fs.js';
 import { config } from './config.js';
 
 /**
@@ -16,7 +17,7 @@ const PHONE_FILE = path.join(config.dataDir, 'phone.json');
 const CERT_VERSION = 2;
 
 /** The computer's addresses on the local network, e.g. 192.168.1.20. */
-export function lanAddresses(): string[] {
+function lanAddresses(): string[] {
   return Object.values(os.networkInterfaces())
     .flat()
     .filter((a): a is os.NetworkInterfaceInfo => Boolean(a && a.family === 'IPv4' && !a.internal))
@@ -37,9 +38,8 @@ function readFile(): PhoneFile {
   }
 }
 
-function writeFile(file: PhoneFile) {
-  fs.mkdirSync(config.dataDir, { recursive: true });
-  fs.writeFileSync(PHONE_FILE, JSON.stringify(file, null, 2));
+function savePhoneFile(file: PhoneFile) {
+  writePrivate(PHONE_FILE, JSON.stringify(file, null, 2));
 }
 
 /** A self-signed certificate for this computer's addresses, reused until they change or it nears expiry. */
@@ -71,7 +71,7 @@ export async function phoneSetup(): Promise<{ pin: string; key: string; cert: st
     });
     file.cert = { ips, key: pems.private, cert: pems.cert, expires: expires.toISOString(), v: CERT_VERSION };
   }
-  writeFile(file);
+  savePhoneFile(file);
   return { pin: file.pin, key: file.cert!.key, cert: file.cert!.cert, ips };
 }
 

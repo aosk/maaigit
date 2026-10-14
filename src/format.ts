@@ -15,6 +15,5 @@ export const dayHeading = (iso: string | Date, lang: Lang) =>
 export const hijri = (iso: string | Date, lang: Lang) =>
   new Intl.DateTimeFormat(`${lang === 'ar' ? 'ar-SA' : 'en'}-u-ca-islamic-umalqura${lang === 'ar' ? '-nu-arab' : ''}`, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso));
 
-export const num = (n: number, lang: Lang) => new Intl.NumberFormat(locale(lang)).format(n);
 
 export const sameDay = (a: string | Date, b: string | Date) => new Date(a).toDateString() === new Date(b).toDateString();

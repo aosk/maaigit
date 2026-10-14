@@ -2,19 +2,18 @@ import { Fragment, useEffect, useRef } from 'react';
 import type { CalendarEvent } from '../../shared/types';
 import { eventEnd, leaveTime } from '../../shared/schedule';
 import { dayHeading, time } from '../format';
+import { safeWebAddress, splitLinks } from '../links';
 import { useSettings } from '../settings';
-
-const URL_IN_TEXT = /(https?:\/\/[^\s<>"')\]]+)/g;
 
 /** Text with its web addresses made tappable (and nothing else interpreted). */
 function Linkified({ text }: { text: string }) {
   return (
     <>
-      {text.split(URL_IN_TEXT).map((part, i) =>
-        i % 2 ? (
-          <a key={i} href={part} target="_blank" rel="noopener noreferrer" dir="ltr">{part}</a>
+      {splitLinks(text).map((piece, i) =>
+        piece.link ? (
+          <a key={i} href={piece.link} target="_blank" rel="noopener noreferrer" dir="ltr">{piece.text}</a>
         ) : (
-          <Fragment key={i}>{part}</Fragment>
+          <Fragment key={i}>{piece.text}</Fragment>
         ),
       )}
     </>
@@ -67,8 +66,8 @@ export function EventSheet({ event, onClose }: { event: CalendarEvent; onClose: 
           {leave && <div className="sub" style={{ color: 'var(--warn-text)' }}>{t.leaveAt(time(leave, lang), event.travelMinutes!)}</div>}
         </div>
 
-        {event.meetingUrl && (
-          <a className="btn primary big" href={event.meetingUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+        {event.meetingUrl && safeWebAddress(event.meetingUrl) && (
+          <a className="btn primary big" href={safeWebAddress(event.meetingUrl)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
             {t.joinMeeting}
             <span style={{ fontWeight: 400, opacity: 0.85 }}> · {host(event.meetingUrl)}</span>
           </a>

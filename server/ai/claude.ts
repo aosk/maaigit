@@ -8,7 +8,7 @@ export type MessageParam = Anthropic.Beta.Messages.BetaMessageParam;
 export type Tool = Anthropic.Beta.Messages.BetaTool;
 export type ToolUse = Anthropic.Beta.Messages.BetaToolUseBlock;
 export type ToolResult = Anthropic.Beta.Messages.BetaToolResultBlockParam;
-export type Message = Anthropic.Beta.Messages.BetaMessage;
+type Message = Anthropic.Beta.Messages.BetaMessage;
 export type OnEvent = (event: ChatEvent) => void;
 
 export const MODEL = 'claude-opus-5-5';
@@ -16,7 +16,7 @@ export const MODEL = 'claude-opus-5-5';
 /** Present only when an API key is set; otherwise MAAI runs in demo mode. */
 export const client = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
 
-export interface Request {
+interface Request {
   system: string;
   messages: MessageParam[];
   tools?: Tool[];

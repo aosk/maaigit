@@ -1,9 +1,8 @@
 import { CalculationMethod, Coordinates, PrayerTimes } from 'adhan';
 
 import type { PrayerName } from './types.js';
-export type { PrayerName };
 
-export interface PrayerSlot {
+interface PrayerSlot {
   name: PrayerName;
   time: Date;
 }

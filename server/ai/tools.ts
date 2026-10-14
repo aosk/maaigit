@@ -6,6 +6,7 @@ import { isEmail, mailConfigured } from '../mail.js';
 import { cachedInbox, getEmail } from '../gmail-inbox.js';
 import { AsanaError, asanaConfigured, cachedTasks, getTask, projects, validateNewTask } from '../asana.js';
 import { emailForClaude } from './context.js';
+import { neutralize } from './untrusted.js';
 import type { Tool, ToolResult, ToolUse } from './claude.js';
 
 /**
@@ -67,8 +68,8 @@ const read_asana_task: ToolSpec<{ task_gid: string }> = {
     const { task, comments } = await getTask(task_gid).catch((error: Error) => {
       throw new ToolError(error.message);
     });
-    const thread = comments.map((c) => `- ${c.by}: ${c.text}`).join('\n') || '- no comments yet';
-    return `<asana_task>\nTask ${task.gid}: ${task.name}${task.project ? ` (${task.project})` : ''}\nDue: ${task.dueOn ?? 'no date'}\nNotes: ${task.notes ?? 'none'}\nRecent comments:\n${thread}\n</asana_task>`;
+    const thread = comments.map((c) => `- ${neutralize(c.by)}: ${neutralize(c.text)}`).join('\n') || '- no comments yet';
+    return `<asana_task>\nTask ${task.gid}: ${neutralize(task.name)}${task.project ? ` (${neutralize(task.project)})` : ''}\nDue: ${task.dueOn ?? 'no date'}\nNotes: ${neutralize(task.notes ?? 'none')}\nRecent comments:\n${thread}\n</asana_task>`;
   },
   detail: ({ task_gid }) => cachedTasks().find((t) => t.gid === task_gid)?.name,
 };

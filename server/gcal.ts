@@ -133,7 +133,7 @@ const failure = (status: number) =>
 // ---------- The live reading of your own Google calendar (livecal.ts) ----------
 
 /** The live source's name in Settings. */
-export const LIVE_NAME = 'Google Calendar (live)';
+const LIVE_NAME = 'Google Calendar (live)';
 /** The live reading counts as working if it last succeeded within this long. */
 const LIVE_FRESH_MS = 5 * 60_000;
 let liveOkAt = 0;

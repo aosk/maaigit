@@ -24,7 +24,7 @@ function keyBytes(base64url: string): ArrayBuffer {
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)).buffer;
 }
 
-export type EnableResult = 'ok' | 'denied' | 'no-worker' | 'unsupported';
+type EnableResult = 'ok' | 'denied' | 'no-worker' | 'unsupported';
 
 export async function enablePush(publicKey: string, send: (sub: PushSubscription) => Promise<void>): Promise<EnableResult> {
   if (!pushSupported) return 'unsupported';

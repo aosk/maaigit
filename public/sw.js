@@ -19,7 +19,9 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
+  // Only ever open a page of this site, whatever the notification says.
+  const wanted = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin);
+  const url = wanted.origin === self.location.origin ? wanted.href : self.location.origin + '/';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
       for (const w of windows) {

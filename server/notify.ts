@@ -5,6 +5,7 @@ import type { AppAlert, CalendarEvent, Lang, NotifyPrefs, PrayerName, Reminder }
 import { prayersFor } from '../shared/prayer.js';
 import { dayPeriod, leaveTime } from '../shared/schedule.js';
 import { config } from './config.js';
+import { writePrivate } from './secure-fs.js';
 import { allEvents, id, save, state } from './store.js';
 
 /**
@@ -25,8 +26,7 @@ function vapidKeys(): { publicKey: string; privateKey: string } {
     return JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
   } catch {
     const keys = webpush.generateVAPIDKeys();
-    fs.mkdirSync(path.dirname(KEYS_FILE), { recursive: true });
-    fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2));
+    writePrivate(KEYS_FILE, JSON.stringify(keys, null, 2));
     return keys;
   }
 }
@@ -34,6 +34,22 @@ function vapidKeys(): { publicKey: string; privateKey: string } {
 const keys = vapidKeys();
 webpush.setVapidDetails(process.env.MAAI_CONTACT ?? 'mailto:maai@example.com', keys.publicKey, keys.privateKey);
 export const publicKey = keys.publicKey;
+
+/**
+ * The servers browsers use to deliver push messages. MAAI sends to whatever address a device gives
+ * when it turns notifications on, so only these are accepted: an address pointing anywhere else
+ * could make the server send requests to internal places.
+ */
+const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /^web\.push\.apple\.com$/, /^[a-z0-9-]+\.notify\.windows\.com$/];
+
+export function isPushServiceUrl(endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint);
+    return url.protocol === 'https:' && !url.username && !url.password && (url.port === '' || url.port === '443') && PUSH_HOSTS.some((host) => host.test(url.hostname));
+  } catch {
+    return false;
+  }
+}
 
 // ---------- Wording ----------
 
@@ -49,7 +65,7 @@ type Text = { title: string; body: string };
 type Due = { key: string; at: Date; kind: AppAlert['kind']; text: (lang: Lang) => Text | Promise<Text> };
 
 /** Writes the briefing text (and refreshes what it is based on). Given by whoever starts the scheduler. */
-export type BriefingWriter = (lang: Lang) => Promise<string>;
+type BriefingWriter = (lang: Lang) => Promise<string>;
 
 const BRIEFING_TITLES: Record<Lang, Record<'morning' | 'noon' | 'night', string>> = {
   en: { morning: 'Morning briefing', noon: 'Noon briefing', night: 'Night briefing' },

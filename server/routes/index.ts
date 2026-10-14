@@ -15,4 +15,6 @@ export const api = Router();
 
 api.get('/status', (_req, res) => res.json({ ...status(), auth: res.locals.auth ?? 'none' }));
 api.use(today, assistant, inbox, asana, calendar, sync, notify, admin);
+// Anything under /api that no route answered.
+api.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 api.use(errorHandler);

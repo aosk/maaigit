@@ -16,7 +16,7 @@ import { audit } from './store.js';
 /** A second pull right after the first reuses its result, so a nervous thumb can't hammer Gmail. */
 const REUSE_MS = 15_000;
 
-export interface SyncResult {
+interface SyncResult {
   at: string;
   /** What failed, in plain words (empty when everything worked). */
   problems: string[];

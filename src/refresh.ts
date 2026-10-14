@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { api } from './api';
 
 /** Sent to every screen when the app is refreshed (pull down, or coming back after a while). */
-export const REFRESH_EVENT = 'maai:refresh';
+const REFRESH_EVENT = 'maai:refresh';
 
 /** Runs `reload` each time the app is refreshed. */
 export function useOnRefresh(reload: () => void) {

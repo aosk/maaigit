@@ -12,14 +12,14 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API = process.env.GOOGLE_CALENDAR_API ?? 'https://www.googleapis.com/calendar/v3';
 const SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
-export interface ServiceKey {
+interface ServiceKey {
   client_email: string;
   private_key: string;
   token_uri?: string;
 }
 
 /** A Google problem in plain words. */
-export class GoogleError extends Error {}
+class GoogleError extends Error {}
 
 function readKey(): { key?: ServiceKey; problem?: string } {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT?.trim();

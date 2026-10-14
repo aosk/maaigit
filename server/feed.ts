@@ -4,6 +4,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { Router } from 'express';
 import type { CalendarEvent } from '../shared/types.js';
 import { config } from './config.js';
+import { writePrivate } from './secure-fs.js';
 import { state } from './store.js';
 
 /**
@@ -20,8 +21,7 @@ function token(): string {
     return fs.readFileSync(TOKEN_FILE, 'utf8').trim();
   } catch {
     const fresh = randomBytes(24).toString('hex');
-    fs.mkdirSync(config.dataDir, { recursive: true });
-    fs.writeFileSync(TOKEN_FILE, fresh);
+    writePrivate(TOKEN_FILE, fresh);
     return fresh;
   }
 }
@@ -73,7 +73,7 @@ export function icsFeed(events: CalendarEvent[], now = new Date()): string {
 }
 
 /** The events worth publishing: MAAI's own, real (not the first-run samples), from the last month on. */
-export function feedEvents(now = new Date()): CalendarEvent[] {
+function feedEvents(now = new Date()): CalendarEvent[] {
   const from = now.getTime() - 30 * 86_400_000;
   return state.events.filter((e) => !e.demo && !e.allDay && Date.parse(e.start) >= from);
 }

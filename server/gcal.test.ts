@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { eventsFromIcs, meetingLink, plainNotes } from './gcal';
 
 const ics = `BEGIN:VCALENDAR
@@ -112,5 +112,26 @@ END:VCALENDAR`;
     expect(meetingLink('', 'Join https://zoom.us/j/99 now')).toBe('https://zoom.us/j/99');
     expect(meetingLink('http://', 'https://')).toBeUndefined();
     expect(plainNotes('a<br/>b&amp;c<script>x</script>')).toBe('a\nb&cx');
+  });
+});
+
+describe('which calendar addresses are accepted', () => {
+  async function loaded(address: string) {
+    vi.resetModules();
+    vi.stubEnv('GOOGLE_CALENDAR_ICS_URL', address);
+    vi.stubEnv('GOOGLE_SERVICE_ACCOUNT', '');
+    vi.stubEnv('GOOGLE_CALENDAR_ID', '');
+    return import('./gcal');
+  }
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('takes https and webcal addresses only: never plain http, files or other schemes', async () => {
+    const gcal = await loaded('http://internal.local/a.ics file:///etc/passwd ftp://x.co/a.ics javascript:alert(1) //evil.com/a.ics https://calendar.google.com/calendar/ical/me%40x.co/private-abc/basic.ics webcal://p01-caldav.icloud.com/published/2/abc');
+    expect(gcal.calendarStatus().sources?.map((s) => s.name)).toEqual(['Google Calendar', 'iPhone (iCloud)']);
+  });
+
+  it('is off when nothing usable is given', async () => {
+    expect((await loaded('http://169.254.169.254/latest/meta-data/')).calendarConfigured).toBe(false);
+    expect((await loaded('')).calendarConfigured).toBe(false);
   });
 });

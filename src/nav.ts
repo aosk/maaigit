@@ -4,7 +4,7 @@ export type Route = 'today' | 'assistant' | 'inbox' | 'settings' | 'admin';
 const ROUTES: Route[] = ['today', 'assistant', 'inbox', 'settings', 'admin'];
 
 /** Sections of the admin portal; their links (#/admin/agents, or plain #agents) open the portal there. */
-export const ADMIN_SECTIONS = ['agents', 'integrations', 'audit'] as const;
+const ADMIN_SECTIONS = ['agents', 'integrations', 'audit'] as const;
 
 /** A request another screen asked the assistant to send on arrival. */
 const PROMPT_KEY = 'maai.prompt';
@@ -17,7 +17,7 @@ export function readRoute(): Route {
   return ROUTES.includes(name as Route) ? (name as Route) : 'today';
 }
 
-export function go(route: Route) {
+function go(route: Route) {
   window.location.hash = `/${route}`;
 }
 

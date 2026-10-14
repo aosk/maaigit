@@ -13,13 +13,17 @@ const timezone = process.env.MAAI_TIMEZONE || 'Asia/Riyadh';
 // Reminder and prayer times use the server's local clock; online servers run on UTC, so pin it.
 process.env.TZ ||= timezone;
 
+// Libraries (Express among them) behave more safely, and say less, when NODE_ENV is production.
+const production = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true' || process.argv.includes('--online');
+if (production) process.env.NODE_ENV ??= 'production';
+
 export const config = {
   dataDir,
   port: num(process.env.PORT, 5173),
   /** HTTPS port for phones on the same Wi-Fi (npm run phone). */
   phonePort: num(process.env.MAAI_PHONE_PORT, num(process.env.PORT, 5173) + 1),
   /** Online mode: password, all network interfaces, built files. Render sets RENDER=true on its servers. */
-  production: process.env.NODE_ENV === 'production' || process.env.RENDER === 'true' || process.argv.includes('--online'),
+  production,
   latitude: num(process.env.MAAI_LATITUDE, 24.7136),
   longitude: num(process.env.MAAI_LONGITUDE, 46.6753),
   timezone,

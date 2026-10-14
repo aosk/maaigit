@@ -13,6 +13,10 @@ import { startBackgroundSync, syncAll } from './sync.js';
 import { startLiveCalendar } from './livecal.js';
 import { briefing } from './ai/briefing.js';
 import { createApp, createInnerApp, createOnlineSite } from './site.js';
+import { writePrivate } from './secure-fs.js';
+
+// A failed background job (a push, a sync) must not take the whole server down.
+process.on('unhandledRejection', (reason) => console.error('Unhandled rejection:', reason));
 
 const phoneMode = process.argv.includes('--phone') || process.env.MAAI_PHONE === '1';
 
@@ -55,8 +59,7 @@ if (config.production) {
   }
   const secretFile = path.join(config.dataDir, 'session-secret');
   if (!fs.existsSync(secretFile)) {
-    fs.mkdirSync(config.dataDir, { recursive: true });
-    fs.writeFileSync(secretFile, randomBytes(32).toString('hex'));
+    writePrivate(secretFile, randomBytes(32).toString('hex'));
   }
   const site = createOnlineSite(app, { password: config.password, secret: fs.readFileSync(secretFile, 'utf8').trim() });
   site.listen(config.port, '0.0.0.0', () => console.log(`MAAI is online on port ${config.port} [${ai}]`));

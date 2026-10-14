@@ -2,6 +2,7 @@ import express from 'express';
 import { createGuard } from './auth.js';
 import { feedRoutes } from './feed.js';
 import { api } from './routes/index.js';
+import { bodyErrors, lastResort, noStore, securityHeaders } from './security.js';
 
 /** An Express app set up the way every MAAI server should be. */
 export function createApp(): express.Express {
@@ -9,6 +10,7 @@ export function createApp(): express.Express {
   // "/API/status" must not be treated as "/api/status": paths are matched exactly as written.
   app.set('case sensitive routing', true);
   app.disable('x-powered-by');
+  app.use(securityHeaders());
   return app;
 }
 
@@ -16,7 +18,8 @@ export function createApp(): express.Express {
 export function createInnerApp(): express.Express {
   const app = createApp();
   app.use(express.json({ limit: '1mb' }));
-  app.use('/api', api);
+  app.use('/api', noStore, api);
+  app.use(bodyErrors, lastResort);
   return app;
 }
 
@@ -28,6 +31,8 @@ export function createOnlineSite(inner: express.Express, options: { password: st
   const site = createApp();
   // Render sits in front of the app; trust its forwarded address and protocol.
   site.set('trust proxy', 1);
+  // The built app can run under a strict Content-Security-Policy; the browser is told to keep to HTTPS.
+  site.use(securityHeaders({ csp: true, hsts: true }));
   // The hosting service checks this to know MAAI is up; it reveals nothing.
   site.get('/api/health', (_req, res) => res.json({ ok: true }));
   // Calendar apps can't sign in; their link is a long random key (see feed.ts).
@@ -35,5 +40,7 @@ export function createOnlineSite(inner: express.Express, options: { password: st
   site.use(express.json({ limit: '1mb' }));
   site.use('/api', createGuard('password', options.password, options.secret));
   site.use(inner);
+  // The body reader runs here, before the sign-in, so its complaints need answering here too.
+  site.use(bodyErrors, lastResort);
   return site;
 }

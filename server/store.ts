@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { writePrivate } from './secure-fs.js';
 import type Anthropic from '@anthropic-ai/sdk';
 import { config } from './config.js';
 import { calendarConfigured, googleEvents } from './gcal.js';
@@ -26,7 +27,7 @@ export interface Conversation {
   turns: ChatTurn[];
 }
 
-export interface State {
+interface State {
   events: CalendarEvent[];
   reminders: Reminder[];
   inbox: InboxMessage[];
@@ -132,8 +133,7 @@ export function save() {
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
     saveTimer = undefined;
-    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-    fs.writeFileSync(DATA_FILE, JSON.stringify(state, null, 2));
+    writePrivate(DATA_FILE, JSON.stringify(state, null, 2));
   }, 500);
 }
 

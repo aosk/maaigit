@@ -48,12 +48,15 @@ interface RawTask {
 
 const FIELDS = 'name,due_on,due_at,notes,permalink_url,projects.name';
 
+/** Only an https address is kept as a link (never "javascript:" or the like). */
+const webLink = (url: string | undefined) => (url && /^https:\/\/[\w.-]+\//.test(url) ? url : '');
+
 const toTask = (t: RawTask): AsanaTask => ({
   gid: t.gid,
   name: t.name,
   dueOn: t.due_on ?? (t.due_at ? todayIso(new Date(t.due_at)) : undefined),
   notes: t.notes?.slice(0, 1500) || undefined,
-  url: t.permalink_url,
+  url: webLink(t.permalink_url),
   project: t.projects?.[0]?.name,
 });
 
@@ -150,7 +153,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export const isGid = (value: unknown): value is string => typeof value === 'string' && GID.test(value);
 
-export interface NewTask {
+interface NewTask {
   name: string;
   notes: string;
   dueOn: string;

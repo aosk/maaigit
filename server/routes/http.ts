@@ -50,8 +50,12 @@ export function explain(error: unknown): { status: number; error: string } {
     }
     return { status: 502, error: `Claude could not answer (${error.status ?? 'network'}): ${message}` };
   }
+  // Express itself rejects some requests (an address that is not valid text, say) with a 4xx status.
+  const refused = (error as { status?: unknown }).status;
+  if (typeof refused === 'number' && refused >= 400 && refused < 500) return { status: refused, error: 'The request could not be read.' };
+  // Anything else is unexpected: its details (file paths, internals) stay in the server log.
   console.error(error);
-  return { status: 500, error: error instanceof Error ? error.message : 'Something went wrong' };
+  return { status: 500, error: 'Something went wrong. Try again.' };
 }
 
 export function errorHandler(error: unknown, _req: Request, res: Response, _next: NextFunction) {

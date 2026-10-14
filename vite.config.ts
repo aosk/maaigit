@@ -6,5 +6,5 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   build: { outDir: 'dist' },
-  test: { include: ['shared/**/*.test.ts', 'server/**/*.test.ts'] },
+  test: { include: ['shared/**/*.test.ts', 'server/**/*.test.ts', 'src/**/*.test.ts'] },
 });

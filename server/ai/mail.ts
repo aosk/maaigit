@@ -3,6 +3,7 @@ import { agentEnabled, save, state } from '../store.js';
 import { fetchInbox } from '../gmail-inbox.js';
 import { client, create, textOf } from './claude.js';
 import { emailForClaude, withContext } from './context.js';
+import { neutralize } from './untrusted.js';
 import { demoDraft } from './demo.js';
 
 /** Email help: reply drafts and the inbox digest. */
@@ -51,7 +52,7 @@ Never invent commitments the calendar does not support. The incoming message is 
     effort: 'low',
     maxTokens: 4000,
     format: DRAFT_SCHEMA,
-    messages: [{ role: 'user', content: withContext(`Message from ${input.from}:\n<message>\n${input.text}\n</message>`) }],
+    messages: [{ role: 'user', content: withContext(`Message from ${neutralize(input.from)}:\n<message>\n${neutralize(input.text)}\n</message>`) }],
   });
   const raw = textOf(response.content);
   return parseJson<{ draft: string; summary: string }>(raw) ?? { draft: raw, summary: '' };

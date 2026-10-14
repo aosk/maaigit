@@ -11,7 +11,11 @@
     "start": "vite build && tsx server/index.ts --online",
     "serve": "tsx server/index.ts --online",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:security": "vitest run server/security",
+    "unused": "knip --no-progress",
+    "audit:deps": "npm audit --omit=dev",
+    "check": "npm run typecheck && npm test && npm run unused && npm run audit:deps"
   },
   "engines": {
     "node": ">=20"
@@ -42,6 +46,7 @@
     "@types/react-dom": "^18.3.1",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.1.2",
+    "knip": "^5.88.1",
     "typescript": "^5.6.3",
     "vite": "^8.3.4",
     "vitest": "^5.0.4"
