@@ -14,6 +14,15 @@ import { startLiveCalendar } from './livecal.js';
 import { briefing } from './ai/briefing.js';
 import { createApp, createInnerApp, createOnlineSite } from './site.js';
 import { writePrivate } from './secure-fs.js';
+import { flushSave } from './store.js';
+
+// Render stops the server on every deploy: write what is still waiting to be saved first.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    flushSave();
+    process.exit(0);
+  });
+}
 
 // A failed background job (a push, a sync) must not take the whole server down.
 process.on('unhandledRejection', (reason) => console.error('Unhandled rejection:', reason));

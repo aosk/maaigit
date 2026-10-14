@@ -293,5 +293,5 @@ a { color: var(--tint-text); }
 .sheet { background: var(--surface); color: var(--text); width: 100%; max-width: 640px; max-height: 85dvh; overflow: auto; border-radius: 22px 22px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); display: grid; gap: 16px; animation: sheet-up 0.2s ease-out; }
 .sheet-notes { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.92em; line-height: 1.5; }
 .sheet a:not(.btn) { color: var(--tint-text); }
-.updated-at { text-align: center; font-size: 0.75em; color: var(--muted); padding: 8px 0 4px; }
+.updated-at { text-align: center; font-size: 0.75em; color: var(--text2); padding: 8px 0 4px; }
 @keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }

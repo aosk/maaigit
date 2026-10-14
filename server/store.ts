@@ -113,16 +113,31 @@ function seed(): State {
 /** The first-run sample events, so copies saved before they were marked can still be recognised. */
 const SAMPLE_EVENTS = new Set(['Team stand-up|Microsoft Teams', 'Call with Sara|Phone', 'Dentist appointment|Clinic', 'Q4 report review|Office']);
 
-function load(): State {
+/** The saved data, null on a first run, and null (with the unreadable file kept aside) if it is damaged. */
+function readSaved(): Partial<State> | null {
+  let text: string;
   try {
-    const saved = { ...seed(), ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) } as State;
-    for (const e of saved.events) if (SAMPLE_EVENTS.has(`${e.title}|${e.place}`)) e.demo = true;
-    // Settings added after the file was saved get their defaults.
-    saved.notifyPrefs = { ...DEFAULT_PREFS, ...saved.notifyPrefs };
-    return saved;
+    text = fs.readFileSync(DATA_FILE, 'utf8');
   } catch {
-    return seed();
+    return null; // nothing saved yet
   }
+  try {
+    return JSON.parse(text) as Partial<State>;
+  } catch (error) {
+    // Starting fresh would overwrite the damaged file on the next save, so keep a copy first.
+    const kept = `${DATA_FILE}.damaged-${Date.now()}`;
+    writePrivate(kept, text);
+    console.error(`\n  The saved data could not be read (${(error as Error).message}). A copy was kept at ${kept}; starting with fresh data.\n`);
+    return null;
+  }
+}
+
+function load(): State {
+  const saved = { ...seed(), ...readSaved() } as State;
+  for (const e of saved.events) if (SAMPLE_EVENTS.has(`${e.title}|${e.place}`)) e.demo = true;
+  // Settings added after the file was saved get their defaults.
+  saved.notifyPrefs = { ...DEFAULT_PREFS, ...saved.notifyPrefs };
+  return saved;
 }
 
 export const state: State = load();
@@ -131,10 +146,15 @@ let saveTimer: NodeJS.Timeout | undefined;
 /** Writes at most twice a second; a restart picks up where it left off. */
 export function save() {
   if (saveTimer) return;
-  saveTimer = setTimeout(() => {
-    saveTimer = undefined;
-    writePrivate(DATA_FILE, JSON.stringify(state, null, 2));
-  }, 500);
+  saveTimer = setTimeout(flushSave, 500);
+}
+
+/** Writes any change not yet written, now (used when the server is told to stop). */
+export function flushSave() {
+  if (!saveTimer) return;
+  clearTimeout(saveTimer);
+  saveTimer = undefined;
+  writePrivate(DATA_FILE, JSON.stringify(state, null, 2));
 }
 
 export function audit(event: string, who: string, outcome: AuditEntry['outcome']) {

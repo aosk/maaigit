@@ -15,7 +15,8 @@
     "test:security": "vitest run server/security",
     "unused": "knip --no-progress",
     "audit:deps": "npm audit --omit=dev",
-    "check": "npm run typecheck && npm test && npm run unused && npm run audit:deps"
+    "check": "npm run typecheck && npm test && npm run unused && npm run audit:deps",
+    "coverage": "vitest run --coverage"
   },
   "engines": {
     "node": ">=20"
@@ -46,6 +47,7 @@
     "@types/react-dom": "^18.3.1",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.1.2",
+    "@vitest/coverage-v8": "^5.0.4",
     "knip": "^5.88.1",
     "typescript": "^5.6.3",
     "vite": "^8.3.4",

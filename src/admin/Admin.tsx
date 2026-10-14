@@ -187,7 +187,7 @@ export function Admin() {
             <h2 className="h2" style={{ fontSize: 18 }}>Safety &amp; audit</h2>
             <span className="sub">Every proposal, approval and admin change is logged</span>
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto' }} tabIndex={0} role="region" aria-label="Audit log entries">
             <table className="admin-table">
               <thead><tr><th>Time</th><th>Event</th><th>Who</th><th>Outcome</th></tr></thead>
               <tbody>

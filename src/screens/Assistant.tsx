@@ -113,10 +113,11 @@ export function Assistant() {
 
   return (
     <div className="chat-screen">
+      <h1 className="sr-only">{t.assistant}</h1>
       <div className="chat-head">
         <button className="btn ghost" onClick={newChat} disabled={busy}><Plus size={18} />{t.newChat}</button>
         <div className="row" style={{ fontWeight: 600, color: 'var(--tint-text)', gap: 6 }}><Logo size={22} /><span style={{ color: 'var(--text)' }}>{t.appName}</span></div>
-        <button className="icon-btn" aria-label={t.switchLanguage} onClick={() => update({ lang: lang === 'ar' ? 'en' : 'ar' })}>
+        <button className="icon-btn" aria-label={`${lang === 'ar' ? 'EN' : 'ع'} — ${t.switchLanguage}`} onClick={() => update({ lang: lang === 'ar' ? 'en' : 'ar' })}>
           {lang === 'ar' ? 'EN' : 'ع'}
         </button>
       </div>
