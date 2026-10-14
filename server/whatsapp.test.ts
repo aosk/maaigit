@@ -234,13 +234,14 @@ describe('replying', () => {
     expect(canAnswer('966511111111')).toBe(true);
   });
 
-  it('reports a Twilio failure without leaking its details, and leaves the message unanswered', async () => {
+  it('reports a Twilio failure in Twilio\'s own words (never the account token), and leaves the message unanswered', async () => {
     const m = put();
     twilio(false);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const res = await send(m.id, 'hi');
     expect(res.status).toBe(400);
-    expect(res.body).not.toContain('Secret detail');
+    expect(res.body).toContain('error 63016');
+    expect(res.body).toContain('Secret detail from Twilio');
     expect(res.body).not.toContain(TOKEN);
     expect(state.inbox.find((x) => x.id === m.id)!.replied).toBe(false);
   });

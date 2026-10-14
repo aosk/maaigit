@@ -145,7 +145,9 @@ export async function sendWhatsApp(phone: string, body: string): Promise<void> {
     const detail = (await response.json().catch(() => ({}))) as { message?: string; code?: number };
     console.error('Twilio refused a message', response.status, detail.code, detail.message);
     if (response.status === 401) throw new WhatsAppError('Twilio did not accept the account details. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.');
-    throw new WhatsAppError(`Twilio could not send the message${detail.code ? ` (error ${detail.code})` : ''}.`);
+    // Twilio's own words say what to fix (a number not in the sandbox, a wrong sender…); they hold no secrets.
+    const why = typeof detail.message === 'string' ? ` ${detail.message.replace(/\s+/g, ' ').trim().slice(0, 240)}` : '';
+    throw new WhatsAppError(`Twilio could not send the message${detail.code ? ` (error ${detail.code})` : ''}.${why}`);
   }
 }
 
