@@ -22,6 +22,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     method,
     headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify({ data: body }) : undefined,
+  }).catch(() => {
+    throw new AsanaError('Could not reach Asana. Check the internet connection and try again.');
   });
   if (res.status === 401) throw new AsanaError('Asana did not accept the token. Create a new personal access token and update ASANA_TOKEN.');
   if (res.status === 404) throw new AsanaError('Asana could not find that task.');
@@ -37,17 +39,19 @@ interface RawTask {
   gid: string;
   name: string;
   due_on: string | null;
+  /** Set instead of due_on when the task has a due time. */
+  due_at?: string | null;
   notes?: string;
   permalink_url: string;
   projects?: { name: string }[];
 }
 
-const FIELDS = 'name,due_on,notes,permalink_url,projects.name';
+const FIELDS = 'name,due_on,due_at,notes,permalink_url,projects.name';
 
 const toTask = (t: RawTask): AsanaTask => ({
   gid: t.gid,
   name: t.name,
-  dueOn: t.due_on ?? undefined,
+  dueOn: t.due_on ?? (t.due_at ? todayIso(new Date(t.due_at)) : undefined),
   notes: t.notes?.slice(0, 1500) || undefined,
   url: t.permalink_url,
   project: t.projects?.[0]?.name,
@@ -57,7 +61,9 @@ let cache: { at: number; tasks: AsanaTask[] } | null = null;
 let lastError: string | undefined;
 
 /** Today as YYYY-MM-DD in the app's time zone (Asana due dates are plain dates). */
-export const todayIso = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: process.env.TZ }).format(now);
+export function todayIso(now = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: process.env.TZ }).format(now);
+}
 
 /** Your open tasks, due soonest first (undated last). Cached for 5 minutes. */
 export async function openTasks(force = false): Promise<AsanaTask[]> {

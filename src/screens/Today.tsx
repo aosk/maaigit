@@ -200,30 +200,7 @@ export function Today() {
         </section>
       )}
 
-      {asana && asana.configured && asana.tasks.length > 0 && (
-        <>
-          <div className="between extra">
-            <h2 className="h2">{t.asanaTasks}</h2>
-            {asana.overdue > 0 && <div className="pill warn">{t.asanaOverdue(asana.overdue)}</div>}
-          </div>
-          <section className="card flush extra" aria-label={t.asanaTasks}>
-            {asana.tasks.map((task) => {
-              const today = new Date().toLocaleDateString('en-CA');
-              const overdue = task.dueOn && task.dueOn < today;
-              return (
-                <a key={task.gid} className="slot" href={task.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="slot-title">{task.name}</div>
-                    <div className="slot-meta" style={overdue ? { color: 'var(--danger)' } : undefined}>
-                      {[task.dueOn === today ? t.asanaDueToday : task.dueOn ?? t.asanaNoDate, task.project].filter(Boolean).join(' · ')}
-                    </div>
-                  </div>
-                </a>
-              );
-            })}
-          </section>
-        </>
-      )}
+      {asana && <AsanaSection asana={asana} />}
 
       <h2 className="h2 extra">{t.reminders}</h2>
       <section className="card flush extra" aria-label={t.reminders}>
@@ -290,5 +267,39 @@ function ScheduleRow({ row, past }: { row: Row; past: boolean }) {
         <div className="slot-meta">{meta}</div>
       </div>
     </div>
+  );
+}
+
+/** The Asana tasks that matter now, or a plain reason why there are none. */
+function AsanaSection({ asana }: { asana: AsanaOverview }) {
+  const { t } = useSettings();
+  const today = new Date().toLocaleDateString('en-CA');
+  const note = !asana.configured ? t.asanaOff : asana.error ? t.asanaError(asana.error) : asana.tasks.length === 0 ? t.asanaNone : '';
+  return (
+    <>
+      <div className="between extra">
+        <h2 className="h2">{t.asanaTasks}</h2>
+        {asana.overdue > 0 && <div className="pill warn">{t.asanaOverdue(asana.overdue)}</div>}
+      </div>
+      {note ? (
+        <a className="card soft extra" href="#/settings" style={{ textDecoration: 'none', color: 'inherit' }}><span className="sub">{note}</span></a>
+      ) : (
+        <section className="card flush extra" aria-label={t.asanaTasks}>
+          {asana.tasks.map((task) => {
+            const overdue = task.dueOn && task.dueOn < today;
+            return (
+              <a key={task.gid} className="slot" href={task.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="slot-title">{task.name}</div>
+                  <div className="slot-meta" style={overdue ? { color: 'var(--danger)' } : undefined}>
+                    {[task.dueOn === today ? t.asanaDueToday : task.dueOn ?? t.asanaNoDate, task.project].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+              </a>
+            );
+          })}
+        </section>
+      )}
+    </>
   );
 }
