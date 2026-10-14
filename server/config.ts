@@ -23,6 +23,8 @@ export const config = {
   latitude: num(process.env.MAAI_LATITUDE, 24.7136),
   longitude: num(process.env.MAAI_LONGITUDE, 46.6753),
   timezone,
+  /** How often everything (calendars, Asana, mail) is refreshed in the background. */
+  syncHours: Math.max(0.25, num(process.env.MAAI_SYNC_HOURS, 3)),
   /** Required online: the password that protects MAAI. */
   password: process.env.MAAI_PASSWORD ?? '',
 };

@@ -4,6 +4,7 @@ import { api } from '../api';
 import { time } from '../format';
 import { useSettings } from '../settings';
 import { useAction } from '../useAction';
+import { useOnRefresh } from '../refresh';
 import { Back, Chat, Send, Trash } from '../components/Icons';
 import { mailtoLink } from '../components/EmailCard';
 import { MailDigest } from './MailDigest';
@@ -178,6 +179,7 @@ function Messages({ header, gmail }: { header: ReactNode; gmail: boolean }) {
     api.inbox().then(setMessages).catch((e: Error) => setError(e.message));
   }, [setError]);
   useEffect(load, [load]);
+  useOnRefresh(load);
 
   const current = messages.find((m) => m.id === open);
   if (current) return <Reply message={current} gmail={gmail} onBack={() => setOpen(null)} onChanged={load} />;

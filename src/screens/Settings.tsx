@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Lang, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings, type Look, type ToggleId } from '../settings';
+import { useOnRefresh } from '../refresh';
 import { CalendarFeed } from '../components/CalendarFeed';
 import { NotificationSettings } from '../components/NotificationSettings';
 
@@ -10,9 +11,11 @@ export function SettingsScreen() {
   const { t, settings, update, toggle } = useSettings();
   const [status, setStatus] = useState<StatusInfo | null>(null);
 
+  const loadStatus = useCallback(() => api.status().then(setStatus).catch(() => {}), []);
+  useOnRefresh(() => void loadStatus());
   useEffect(() => {
-    api.status().then(setStatus).catch(() => {});
-  }, []);
+    void loadStatus();
+  }, [loadStatus]);
 
   const langs: { id: Lang; label: string }[] = [
     { id: 'en', label: 'English' },

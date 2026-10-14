@@ -134,9 +134,9 @@ async function workspaces(): Promise<string[]> {
 let projectCache: { at: number; projects: AsanaProject[] } | null = null;
 
 /** Your projects (for choosing where a new task goes), cached for 30 minutes. */
-export async function projects(): Promise<AsanaProject[]> {
+export async function projects(force = false): Promise<AsanaProject[]> {
   if (!asanaConfigured) return [];
-  if (projectCache && Date.now() - projectCache.at < 30 * 60_000) return projectCache.projects;
+  if (!force && projectCache && Date.now() - projectCache.at < 30 * 60_000) return projectCache.projects;
   const lists = await Promise.all((await workspaces()).map((w) => call<AsanaProject[]>('GET', `/projects?workspace=${w}&archived=false&limit=100&opt_fields=name`)));
   const all = lists.flat().sort((a, b) => a.name.localeCompare(b.name));
   projectCache = { at: Date.now(), projects: all };

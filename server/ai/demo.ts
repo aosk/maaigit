@@ -1,15 +1,20 @@
 import type { Lang, PrayerName, Proposal, Tone } from '../../shared/types.js';
+import type { DayPeriod } from '../../shared/schedule.js';
 import { allEvents, id, state } from '../store.js';
 
 /** Demo mode: simple canned answers when no API key is set, so every screen still works. */
 
-export function demoBriefing(lang: Lang): string {
-  const today = new Date().toDateString();
-  const events = allEvents().filter((e) => new Date(e.start).toDateString() === today).length;
+export function demoBriefing(lang: Lang, period: DayPeriod = 'morning'): string {
+  const now = Date.now();
+  const sameDay = (iso: string) => new Date(iso).toDateString() === new Date(now).toDateString();
+  const today = allEvents().filter((e) => sameDay(e.start));
+  // At noon and night only what is still ahead counts.
+  const events = (period === 'morning' ? today : today.filter((e) => Date.parse(e.start) + e.minutes * 60_000 > now)).length;
   const reminders = state.reminders.filter((r) => !r.done).length;
+  const left = period === 'morning' ? '' : lang === 'ar' ? ' متبقية' : ' left';
   return lang === 'ar'
-    ? `لديك ${events.toLocaleString('ar-SA')} مواعيد و${reminders.toLocaleString('ar-SA')} تذكيرات اليوم. أضف مفتاح Claude لتحصل على موجز ذكي.`
-    : `You have ${events} events and ${reminders} reminders today. Add a Claude API key for a smart briefing.`;
+    ? `لديك ${events.toLocaleString('ar-SA')} مواعيد${left} و${reminders.toLocaleString('ar-SA')} تذكيرات${period === 'morning' ? ' اليوم' : ''}. أضف مفتاح Claude لتحصل على موجز ذكي.`
+    : `You have ${events} event${events === 1 ? '' : 's'}${left} and ${reminders} reminder${reminders === 1 ? '' : 's'}${period === 'morning' ? ' today' : ''}. Add a Claude API key for a smart briefing.`;
 }
 
 function nextFreeMornings(minutes: number): { start: string; note?: string }[] {

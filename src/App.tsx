@@ -12,6 +12,8 @@ import { AlertBanner } from './components/AlertBanner';
 import { worker } from './push';
 import { readRoute, type Route } from './nav';
 import { useMailCount } from './useMailCount';
+import { PullToRefresh } from './components/PullToRefresh';
+import { refreshAll } from './refresh';
 
 export function App() {
   const { t } = useSettings();
@@ -22,6 +24,17 @@ export function App() {
   // The service worker shows notifications; register it early so they work with the app closed.
   useEffect(() => {
     void worker();
+  }, []);
+
+  // Coming back to the app after a while: refresh what it shows.
+  useEffect(() => {
+    let leftAt = 0;
+    const onVisible = () => {
+      if (document.hidden) leftAt = Date.now();
+      else if (leftAt && Date.now() - leftAt > 10 * 60_000) void refreshAll();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
   useEffect(() => {
@@ -56,6 +69,7 @@ export function App() {
   return (
     <div className="shell">
       <AlertBanner />
+      <PullToRefresh onRefresh={refreshAll} disabled={route === 'assistant'} />
       <main>
         {route === 'today' && <Today />}
         {route === 'assistant' && <Assistant />}

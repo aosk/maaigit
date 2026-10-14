@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LEAVE_BUFFER_MINUTES, dedupeEvents, eventEnd, leaveTime } from './schedule';
+import { LEAVE_BUFFER_MINUTES, dayPeriod, dedupeEvents, eventEnd, leaveTime } from './schedule';
 
 describe('schedule helpers', () => {
   const start = '2026-10-14T13:00:00.000Z';
@@ -27,5 +27,24 @@ describe('de-duplicating events', () => {
 
   it('keeps meetings that differ in time or length', () => {
     expect(dedupeEvents([e('Sync'), e('Sync', '2026-10-15T07:00:00.000Z'), e('Sync', undefined, 60)]).merged).toBe(0);
+  });
+});
+
+describe('time of day', () => {
+  // Riyadh is UTC+3 all year.
+  const at = (hhmm: string) => new Date(`2026-10-13T${hhmm}:00+03:00`);
+  const period = (hhmm: string) => dayPeriod(at(hhmm), 'Asia/Riyadh');
+
+  it('is morning until noon, noon until 18:00, and night after', () => {
+    expect([period('05:00'), period('11:59')]).toEqual(['morning', 'morning']);
+    expect([period('12:00'), period('17:59')]).toEqual(['noon', 'noon']);
+    expect([period('18:00'), period('23:30'), period('00:15'), period('03:59')]).toEqual(['night', 'night', 'night', 'night']);
+    expect(period('04:00')).toBe('morning');
+  });
+
+  it('uses the clock of the given time zone, not the server\'s', () => {
+    const moment = new Date('2026-10-13T09:00:00Z'); // 12:00 in Riyadh, 05:00 in New York
+    expect(dayPeriod(moment, 'Asia/Riyadh')).toBe('noon');
+    expect(dayPeriod(moment, 'America/New_York')).toBe('morning');
   });
 });

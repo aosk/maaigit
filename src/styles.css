@@ -282,3 +282,16 @@ a { color: var(--tint-text); }
 .task-panel { display: grid; gap: 12px; padding: 2px 16px 14px; }
 .task-panel .field { gap: 4px; }
 .undo-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--success-soft); color: var(--success); border-radius: 12px; padding: 10px 14px; font-size: 0.85em; font-weight: 600; }
+
+/* Pull down to refresh. */
+.ptr { position: fixed; top: env(safe-area-inset-top); left: 50%; z-index: 60; display: flex; align-items: center; gap: 8px; background: var(--surface); color: var(--tint-text); border: 1px solid var(--sep); border-radius: 999px; padding: 8px 16px; font-size: 0.85em; font-weight: 600; box-shadow: 0 4px 14px var(--shadow); pointer-events: none; }
+.ptr-arrow { display: inline-block; transition: transform 0.15s; }
+
+/* Event details. */
+.slot-btn { display: flex; width: 100%; text-align: start; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.sheet-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-end; justify-content: center; }
+.sheet { background: var(--surface); color: var(--text); width: 100%; max-width: 640px; max-height: 85dvh; overflow: auto; border-radius: 22px 22px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); display: grid; gap: 16px; animation: sheet-up 0.2s ease-out; }
+.sheet-notes { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.92em; line-height: 1.5; }
+.sheet a:not(.btn) { color: var(--tint-text); }
+.updated-at { text-align: center; font-size: 0.75em; color: var(--muted); padding: 8px 0 4px; }
+@keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }

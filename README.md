@@ -195,11 +195,27 @@ open MAAI from the icon, then Settings → **Turn on notifications**.
 
 Your data online starts fresh; it is separate from the copy on your computer.
 
+## Staying up to date
+
+- **In the background:** every 3 hours the server re-reads your calendars, Asana and Gmail, and sends
+  Google any meetings it is missing, even when the app is closed. Change the interval with
+  `MAAI_SYNC_HOURS` (minimum 0.25). Each source is separate: one failing never stops the others. The audit
+  log records each background refresh.
+- **Pull down to refresh:** at the top of Today, Inbox or Settings, pull down (an installed iPhone app has no
+  built-in pull-to-refresh, so MAAI adds one). It re-reads everything now and shows "Up to date", or "Some
+  things could not be updated". Today's footer shows when the last refresh happened.
+- **Coming back:** after you've been away from the app for 10 minutes, it refreshes by itself.
+- **Event details:** tap any event on Today for its time, place, notes (links are tappable) and a **Join
+  meeting** button when it has a Google Meet, Zoom, Teams or Webex link. Notes stay on screen only; the
+  assistant never reads them as instructions.
+- **Briefing:** the card is *Morning briefing* until 12:00, *Noon briefing* until 18:00 and *Night briefing*
+  after, and it is written for that time: the day ahead, what is left of it, or a wrap-up plus tomorrow.
+
 ## What's in it
 
 | Screen | What it does |
 |---|---|
-| **Today** | Gregorian and Hijri date, an AI morning briefing you can listen to, the day's schedule with the five prayer times marked as protected, "leave by" hints, a free-time suggestion, reminders. |
+| **Today** | Gregorian and Hijri date, an AI briefing (morning, noon or night) you can listen to, the day's schedule with the five prayer times marked as protected, "leave by" hints, a free-time suggestion, reminders. |
 | **Assistant** | Chat by typing or by voice (Chrome / Edge). Ask it to book a meeting or set a reminder; it replies with an approval card. Nothing happens until you tap Approve. Meeting times that clash with a prayer are rejected. |
 | **Inbox** | Paste a message from WhatsApp or email; MAAI drafts a reply in the tone you pick (short, friendly, formal, Arabic) using your real calendar, then opens it in WhatsApp for you to send. |
 | **Settings** | Language (English / العربية, right-to-left), light / dark / system, and accessibility: simple mode, captions, read replies aloud, slower speech, larger text, high contrast, reduced motion. |

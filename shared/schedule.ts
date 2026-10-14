@@ -27,3 +27,11 @@ export function dedupeEvents<T extends Pick<CalendarEvent, 'title' | 'start' | '
   });
   return { events: out, merged: events.length - out.length };
 }
+
+export type DayPeriod = 'morning' | 'noon' | 'night';
+
+/** Morning until 12:00, noon from 12:00 to 18:00, night from 18:00, by the clock in the given time zone. */
+export function dayPeriod(at: Date, timeZone?: string): DayPeriod {
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hour12: false }).format(at)) % 24;
+  return hour >= 4 && hour < 12 ? 'morning' : hour >= 12 && hour < 18 ? 'noon' : 'night';
+}

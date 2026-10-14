@@ -102,6 +102,8 @@ export const api = {
   deleteMessage: (id: string) => call<void>('DELETE', `/inbox/${id}`),
 
   calendarFeed: () => call<{ https: string; webcal: string }>('GET', '/calendar/feed'),
+  /** Re-reads calendars, Asana and Gmail on the server now. */
+  sync: () => call<{ at: string; problems: string[] }>('POST', '/sync'),
   asana: () => call<AsanaOverview>('GET', '/asana'),
   asanaProjects: () => call<AsanaProject[]>('GET', '/asana/projects'),
   asanaCreate: (task: NewAsanaTask) => call<AsanaTask>('POST', '/asana/tasks', task),

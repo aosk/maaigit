@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Briefing, CalendarEvent, TodayData } from '../../shared/types';
 import { PRAYER_BUFFER_MINUTES } from '../../shared/prayer';
-import { eventEnd, leaveTime } from '../../shared/schedule';
+import { dayPeriod, eventEnd, leaveTime } from '../../shared/schedule';
 import { api } from '../api';
 import { dayHeading, dayTime, hijri, sameDay, time } from '../format';
 import { useSettings } from '../settings';
@@ -10,6 +10,8 @@ import { Bell, Mic, Send, Speaker, Sun } from '../components/Icons';
 import { askAssistant, talkToAssistant } from '../nav';
 import { Logo } from '../components/Logo';
 import { AsanaTasks } from '../components/AsanaTasks';
+import { EventSheet } from '../components/EventSheet';
+import { useOnRefresh } from '../refresh';
 import { useMailCount } from '../useMailCount';
 
 type Row =
@@ -46,6 +48,8 @@ export function Today() {
   const [error, setError] = useState('');
   const [now, setNow] = useState(() => new Date());
   const [showPast, setShowPast] = useState(false);
+  const [selected, setSelected] = useState<CalendarEvent | null>(null);
+  const closeSheet = useCallback(() => setSelected(null), []);
   const unread = useMailCount();
 
   const load = useCallback(() => {
@@ -58,10 +62,19 @@ export function Today() {
     return () => clearInterval(timer);
   }, [load]);
 
-  useEffect(() => {
-    setBrief(null);
+  // Morning, noon or night: a new briefing is written when the time of day changes.
+  const period = dayPeriod(now);
+  const loadBrief = useCallback(() => {
     api.briefing(lang).then(setBrief).catch(() => setBrief(null));
   }, [lang]);
+  useEffect(() => {
+    setBrief(null);
+    loadBrief();
+  }, [loadBrief, period]);
+  useOnRefresh(() => {
+    load();
+    loadBrief();
+  });
 
   useEffect(() => () => stopSpeaking(), []);
 
@@ -128,8 +141,8 @@ export function Today() {
 
       {error && <div className="error" role="alert">{error}</div>}
 
-      <section className="card" aria-label={t.morningBriefing}>
-        <div className="card-label"><Sun size={20} />{t.morningBriefing}</div>
+      <section className="card" aria-label={t.briefingTitle[brief?.period ?? period]}>
+        <div className="card-label"><Sun size={20} />{t.briefingTitle[brief?.period ?? period]}</div>
         {brief ? <p aria-live="polite">{brief.text}</p> : <div className="skeleton" aria-label={t.loading}><span /><span /></div>}
         <div className="row">
           <button className="btn primary grow" onClick={toggleListen} disabled={!brief}>
@@ -179,7 +192,7 @@ export function Today() {
               {i === pastCount && pastCount > 0 && (
                 <div className="now-line" aria-label={t.now}><span>{t.now} · {time(now, lang)}</span></div>
               )}
-              <ScheduleRow row={row} past={row.end < now.getTime()} />
+              <ScheduleRow row={row} past={row.end < now.getTime()} onSelect={setSelected} />
             </Fragment>
           );
         })}
@@ -218,23 +231,25 @@ export function Today() {
           <h2 className="h2 extra">{t.upcoming}</h2>
           <section className="card flush extra">
             {upcoming.map((e) => (
-              <div key={e.id} className="slot">
+              <button key={e.id} type="button" className="slot slot-btn" onClick={() => setSelected(e)} aria-haspopup="dialog">
                 <div style={{ flex: 1 }}>
                   <div className="slot-title">{e.title}</div>
                   <div className="slot-meta">{dayTime(e.start, lang)}{e.place ? ` · ${e.place}` : ''}</div>
                 </div>
-              </div>
+              </button>
             ))}
           </section>
         </>
       )}
 
+      {data?.syncedAt && <div className="updated-at">{t.updatedAt(time(data.syncedAt, lang))}</div>}
+      {selected && <EventSheet event={selected} onClose={closeSheet} />}
     </div>
   );
 }
 
 /** One line of the day: a prayer (protected time) or an event, with a "leave by" hint when there is travel. */
-function ScheduleRow({ row, past }: { row: Row; past: boolean }) {
+function ScheduleRow({ row, past, onSelect }: { row: Row; past: boolean; onSelect: (e: CalendarEvent) => void }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   if (row.kind === 'prayer') {
@@ -253,7 +268,7 @@ function ScheduleRow({ row, past }: { row: Row; past: boolean }) {
     : [e.place, e.bookedByMaai ? t.bookedByMaai : t.minutesShort(e.minutes)].filter(Boolean).join(' · ');
   const google = e.source === 'google';
   return (
-    <div className={`slot${leave ? ' warn' : ''}${past ? ' past' : ''}${google ? ' google' : ''}`}>
+    <button type="button" className={`slot slot-btn${leave ? ' warn' : ''}${past ? ' past' : ''}${google ? ' google' : ''}`} onClick={() => onSelect(e)} aria-haspopup="dialog">
       <div className="slot-time">{time(e.start, lang)}</div>
       <div className="slot-bar" />
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -263,6 +278,6 @@ function ScheduleRow({ row, past }: { row: Row; past: boolean }) {
         </div>
         <div className="slot-meta">{meta}</div>
       </div>
-    </div>
+    </button>
   );
 }

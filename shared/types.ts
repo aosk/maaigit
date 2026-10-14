@@ -18,6 +18,12 @@ export interface CalendarEvent {
   allDay?: boolean;
   /** Sample data from the first run; hidden once a real calendar is connected. */
   demo?: boolean;
+  /** Which calendar it was read from, such as "Google Calendar" or "iPhone (iCloud)". */
+  calendar?: string;
+  /** The event's own notes (plain text). */
+  description?: string;
+  /** A link to join it (Google Meet, Zoom, Teams…), when it has one. */
+  meetingUrl?: string;
   /** Set once the event has been added to Google Calendar. */
   googleId?: string;
   /** Why adding it to Google Calendar failed, if it did. */
@@ -144,6 +150,8 @@ export interface TodayData {
   reminders: Reminder[];
   prayers: { name: PrayerName; time: string }[];
   nextPrayer: { name: PrayerName; time: string };
+  /** When everything (calendars, Asana, mail) was last refreshed from its source. */
+  syncedAt?: string;
 }
 
 export interface AuditEntry {
@@ -162,6 +170,8 @@ export interface AgentSetting {
 }
 
 export interface Briefing {
+  /** Which briefing this is: morning, noon or night. */
+  period: 'morning' | 'noon' | 'night';
   text: string;
   source: 'claude' | 'demo';
 }

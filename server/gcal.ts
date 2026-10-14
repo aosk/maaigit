@@ -52,20 +52,55 @@ let inFlight: Promise<void> | null = null;
 const plain = (value: unknown): string =>
   typeof value === 'string' ? value : value && typeof value === 'object' && 'val' in value ? String((value as { val: unknown }).val) : '';
 
-function toEvent(uid: string, title: string, start: Date, end: Date, location: string, allDay: boolean): CalendarEvent {
+/** Notes sometimes carry a little HTML; this keeps the words and the line breaks. */
+export function plainNotes(text: string): string {
+  return text
+    .replace(/<\s*br\s*\/?>|<\/(p|div|li)>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 2000);
+}
+
+const MEETING_HOSTS = /(meet\.google\.com|zoom\.us|zoom\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|bluejeans\.com|chime\.aws|gotomeeting\.com|meet\.jit\.si)/i;
+const LINK = /https?:\/\/[^\s<>"')\]]+/g;
+
+/** The link to join a meeting: Google's own conference link first, then one found in the location or notes. */
+export function meetingLink(...sources: string[]): string | undefined {
+  for (const source of sources) {
+    for (const link of source.match(LINK) ?? []) {
+      try {
+        if (MEETING_HOSTS.test(new URL(link).hostname)) return link;
+      } catch {
+        // not a usable address; try the next one
+      }
+    }
+  }
+  return undefined;
+}
+
+function toEvent(uid: string, title: string, start: Date, end: Date, extra: { location: string; notes: string; conference: string; calendar: string }, allDay: boolean): CalendarEvent {
+  const description = plainNotes(extra.notes);
   return {
     id: `g:${uid}:${start.toISOString()}`,
     title: title || '(No title)',
     start: start.toISOString(),
     minutes: Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000)),
-    place: location || undefined,
+    place: extra.location || undefined,
+    description: description || undefined,
+    meetingUrl: meetingLink(extra.conference, extra.location, description),
+    calendar: extra.calendar,
     source: 'google',
     allDay: allDay || undefined,
   };
 }
 
 /** Events from one calendar file in the window, with repeating events expanded. */
-export function eventsFromIcs(text: string, now = new Date()): CalendarEvent[] {
+export function eventsFromIcs(text: string, now = new Date(), calendar = 'Google Calendar'): CalendarEvent[] {
   const from = new Date(now.getTime() - PAST_DAYS * 86_400_000);
   const to = new Date(now.getTime() + FUTURE_DAYS * 86_400_000);
   const out: CalendarEvent[] = [];
@@ -74,14 +109,15 @@ export function eventsFromIcs(text: string, now = new Date()): CalendarEvent[] {
     const ev = item as VEvent;
     if (plain(ev.status).toUpperCase() === 'CANCELLED') continue;
     const allDay = (ev as { datetype?: string }).datetype === 'date';
+    const extra = { location: plain(ev.location), notes: plain(ev.description), conference: plain((ev as unknown as Record<string, unknown>)['GOOGLE-CONFERENCE']) || plain(ev.url), calendar };
     if (ev.rrule) {
       for (const inst of ical.expandRecurringEvent(ev, { from, to })) {
-        out.push(toEvent(ev.uid, plain(inst.summary), new Date(inst.start), new Date(inst.end), plain(ev.location), inst.isFullDay));
+        out.push(toEvent(ev.uid, plain(inst.summary), new Date(inst.start), new Date(inst.end), extra, inst.isFullDay));
       }
     } else if (ev.start) {
       const start = new Date(ev.start);
       const end = ev.end ? new Date(ev.end) : new Date(start.getTime() + (allDay ? 86_400_000 : 3_600_000));
-      if (end >= from && start <= to) out.push(toEvent(ev.uid, plain(ev.summary), start, end, plain(ev.location), allDay));
+      if (end >= from && start <= to) out.push(toEvent(ev.uid, plain(ev.summary), start, end, extra, allDay));
     }
   }
   return out;
@@ -96,7 +132,7 @@ async function readSource(source: (typeof sources)[number]): Promise<void> {
   try {
     const res = await fetch(source.url, { headers: { 'User-Agent': 'MAAI' } });
     if (!res.ok) throw new Error(failure(res.status));
-    bySource.set(source.name, eventsFromIcs(await res.text()));
+    bySource.set(source.name, eventsFromIcs(await res.text(), new Date(), source.name));
     problems.delete(source.name);
   } catch (error) {
     // Keep what this calendar showed last time; the others still update.

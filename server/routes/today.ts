@@ -7,6 +7,7 @@ import { refreshCalendar } from '../gcal.js';
 import { config } from '../config.js';
 import { allEvents, audit, id, save, state } from '../store.js';
 import { mirrorToGoogle, removeFromGoogle } from '../gwrite.js';
+import { lastSyncAt } from '../sync.js';
 import { HttpError, find, lang, text, wrap } from './http.js';
 
 export const today = Router();
@@ -22,6 +23,7 @@ today.get('/today', wrap(async (_req, res) => {
     reminders: state.reminders,
     prayers: prayersFor(now, config.latitude, config.longitude).map(slot),
     nextPrayer: slot(nextPrayer(now, config.latitude, config.longitude)),
+    syncedAt: lastSyncAt(),
   };
   res.json(data);
 }));

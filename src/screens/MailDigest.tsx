@@ -3,6 +3,7 @@ import type { MailCategory, MailDigest as Digest } from '../../shared/types';
 import { api } from '../api';
 import { dayTime } from '../format';
 import { useSettings } from '../settings';
+import { useOnRefresh } from '../refresh';
 import { askAssistant } from '../nav';
 import { Chat, Sun } from '../components/Icons';
 
@@ -34,6 +35,8 @@ export function MailDigest({ gmail }: { gmail: boolean }) {
   useEffect(() => {
     if (gmail) load(false);
   }, [gmail, load]);
+  // After a refresh the server has the newest mail; the summary is only rewritten if it changed.
+  useOnRefresh(() => gmail && load(false));
 
   if (!gmail) return <div className="banner">{t.inboxNeedsGmail}</div>;
 

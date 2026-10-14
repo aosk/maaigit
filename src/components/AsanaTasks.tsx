@@ -3,6 +3,7 @@ import type { AsanaControl, AsanaOverview, AsanaProject, AsanaTask } from '../..
 import { api, type NewAsanaTask } from '../api';
 import { useSettings } from '../settings';
 import { useAction } from '../useAction';
+import { useOnRefresh } from '../refresh';
 import { Plus } from './Icons';
 import { AsanaNewFields } from './AsanaNewFields';
 
@@ -24,6 +25,7 @@ export function AsanaTasks() {
   useEffect(() => {
     void load();
   }, [load]);
+  useOnRefresh(() => void load());
 
   // The "marked done" bar goes away by itself.
   useEffect(() => {
