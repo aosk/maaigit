@@ -19,7 +19,7 @@ export async function briefing(lang: Lang, now = new Date()): Promise<Briefing> 
   if (!client || !agentEnabled('planner')) return { period, text: demoBriefing(lang, period), source: 'demo' };
   await refreshContext();
   const response = await create({
-    system: `You are MAAI. Write ${FOCUS[period]}, in ${lang === 'ar' ? 'Arabic' : 'English'}: two short sentences, spoken style, no lists. Include any Asana tasks that are overdue or due today. Use only what the context shows; do not invent details.`,
+    system: `You are MAAI. Write ${FOCUS[period]}, in ${lang === 'ar' ? 'Arabic' : 'English'}: two short sentences, spoken style, no lists. Include any Asana tasks that are overdue or due today, and mention WhatsApp messages waiting for an answer only if one looks important. Use only what the context shows; do not invent details.`,
     effort: 'low',
     maxTokens: 2000,
     messages: [{ role: 'user', content: contextNote() }],

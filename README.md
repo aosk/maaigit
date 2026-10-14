@@ -167,6 +167,21 @@ it can't (for example, which email to share the calendar with). The downloaded k
 calendar: keep it only in Render, never in GitHub or a chat, and delete it in Google Cloud to cut MAAI off.
 Don't also subscribe Google Calendar to MAAI's link: each meeting would show twice.
 
+### WhatsApp Business (through Twilio)
+
+MAAI reads the messages people send to your **WhatsApp Business number**, summarises them, ranks them by
+importance (decide / reply / for your information / skip), and helps you answer. It cannot see your
+personal WhatsApp chats, and it never sends anything by itself: you edit the draft and tap **Send on WhatsApp**.
+
+1. Create a Twilio account and note the **Account SID** and **Auth Token**. To try it first, use Twilio's
+   WhatsApp sandbox (Messaging → Try it out → Send a WhatsApp message); for real use, register your business number as a sender.
+2. On Render → **Environment** add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_WHATSAPP_FROM`
+   (like `whatsapp:+9665XXXXXXXX`). Never put them in the code or in chat.
+3. In Twilio, set the incoming-message webhook (method POST) to `https://YOUR-APP.onrender.com/webhook/whatsapp`.
+4. Open **Inbox → WhatsApp**. Messages are deleted after 7 days (`MAAI_WHATSAPP_DAYS`).
+5. WhatsApp only lets a business answer freely within 24 hours of the person's last message; after that MAAI
+   offers "Open in WhatsApp" so you write to them yourself.
+
 ### Asana
 
 MAAI lists the tasks assigned to you (overdue first) on Today and includes them in the morning briefing.

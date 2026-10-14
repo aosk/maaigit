@@ -31,6 +31,8 @@ export const config = {
   syncHours: Math.max(0.25, num(process.env.MAAI_SYNC_HOURS, 3)),
   /** How often your Google calendar is read live (seconds). */
   liveSeconds: Math.max(2, num(process.env.MAAI_LIVE_SECONDS, 60)),
+  /** Days WhatsApp messages received on the business number are kept. */
+  whatsappDays: Math.max(1, Math.min(90, Math.round(num(process.env.MAAI_WHATSAPP_DAYS, 7)))),
   /** Required online: the password that protects MAAI. */
   password: process.env.MAAI_PASSWORD ?? '',
 };

@@ -8,10 +8,11 @@ import { useOnRefresh } from '../refresh';
 import { Back, Chat, Send, Trash } from '../components/Icons';
 import { mailtoLink } from '../components/EmailCard';
 import { MailDigest } from './MailDigest';
+import { WhatsAppDigest } from './WhatsAppDigest';
 
 const TONES: Tone[] = ['short', 'friendly', 'formal', 'arabic'];
 
-function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; gmail: boolean; onBack: () => void; onChanged: () => void }) {
+function Reply({ message, gmail, whatsapp, onBack, onChanged }: { message: InboxMessage; gmail: boolean; whatsapp: boolean; onBack: () => void; onChanged: () => void }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   const [tone, setTone] = useState<Tone>(lang === 'ar' ? 'arabic' : 'friendly');
@@ -20,8 +21,18 @@ function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; g
   const [copied, setCopied] = useState(false);
   const drafting = useAction();
   const emailing = useAction();
+  const texting = useAction();
+  const [textSent, setTextSent] = useState(false);
   const busy = drafting.busy;
-  const error = drafting.error || emailing.error;
+  const error = drafting.error || emailing.error || texting.error;
+  // WhatsApp only lets MAAI answer within 24 hours of their last message; the server checks it too.
+  const canSend = whatsapp && message.via === 'twilio' && Date.now() - Date.parse(message.receivedAt) < 24 * 3_600_000;
+  const sendIt = () =>
+    texting.run(async () => {
+      await api.sendWhatsApp(message.id, draft);
+      setTextSent(true);
+      onChanged();
+    });
 
   const makeDraft = (chosen: Tone) =>
     drafting.run(async () => {
@@ -70,7 +81,7 @@ function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; g
         <button className="btn ghost" onClick={onBack} style={{ paddingInline: 0 }}>
           <span style={{ display: 'inline-flex', transform: lang === 'ar' ? 'scaleX(-1)' : undefined }}><Back size={20} /></span>{t.inboxTitle}
         </button>
-        <div style={{ fontWeight: 600 }}>{t.replyTo(message.from)}</div>
+        <h1 style={{ fontWeight: 600, fontSize: 'inherit', margin: 0 }}>{t.replyTo(message.from)}</h1>
         <div style={{ width: 60 }} />
       </div>
 
@@ -119,7 +130,16 @@ function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; g
       )}
 
       <section className="card">
-        <a className="btn primary big" href={waLink} target="_blank" rel="noreferrer" onClick={sent} aria-disabled={busy || !draft} style={{ textDecoration: 'none' }}>
+        {message.via === 'twilio' && (
+          canSend ? (
+            <button className="btn primary big" onClick={sendIt} disabled={busy || !draft || texting.busy || textSent}>
+              <Send size={20} />{texting.busy ? t.sending : textSent ? t.sentOnWhatsApp : t.sendOnWhatsApp}
+            </button>
+          ) : (
+            <div className="sub" role="note">{t.whatsappWindowClosed}</div>
+          )
+        )}
+        <a className={`btn ${message.via === 'twilio' && canSend ? 'secondary' : 'primary'} big`} href={waLink} target="_blank" rel="noreferrer" onClick={sent} aria-disabled={busy || !draft} style={{ textDecoration: 'none' }}>
           <Send size={20} />{t.openWhatsApp}
         </a>
         <div className="row">
@@ -132,13 +152,14 @@ function Reply({ message, gmail, onBack, onChanged }: { message: InboxMessage; g
   );
 }
 
-type View = 'email' | 'messages';
+type View = 'email' | 'whatsapp' | 'messages';
 const VIEW_KEY = 'maai.inboxView';
 
 /** Two inboxes: Gmail, read and sorted by MAAI, and messages the user pasted in from WhatsApp. */
 export function Inbox() {
   const { t } = useSettings();
   const [status, setStatus] = useState<StatusInfo | null>(null);
+  const [replying, setReplying] = useState<InboxMessage | null>(null);
   // Email first; the choice is remembered for this visit.
   const [view, setView] = useState<View>(() => (sessionStorage.getItem(VIEW_KEY) as View | null) ?? 'email');
   const pickView = (v: View) => {
@@ -154,11 +175,22 @@ export function Inbox() {
       <h1 className="title">{t.inboxTitle}</h1>
       <div className="seg" role="radiogroup" aria-label={t.inboxTitle}>
         <button role="radio" aria-checked={view === 'email'} onClick={() => pickView('email')}>{t.emailTab}</button>
+        <button role="radio" aria-checked={view === 'whatsapp'} onClick={() => pickView('whatsapp')}>{t.whatsappTab}</button>
         <button role="radio" aria-checked={view === 'messages'} onClick={() => pickView('messages')}>{t.messagesTab}</button>
       </div>
     </>
   );
-  if (view === 'messages') return <Messages header={header} gmail={Boolean(status?.mail?.configured)} />;
+  const whatsapp = Boolean(status?.whatsapp?.configured);
+  if (replying) return <Reply message={replying} gmail={Boolean(status?.mail?.configured)} whatsapp={whatsapp} onBack={() => setReplying(null)} onChanged={() => {}} />;
+  if (view === 'messages') return <Messages header={header} gmail={Boolean(status?.mail?.configured)} whatsapp={whatsapp} />;
+  if (view === 'whatsapp') {
+    return (
+      <div className="screen">
+        {header}
+        <WhatsAppDigest connected={whatsapp} onReply={setReplying} />
+      </div>
+    );
+  }
   return (
     <div className="screen">
       {header}
@@ -168,7 +200,7 @@ export function Inbox() {
 }
 
 /** Messages pasted in from WhatsApp or email, each with a reply MAAI drafts (which takes over the screen). */
-function Messages({ header, gmail }: { header: ReactNode; gmail: boolean }) {
+function Messages({ header, gmail, whatsapp }: { header: ReactNode; gmail: boolean; whatsapp: boolean }) {
   const { t, settings } = useSettings();
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [open, setOpen] = useState<string | null>(null);
@@ -182,7 +214,7 @@ function Messages({ header, gmail }: { header: ReactNode; gmail: boolean }) {
   useOnRefresh(load);
 
   const current = messages.find((m) => m.id === open);
-  if (current) return <Reply message={current} gmail={gmail} onBack={() => setOpen(null)} onChanged={load} />;
+  if (current) return <Reply message={current} gmail={gmail} whatsapp={whatsapp} onBack={() => setOpen(null)} onChanged={load} />;
 
   const add = (e: FormEvent) => {
     e.preventDefault();

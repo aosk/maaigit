@@ -25,6 +25,20 @@ function inboxOverview(): string {
   return `Recent Gmail inbox (use read_email to open one):\n${mails.map((m) => `- #${m.uid} ${dayTime(m.date)} from ${n(m.fromName)}: ${n(m.subject)}${m.unread ? ' (unread)' : ''}`).join('\n')}`;
 }
 
+/** WhatsApp people are still waiting on, newest first: who, how many, and the latest words. */
+function whatsappOverview(): string {
+  const waiting = new Map<string, { name: string; count: number; last: string; at: string }>();
+  for (const m of state.inbox) {
+    if (m.channel !== 'whatsapp' || m.replied) continue;
+    const key = m.phone ?? m.from;
+    const entry = waiting.get(key);
+    waiting.set(key, { name: m.from, count: (entry?.count ?? 0) + 1, last: m.receivedAt >= (entry?.at ?? '') ? m.text : entry!.last, at: m.receivedAt > (entry?.at ?? '') ? m.receivedAt : entry!.at });
+  }
+  if (!waiting.size) return 'WhatsApp: nothing waiting for an answer.';
+  const rows = [...waiting.values()].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10);
+  return `WhatsApp messages still waiting for an answer:\n${rows.map((r) => `- ${n(r.name)} (${r.count}, latest ${dayTime(r.at)}): ${n(r.last.replace(/\s+/g, ' ').slice(0, 160))}`).join('\n')}`;
+}
+
 function upcomingEvents(now: Date): string[] {
   return allEvents()
     .filter((e) => new Date(e.start).getTime() + e.minutes * 60_000 > now.getTime())
@@ -64,6 +78,7 @@ export function contextNote(): string {
     `Open reminders:\n${reminders.join('\n') || '- none'}`,
     inboxOverview(),
     asanaOverview(),
+    whatsappOverview(),
   ].join('\n\n');
 }
 

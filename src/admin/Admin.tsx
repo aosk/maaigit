@@ -158,6 +158,7 @@ export function Admin() {
               { name: 'Gmail (sending)', ok: data?.status.mail?.configured, okText: data?.status.mail?.from ?? 'Connected', offText: 'Not connected' },
               { name: 'Prayer times (Umm al-Qura)', ok: true, okText: data ? data.status.location.timezone : '…', offText: '' },
               { name: 'WhatsApp hand-off', ok: true, okText: 'Ready (wa.me link)', offText: '' },
+              { name: 'WhatsApp Business (Twilio)', ok: data?.status.whatsapp?.configured, okText: data?.status.whatsapp?.number ?? 'Connected', offText: 'Not connected' },
               { name: 'Voice input', ok: true, okText: 'In Chrome / Edge', offText: '' },
               {
                 name: 'Asana',

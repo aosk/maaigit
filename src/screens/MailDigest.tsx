@@ -75,7 +75,7 @@ export function MailDigest({ gmail }: { gmail: boolean }) {
                   <button className="msg-item" onClick={() => setOpen(expanded ? null : m.uid)} aria-expanded={expanded}>
                     <span className="between" style={{ width: '100%' }}>
                       <span className="row" style={{ fontWeight: 600, minWidth: 0 }}>
-                        {m.unread && <span className="dot" aria-label={t.unread} />}
+                        {m.unread && <span className="dot" role="img" aria-label={t.unread} />}
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.fromName}</span>
                       </span>
                       <span className="row" style={{ flex: 'none' }}>

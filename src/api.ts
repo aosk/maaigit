@@ -15,6 +15,7 @@ import type {
   MailDigest,
   NotifyPrefs,
   NotifyStatus,
+  WhatsAppDigest,
   Proposal,
   Reminder,
   StatusInfo,
@@ -98,6 +99,8 @@ export const api = {
   addMessage: (m: { from: string; phone?: string; email?: string; text: string }) => call<InboxMessage>('POST', '/inbox', m),
   emailReply: (id: string, mail: { to: string; subject: string; body: string }) => call<InboxMessage>('POST', `/inbox/${id}/email`, mail),
   draft: (id: string, tone: Tone, lang: Lang) => call<{ draft: string; summary: string }>('POST', `/inbox/${id}/draft`, { tone, lang }),
+  whatsappDigest: (lang: Lang, refresh = false) => call<WhatsAppDigest>('GET', `/whatsapp/digest?lang=${lang}${refresh ? '&refresh=1' : ''}`),
+  sendWhatsApp: (id: string, body: string) => call<InboxMessage>('POST', `/inbox/${id}/whatsapp`, { body }),
   replied: (id: string) => call<InboxMessage>('POST', `/inbox/${id}/replied`, {}),
   deleteMessage: (id: string) => call<void>('DELETE', `/inbox/${id}`),
 

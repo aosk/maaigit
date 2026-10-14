@@ -80,6 +80,9 @@ export function SettingsScreen() {
                   ? t.asanaConnected(status.asana.open, status.asana.overdue)
                   : t.asanaOff}
             </Conn>
+            <Conn state={status.whatsapp?.configured ? 'on' : 'off'} name={t.whatsappConn}>
+              {status.whatsapp?.configured ? t.whatsappConnected(status.whatsapp.number ?? '', status.whatsapp.keepDays) : t.whatsappOff}
+            </Conn>
           </>
         ) : (
           <div className="skeleton"><span /><span /></div>

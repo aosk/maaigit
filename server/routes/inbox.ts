@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import type { Tone } from '../../shared/types.js';
 import { digestInbox, draftReply } from '../ai/mail.js';
+import { digestWhatsApp } from '../ai/whatsapp.js';
+import { ANSWER_WINDOW_MS, canAnswer, pruneWhatsApp, sendWhatsApp, whatsappConfigured } from '../whatsapp.js';
 import { isEmail, sendMail } from '../mail.js';
 import { fetchInbox, inboxConfigured } from '../gmail-inbox.js';
-import { audit, id, save, state } from '../store.js';
+import { agentEnabled, audit, id, save, state } from '../store.js';
 import { HttpError, find, lang, text, wrap } from './http.js';
 
 export const inbox = Router();
@@ -12,7 +14,10 @@ const TONES: Tone[] = ['short', 'friendly', 'formal', 'arabic'];
 
 // ---------- Messages the user pasted in (WhatsApp or email) ----------
 
-inbox.get('/inbox', (_req, res) => res.json([...state.inbox].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))));
+inbox.get('/inbox', (_req, res) => {
+  pruneWhatsApp();
+  res.json([...state.inbox].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)));
+});
 
 inbox.post('/inbox', (req, res) => {
   const from = text(req.body.from, 100);
@@ -44,6 +49,24 @@ inbox.post('/inbox/:id/email', wrap(async (req, res) => {
   res.json(message);
 }));
 
+// Sends the reply through the WhatsApp Business number. Only when the user taps Send, and only
+// while WhatsApp still allows a free answer (24 hours after the person's last message).
+inbox.post('/inbox/:id/whatsapp', wrap(async (req, res) => {
+  const message = find(state.inbox, req.params.id);
+  if (!agentEnabled('messaging')) throw new HttpError(403, 'Messaging is switched off by the admin.');
+  if (!whatsappConfigured) throw new HttpError(400, 'WhatsApp is not connected yet.');
+  if (message.via !== 'twilio' || !message.phone) throw new HttpError(400, 'This message did not arrive on the WhatsApp Business number, so MAAI cannot send the reply. Use "Open WhatsApp" instead.');
+  const body = text(req.body.body, 1500);
+  if (!body) throw new HttpError(400, 'The reply is empty');
+  if (!canAnswer(message.phone)) {
+    throw new HttpError(409, `WhatsApp only allows a reply within ${ANSWER_WINDOW_MS / 3_600_000} hours of their last message. Open WhatsApp and write to them yourself.`);
+  }
+  await sendWhatsApp(message.phone, body);
+  for (const m of state.inbox) if (m.phone === message.phone && m.receivedAt <= message.receivedAt) m.replied = true;
+  audit(`Sent a WhatsApp reply to ${message.from}`, 'User', 'approved');
+  res.json(message);
+}));
+
 inbox.post('/inbox/:id/replied', (req, res) => {
   const message = find(state.inbox, req.params.id);
   message.replied = true;
@@ -67,3 +90,7 @@ inbox.get('/mail/count', wrap(async (_req, res) => {
 }));
 
 inbox.get('/mail/digest', wrap(async (req, res) => res.json(await digestInbox(lang(req.query.lang), req.query.refresh === '1'))));
+
+// ---------- WhatsApp business number: summary and ranking ----------
+
+inbox.get('/whatsapp/digest', wrap(async (req, res) => res.json(await digestWhatsApp(lang(req.query.lang), req.query.refresh === '1'))));

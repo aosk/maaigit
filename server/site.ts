@@ -2,6 +2,7 @@ import express from 'express';
 import { createGuard } from './auth.js';
 import { feedRoutes } from './feed.js';
 import { api } from './routes/index.js';
+import { whatsappWebhook } from './whatsapp.js';
 import { bodyErrors, lastResort, noStore, securityHeaders } from './security.js';
 
 /** An Express app set up the way every MAAI server should be. */
@@ -37,6 +38,8 @@ export function createOnlineSite(inner: express.Express, options: { password: st
   site.get('/api/health', (_req, res) => res.json({ ok: true }));
   // Calendar apps can't sign in; their link is a long random key (see feed.ts).
   site.use(feedRoutes);
+  // Twilio cannot sign in either; every request to this one proves itself with Twilio's signature.
+  site.use(whatsappWebhook);
   site.use(express.json({ limit: '1mb' }));
   site.use('/api', createGuard('password', options.password, options.secret));
   site.use(inner);

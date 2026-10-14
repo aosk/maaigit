@@ -57,6 +57,10 @@ export interface InboxMessage {
   text: string;
   receivedAt: string;
   replied: boolean;
+  /** Set when the message arrived on the WhatsApp Business number (not pasted in by hand). */
+  via?: 'twilio';
+  /** The provider's id for the message, so a message delivered twice is kept once. */
+  externalId?: string;
 }
 
 export type Tone = 'short' | 'friendly' | 'formal' | 'arabic';
@@ -184,6 +188,8 @@ export interface StatusInfo {
   calendar?: CalendarStatus;
   /** Asana, read through a personal access token. */
   asana?: AsanaStatus;
+  /** WhatsApp Business number, read and answered through Twilio. */
+  whatsapp?: WhatsAppStatus;
   /** How this device signed in: not at all on the computer itself, a PIN at home, a password online. */
   auth?: 'none' | 'pin' | 'password';
   model: string;
@@ -267,6 +273,37 @@ export interface MailDigest {
   summary: string;
   source: 'claude' | 'demo';
   emails: (MailItem & { insight?: MailInsight })[];
+}
+
+/** One person's WhatsApp messages, read and sorted by MAAI. */
+export interface WhatsAppThread {
+  /** Stable key: the phone number, or the name when there is no number. */
+  key: string;
+  name: string;
+  phone?: string;
+  /** Oldest first. */
+  messages: InboxMessage[];
+  lastAt: string;
+  unanswered: number;
+  /** MAAI can send the reply itself (the number is connected and they wrote within the last 24 hours). */
+  canReply: boolean;
+  insight?: Omit<MailInsight, 'uid'>;
+}
+
+export interface WhatsAppDigest {
+  fetchedAt: string;
+  summary: string;
+  source: 'claude' | 'demo';
+  /** Days messages are kept before they are deleted. */
+  keepDays: number;
+  threads: WhatsAppThread[];
+}
+
+export interface WhatsAppStatus {
+  configured: boolean;
+  /** The WhatsApp Business number messages arrive on. */
+  number?: string;
+  keepDays: number;
 }
 
 export interface CalendarStatus {
