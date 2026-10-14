@@ -173,7 +173,7 @@ a { color: var(--tint-text); }
 /* ---------- Inbox / forms ---------- */
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 0.76em; font-weight: 600; color: var(--text2); padding-inline-start: 4px; }
-.field input, .field textarea { border-radius: 14px; border: 1px solid var(--border); background: var(--surface); padding: 12px 14px; min-height: 48px; }
+.field input, .field textarea, .field select { border-radius: 14px; border: 1px solid var(--border); background: var(--surface); padding: 12px 14px; min-height: 48px; }
 .field textarea { min-height: 120px; resize: vertical; line-height: 1.4; }
 .msg-item { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-bottom: 1px solid var(--sep); text-align: start; background: transparent; border-inline: none; border-top: none; width: 100%; }
 .msg-item:last-child { border-bottom: none; }
@@ -271,3 +271,14 @@ a { color: var(--tint-text); }
 :root[data-motion='reduce'] .najiz-logo, :root[data-motion='reduce'] .najiz-caret { animation: none; }
 @media (prefers-color-scheme: dark) { :root:not([data-look='light']) .najiz-phrase { color: #00AD68; } }
 :root[data-look='dark'] .najiz-phrase { color: #00AD68; }
+
+/* Asana tasks on Today: a tick to finish, tap the name for status and date. */
+.task { border-bottom: 1px solid var(--sep); }
+.task:last-child { border-bottom: none; }
+.task-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; min-height: 52px; }
+.task-row .circle { width: 28px; height: 28px; border-radius: 14px; border: 2px solid var(--tint); background: transparent; flex: none; }
+.task-row .circle:disabled { opacity: 0.4; }
+.task-open { background: none; border: none; padding: 0; text-align: start; flex: 1; min-width: 0; color: inherit; font: inherit; }
+.task-panel { display: grid; gap: 12px; padding: 2px 16px 14px; }
+.task-panel .field { gap: 4px; }
+.undo-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--success-soft); color: var(--success); border-radius: 12px; padding: 10px 14px; font-size: 0.85em; font-weight: 600; }

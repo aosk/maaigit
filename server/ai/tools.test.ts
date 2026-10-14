@@ -9,7 +9,7 @@ const call = (name: string, input: unknown): ToolUse => ({ type: 'tool_use', id:
 
 describe('assistant tools', () => {
   it('lists every tool as strict', () => {
-    expect(tools.map((t) => t.name).sort()).toEqual(['propose_asana_update', 'propose_email', 'propose_meeting', 'propose_reminder', 'read_asana_task', 'read_email']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['propose_asana_task', 'propose_asana_update', 'propose_email', 'propose_meeting', 'propose_reminder', 'read_asana_task', 'read_email']);
     expect(tools.every((t) => t.strict)).toBe(true);
   });
 
@@ -53,6 +53,8 @@ describe('assistant tools', () => {
     const created: Proposal[] = [];
     const { result } = await runTool(call('propose_asana_update', { task_gid: '1', comment: 'Done', complete: true, due_on: '' }), created);
     expect(result.is_error).toBe(true);
+    expect(created).toHaveLength(0);
+    expect((await runTool(call('propose_asana_task', { name: 'Call the accountant', notes: '', due_on: '', project_name: '' }), created)).result.is_error).toBe(true);
     expect(created).toHaveLength(0);
     expect((await runTool(call('read_asana_task', { task_gid: '1' }), created)).result.is_error).toBe(true);
   });

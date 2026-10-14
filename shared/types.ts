@@ -99,6 +99,19 @@ export type Proposal =
       complete: boolean;
       /** A new due date, YYYY-MM-DD (empty for none). */
       dueOn: string;
+    }
+  | {
+      id: string;
+      kind: 'asana_new';
+      status: ProposalStatus;
+      /** The new task's name. */
+      title: string;
+      notes: string;
+      /** YYYY-MM-DD, or empty for no date. */
+      dueOn: string;
+      /** The project to put it in, or empty for just the user's own tasks. */
+      projectGid: string;
+      taskUrl?: string;
     };
 
 export type ProposalStatus = 'pending' | 'approved' | 'cancelled';
@@ -255,6 +268,26 @@ export interface AsanaTask {
   notes?: string;
   url: string;
   project?: string;
+}
+
+export interface AsanaProject {
+  gid: string;
+  name: string;
+}
+
+/**
+ * One way to change a task's status: the column it sits in on a project's board
+ * (type "section"), or a dropdown field such as "Status" (type "field").
+ */
+export interface AsanaControl {
+  type: 'section' | 'field';
+  /** What it changes: the project name, or the field name. */
+  label: string;
+  /** For a field, its id (a section needs none). */
+  fieldGid?: string;
+  /** The option the task has now. */
+  current?: string;
+  options: { gid: string; name: string }[];
 }
 
 export interface AsanaStatus {

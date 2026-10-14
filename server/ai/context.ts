@@ -3,7 +3,7 @@ import { PRAYER_BUFFER_MINUTES, prayersFor } from '../../shared/prayer.js';
 import { config } from '../config.js';
 import { allEvents, state } from '../store.js';
 import { cachedInbox, inboxConfigured } from '../gmail-inbox.js';
-import { asanaConfigured, cachedTasks, openTasks, todayIso } from '../asana.js';
+import { asanaConfigured, cachedProjects, cachedTasks, openTasks, projects, todayIso } from '../asana.js';
 
 /** What Claude is told about the user's day and inbox, rebuilt for every request. */
 
@@ -45,10 +45,12 @@ function prayerTimes(now: Date, days: number): string[] {
 function asanaOverview(): string {
   if (!asanaConfigured) return 'Asana: not connected.';
   const tasks = cachedTasks().slice(0, 25);
-  if (!tasks.length) return 'Asana: connected, no open tasks assigned to the user.';
+  const names = cachedProjects().map((p) => p.name).join(', ');
+  const where = names ? `\nAsana projects (for propose_asana_task): ${names}` : '';
+  if (!tasks.length) return `Asana: connected, no open tasks assigned to the user.${where}`;
   const today = todayIso();
   const flag = (due?: string) => (!due ? 'no date' : due < today ? `due ${due}, OVERDUE` : due === today ? 'due TODAY' : `due ${due}`);
-  return `Asana tasks assigned to the user (use read_asana_task to open one, propose_asana_update to comment/complete/reschedule):\n${tasks.map((t) => `- [${t.gid}] ${t.name}${t.project ? ` (${t.project})` : ''}: ${flag(t.dueOn)}`).join('\n')}`;
+  return `Asana tasks assigned to the user (use read_asana_task to open one, propose_asana_update to comment/complete/reschedule, propose_asana_task to create a new one):\n${tasks.map((t) => `- [${t.gid}] ${t.name}${t.project ? ` (${t.project})` : ''}: ${flag(t.dueOn)}`).join('\n')}${where}`;
 }
 
 export function contextNote(): string {
@@ -66,7 +68,7 @@ export function contextNote(): string {
 
 /** Loads what the context needs that is not already in memory (Asana), best effort. */
 export async function refreshContext(): Promise<void> {
-  await openTasks().catch(() => {});
+  await Promise.all([openTasks().catch(() => {}), projects().catch(() => {})]);
 }
 
 /** The context block that starts every user message to Claude. */

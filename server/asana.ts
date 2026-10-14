@@ -1,4 +1,4 @@
-import type { AsanaStatus, AsanaTask } from '../shared/types.js';
+import type { AsanaControl, AsanaProject, AsanaStatus, AsanaTask } from '../shared/types.js';
 
 /**
  * Asana through a Personal Access Token (Asana → profile picture → My Settings →
@@ -120,5 +120,110 @@ export async function updateTask(gid: string, change: { comment?: string; comple
   if (change.complete) fields.completed = true;
   if (change.dueOn) fields.due_on = change.dueOn;
   if (Object.keys(fields).length) await call('PUT', `/tasks/${gid}`, fields);
+  cache = null;
+}
+
+// ---------- Projects, status and new tasks ----------
+
+let workspaceCache: string[] | null = null;
+async function workspaces(): Promise<string[]> {
+  workspaceCache ??= (await call<{ workspaces: { gid: string }[] }>('GET', '/users/me?opt_fields=workspaces')).workspaces.map((w) => w.gid);
+  return workspaceCache;
+}
+
+let projectCache: { at: number; projects: AsanaProject[] } | null = null;
+
+/** Your projects (for choosing where a new task goes), cached for 30 minutes. */
+export async function projects(): Promise<AsanaProject[]> {
+  if (!asanaConfigured) return [];
+  if (projectCache && Date.now() - projectCache.at < 30 * 60_000) return projectCache.projects;
+  const lists = await Promise.all((await workspaces()).map((w) => call<AsanaProject[]>('GET', `/projects?workspace=${w}&archived=false&limit=100&opt_fields=name`)));
+  const all = lists.flat().sort((a, b) => a.name.localeCompare(b.name));
+  projectCache = { at: Date.now(), projects: all };
+  return all;
+}
+
+export const cachedProjects = (): AsanaProject[] => projectCache?.projects ?? [];
+
+const GID = /^\d{3,30}$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export const isGid = (value: unknown): value is string => typeof value === 'string' && GID.test(value);
+
+export interface NewTask {
+  name: string;
+  notes: string;
+  dueOn: string;
+  projectGid: string;
+}
+
+/** The new task as Asana will receive it, or a plain-words reason it can't be created. */
+export function validateNewTask(input: Partial<Record<keyof NewTask, unknown>>): NewTask {
+  const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+  const task = { name: str(input.name, 500), notes: str(input.notes, 10_000), dueOn: str(input.dueOn, 10), projectGid: str(input.projectGid, 30) };
+  if (!task.name) throw new AsanaError('The task needs a name.');
+  if (task.dueOn && !DATE.test(task.dueOn)) throw new AsanaError('The due date must look like 2026-10-20.');
+  if (task.projectGid && !GID.test(task.projectGid)) throw new AsanaError('That project is not valid.');
+  return task;
+}
+
+/** Creates a task assigned to you, in a project if one is given. Returns it with its link. */
+export async function createTask(input: NewTask): Promise<AsanaTask> {
+  const where = input.projectGid ? { projects: [input.projectGid] } : { workspace: (await workspaces())[0] };
+  const raw = await call<RawTask>('POST', `/tasks?opt_fields=${FIELDS}`, {
+    name: input.name,
+    assignee: 'me',
+    ...(input.notes ? { notes: input.notes } : {}),
+    ...(input.dueOn ? { due_on: input.dueOn } : {}),
+    ...where,
+  });
+  cache = null;
+  return toTask(raw);
+}
+
+export async function setCompleted(gid: string, done: boolean): Promise<void> {
+  await call('PUT', `/tasks/${gid}`, { completed: done });
+  cache = null;
+}
+
+export async function setDueOn(gid: string, dueOn: string): Promise<void> {
+  if (dueOn && !DATE.test(dueOn)) throw new AsanaError('The due date must look like 2026-10-20.');
+  await call('PUT', `/tasks/${gid}`, { due_on: dueOn || null });
+  cache = null;
+}
+
+/** The ways to change this task's status: its column on each project's board, and its dropdown fields. */
+export async function statusControls(gid: string): Promise<AsanaControl[]> {
+  const raw = await call<{
+    memberships?: { project?: { gid: string; name: string }; section?: { gid: string } }[];
+    custom_fields?: { gid: string; name: string; resource_subtype: string; enum_options?: { gid: string; name: string; enabled?: boolean }[]; enum_value?: { gid: string } | null }[];
+  }>(
+    'GET',
+    `/tasks/${gid}?opt_fields=memberships.project.name,memberships.section,custom_fields.name,custom_fields.resource_subtype,custom_fields.enum_options.name,custom_fields.enum_options.enabled,custom_fields.enum_value`,
+  );
+  const sections = await Promise.all(
+    (raw.memberships ?? [])
+      .filter((m) => m.project)
+      .map(async (m): Promise<AsanaControl> => {
+        const list = await call<{ gid: string; name: string }[]>('GET', `/projects/${m.project!.gid}/sections?opt_fields=name&limit=100`);
+        return { type: 'section', label: m.project!.name, current: m.section?.gid, options: list.map((o) => ({ gid: o.gid, name: o.name })) };
+      }),
+  );
+  const fields = (raw.custom_fields ?? [])
+    .filter((f) => f.resource_subtype === 'enum' && f.enum_options?.length)
+    .map((f): AsanaControl => ({
+      type: 'field',
+      label: f.name,
+      fieldGid: f.gid,
+      current: f.enum_value?.gid,
+      options: f.enum_options!.filter((o) => o.enabled !== false).map((o) => ({ gid: o.gid, name: o.name })),
+    }));
+  return [...sections, ...fields].filter((c) => c.options.length > 0);
+}
+
+/** Moves the task to another column, or sets a dropdown field. */
+export async function setStatus(gid: string, change: { type: 'section' | 'field'; optionGid: string; fieldGid?: string }): Promise<void> {
+  if (change.type === 'section') await call('POST', `/sections/${change.optionGid}/addTask`, { task: gid });
+  else await call('PUT', `/tasks/${gid}`, { custom_fields: { [change.fieldGid ?? '']: change.optionGid } });
   cache = null;
 }

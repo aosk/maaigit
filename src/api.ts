@@ -1,7 +1,10 @@
 import type {
   AdminOverview,
   AgentSetting,
+  AsanaControl,
   AsanaOverview,
+  AsanaProject,
+  AsanaTask,
   AppAlert,
   Briefing,
   ChatEvent,
@@ -19,6 +22,14 @@ import type {
   TodayData,
   Tone,
 } from '../shared/types';
+
+/** A new Asana task, as typed in a form. */
+export interface NewAsanaTask {
+  name: string;
+  notes: string;
+  dueOn: string;
+  projectGid: string;
+}
 
 export const LOCKED_EVENT = 'maai:locked';
 
@@ -92,6 +103,13 @@ export const api = {
 
   calendarFeed: () => call<{ https: string; webcal: string }>('GET', '/calendar/feed'),
   asana: () => call<AsanaOverview>('GET', '/asana'),
+  asanaProjects: () => call<AsanaProject[]>('GET', '/asana/projects'),
+  asanaCreate: (task: NewAsanaTask) => call<AsanaTask>('POST', '/asana/tasks', task),
+  asanaComplete: (gid: string, done: boolean) => call<void>('POST', `/asana/tasks/${gid}/complete`, { done }),
+  asanaSetDue: (gid: string, dueOn: string) => call<void>('POST', `/asana/tasks/${gid}/due`, { dueOn }),
+  asanaControls: (gid: string) => call<AsanaControl[]>('GET', `/asana/tasks/${gid}/controls`),
+  asanaSetStatus: (gid: string, change: { type: AsanaControl['type']; optionGid: string; fieldGid?: string }) => call<void>('POST', `/asana/tasks/${gid}/status`, change),
+  approveAsanaNew: (id: string, task: NewAsanaTask) => call<Proposal>('POST', `/proposals/${id}/approve`, task),
   mailCount: () => call<{ unread: number | null; total?: number }>('GET', '/mail/count'),
   mailDigest: (lang: Lang, refresh = false) => call<MailDigest>('GET', `/mail/digest?lang=${lang}${refresh ? '&refresh=1' : ''}`),
   notify: () => call<NotifyStatus>('GET', '/notify'),

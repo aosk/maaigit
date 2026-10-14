@@ -122,17 +122,22 @@ soon as a calendar is connected.
 
 ### Asana
 
-MAAI lists the tasks assigned to you (overdue first) on Today, includes them in the morning briefing,
-and, when you ask, reads a task and its comments, and prepares a **comment**, **mark done** or **new due
-date** as an editable card. Nothing changes in Asana until you tap **Update in Asana**.
+MAAI lists the tasks assigned to you (overdue first) on Today and includes them in the morning briefing.
+
+- **Buttons on Today:** tap the circle to mark a task done (with **Undo** for 10 seconds). Tap a task's
+  name to change its **status** (its column on the project's board, such as To do / In progress / Done,
+  and any dropdown field such as Priority) or its **due date**. **New task** adds one, with an optional
+  project and date. These are your own taps, so they apply straight away and are logged in the admin
+  audit log.
+- **Ask the assistant:** *"What's overdue in Asana?"*, *"Read the Q4 report task"*, *"Comment on the Q4
+  report task that I'll send it Thursday"*, *"Add a task to book the venue in Ops, due next Sunday"*. The
+  assistant never changes Asana by itself: it shows an editable card (a comment, mark done, new date, or
+  a new task) and acts only when you tap **Update in Asana** or **Create task**.
 
 1. In Asana: your profile picture → **My Settings** → **Apps** → **Developer apps** →
    **Create new token**. Copy it once.
 2. Add it as `ASANA_TOKEN` in `.env`, or on Render → **Environment**. Settings → Connections shows
    "Connected · N open tasks". Delete the token in Asana to cut MAAI off.
-
-Ask things like *"What's overdue in Asana?"*, *"Read the Q4 report task"*, or *"Comment on the Q4
-report task that I'll send it Thursday"*.
 
 ## Put it online (Render)
 

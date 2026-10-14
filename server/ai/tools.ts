@@ -4,7 +4,7 @@ import { agentEnabled, id } from '../store.js';
 import { config } from '../config.js';
 import { isEmail, mailConfigured } from '../mail.js';
 import { cachedInbox, getEmail } from '../gmail-inbox.js';
-import { AsanaError, asanaConfigured, cachedTasks, getTask } from '../asana.js';
+import { AsanaError, asanaConfigured, cachedTasks, getTask, projects, validateNewTask } from '../asana.js';
 import { emailForClaude } from './context.js';
 import type { Tool, ToolResult, ToolUse } from './claude.js';
 
@@ -108,6 +108,34 @@ const propose_asana_update: ToolSpec<{ task_gid: string; comment: string; comple
       dueOn: input.due_on,
     });
     return 'Asana card shown. Nothing changed yet; waiting for the user to approve.';
+  },
+  detail: lastTitle,
+};
+
+const propose_asana_task: ToolSpec<{ name: string; notes: string; due_on: string; project_name: string }> = {
+  definition: {
+    description: 'Show the user an editable approval card to create a new Asana task assigned to them. Nothing is created until the user taps Create.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The task name, short and specific.' },
+        notes: { type: 'string', description: 'Details for the task description, or an empty string.' },
+        due_on: { type: 'string', description: 'Due date as YYYY-MM-DD, or an empty string for no date.' },
+        project_name: { type: 'string', description: 'The project to put it in, exactly as named in the Asana projects list, or an empty string for none.' },
+      },
+      required: ['name', 'notes', 'due_on', 'project_name'],
+      additionalProperties: false,
+    },
+  },
+  async run(input, created) {
+    requireAgent('messaging', 'Messaging is switched off by the admin.');
+    if (!asanaConfigured) throw new ToolError('Asana is not connected, so a task cannot be created.');
+    const all = await projects().catch(() => []);
+    const project = input.project_name ? all.find((p) => p.name.toLowerCase() === input.project_name.trim().toLowerCase()) : undefined;
+    if (input.project_name && !project) throw new ToolError(`No Asana project named "${input.project_name}". Projects: ${all.map((p) => p.name).join(', ') || 'none found'}. Use one of these, or an empty project_name.`);
+    const task = validateNewTask({ name: input.name, notes: input.notes, dueOn: input.due_on, projectGid: project?.gid });
+    created.push({ id: id(), kind: 'asana_new', status: 'pending', title: task.name, notes: task.notes, dueOn: task.dueOn, projectGid: task.projectGid });
+    return 'Asana task card shown. Nothing created yet; waiting for the user to tap Create.';
   },
   detail: lastTitle,
 };
@@ -239,7 +267,7 @@ const propose_reminder: ToolSpec<{ title: string; when: string; at: string; afte
   detail: lastTitle,
 };
 
-const SPECS: Record<string, ToolSpec<any>> = { read_email, read_asana_task, propose_asana_update, propose_email, propose_meeting, propose_reminder };
+const SPECS: Record<string, ToolSpec<any>> = { read_email, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder };
 
 export const tools: Tool[] = Object.entries(SPECS).map(([name, spec]) => ({ name, strict: true, ...spec.definition }) as Tool);
 
