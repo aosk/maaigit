@@ -217,12 +217,16 @@ export interface NotifyPrefs {
   eventMinutes: number;
   prayers: boolean;
   prayerMinutes: number;
+  /** A daily summary of the day, written by MAAI, at `briefingTime`. */
+  briefing: boolean;
+  /** HH:MM in the app's time zone. */
+  briefingTime: string;
 }
 
 export interface AppAlert {
   id: string;
   at: string;
-  kind: 'reminder' | 'leave' | 'event' | 'prayer' | 'test';
+  kind: 'reminder' | 'leave' | 'event' | 'prayer' | 'briefing' | 'test';
   title: string;
   body: string;
 }

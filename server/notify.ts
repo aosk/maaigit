@@ -3,7 +3,7 @@ import path from 'node:path';
 import webpush, { type PushSubscription } from 'web-push';
 import type { AppAlert, CalendarEvent, Lang, NotifyPrefs, PrayerName, Reminder } from '../shared/types.js';
 import { prayersFor } from '../shared/prayer.js';
-import { leaveTime } from '../shared/schedule.js';
+import { dayPeriod, leaveTime } from '../shared/schedule.js';
 import { config } from './config.js';
 import { allEvents, id, save, state } from './store.js';
 
@@ -45,7 +45,34 @@ const PRAYER_NAMES: Record<Lang, Record<PrayerName, string>> = {
 const clock = (d: Date, lang: Lang) =>
   new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-nu-arab' : 'en-GB', { timeZone: config.timezone, hour: 'numeric', minute: '2-digit', hour12: false }).format(d);
 
-type Due = { key: string; at: Date; kind: AppAlert['kind']; text: (lang: Lang) => { title: string; body: string } };
+type Text = { title: string; body: string };
+type Due = { key: string; at: Date; kind: AppAlert['kind']; text: (lang: Lang) => Text | Promise<Text> };
+
+/** Writes the briefing text (and refreshes what it is based on). Given by whoever starts the scheduler. */
+export type BriefingWriter = (lang: Lang) => Promise<string>;
+
+const BRIEFING_TITLES: Record<Lang, Record<'morning' | 'noon' | 'night', string>> = {
+  en: { morning: 'Morning briefing', noon: 'Noon briefing', night: 'Night briefing' },
+  ar: { morning: 'موجز الصباح', noon: 'موجز الظهر', night: 'موجز الليل' },
+};
+const BRIEFING_FALLBACK: Record<Lang, string> = { en: 'Open MAAI to see your day.', ar: 'افتح مساعد لترى يومك.' };
+
+/** The briefing notification: titled for the time of day, with the day summarised in the body. */
+function briefingDue(key: string, at: Date, write: BriefingWriter): Due {
+  return {
+    key,
+    at,
+    kind: 'briefing',
+    text: async (lang) => ({
+      title: BRIEFING_TITLES[lang][dayPeriod(at, config.timezone)],
+      // If writing it fails (say, Claude is unreachable) the notification still arrives.
+      body: await write(lang).catch((error: Error) => {
+        console.error('Briefing notification text failed:', error.message);
+        return BRIEFING_FALLBACK[lang];
+      }),
+    }),
+  };
+}
 
 // ---------- What is due ----------
 
@@ -75,6 +102,7 @@ export function dueAlerts(
   prefs: NotifyPrefs,
   latitude: number,
   longitude: number,
+  writeBriefing?: BriefingWriter,
 ): Due[] {
   const out: Due[] = [];
   const day = now.toDateString();
@@ -134,22 +162,33 @@ export function dueAlerts(
     }
   }
 
+  if (prefs.briefing && writeBriefing) {
+    const [hours, minutes] = (/^([01]\d|2[0-3]):[0-5]\d$/.test(prefs.briefingTime) ? prefs.briefingTime : '07:00').split(':').map(Number);
+    const at = new Date(now);
+    at.setHours(hours, minutes, 0, 0);
+    out.push(briefingDue(`briefing:${day}`, at, writeBriefing));
+  }
+
   return out.filter((d) => d.at.getTime() <= now.getTime() && d.at.getTime() > now.getTime() - GRACE_MS);
 }
 
 // ---------- Sending ----------
 
 async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>) {
+  // Written once per language, even with several devices (a briefing costs an AI call).
+  const written = new Map<Lang, Promise<Text>>();
+  const textFor = (lang: Lang) => written.get(lang) ?? written.set(lang, Promise.resolve(due.text(lang))).get(lang)!;
+
   const appLang: Lang = state.subscriptions[0]?.lang ?? 'en';
-  const shown = due.text(appLang);
+  const shown = await textFor(appLang);
   state.alerts.unshift({ id: id(), at: new Date().toISOString(), kind: due.kind, ...shown });
   state.alerts.length = Math.min(state.alerts.length, 30);
 
   const gone: string[] = [];
   await Promise.all(
     state.subscriptions.map(async (s) => {
-      const { title, body } = due.text(s.lang);
       try {
+        const { title, body } = await textFor(s.lang);
         await webpush.sendNotification(s.subscription, JSON.stringify({ title, body, tag: due.key, url: '/#/today' }), { TTL: 3600 });
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;
@@ -182,10 +221,19 @@ export function unsubscribe(endpoint: string) {
   save();
 }
 
-/** Checks every 30 seconds for anything due. */
-export function startScheduler() {
+let writeBriefing: BriefingWriter | undefined;
+
+/** Sends today's briefing right now, to every device (the "send a test" button). */
+export async function sendBriefingNow(): Promise<void> {
+  if (!writeBriefing) throw new Error('The briefing is not available right now.');
+  await deliver(briefingDue(`briefing-now:${Date.now()}`, new Date(), writeBriefing));
+}
+
+/** Checks every 30 seconds for anything due. `write` writes the briefing notification's text. */
+export function startScheduler(write?: BriefingWriter) {
+  writeBriefing = write;
   const tick = async () => {
-    const due = dueAlerts(new Date(), { reminders: state.reminders, events: allEvents().filter((e) => !e.allDay) }, state.notifyPrefs, config.latitude, config.longitude).filter((d) => !state.sentAlerts.includes(d.key));
+    const due = dueAlerts(new Date(), { reminders: state.reminders, events: allEvents().filter((e) => !e.allDay) }, state.notifyPrefs, config.latitude, config.longitude, writeBriefing).filter((d) => !state.sentAlerts.includes(d.key));
     for (const d of due) {
       state.sentAlerts.push(d.key);
       await deliver(d);

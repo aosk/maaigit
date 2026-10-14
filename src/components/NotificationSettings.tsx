@@ -52,11 +52,24 @@ export function NotificationSettings() {
       setNote(t.notifyTestSent);
     });
 
-  const flip = (key: keyof Pick<NotifyPrefs, 'reminders' | 'leave' | 'events' | 'prayers'>) =>
+  const flip = (key: keyof Pick<NotifyPrefs, 'reminders' | 'leave' | 'events' | 'prayers' | 'briefing'>) =>
     run(async () => {
       if (!status) return;
       const prefs = await api.setNotifyPrefs({ [key]: !status.prefs[key] });
       setStatus({ ...status, prefs });
+    });
+
+  const setBriefingTime = (briefingTime: string) =>
+    run(async () => {
+      if (!status || !briefingTime) return;
+      setStatus({ ...status, prefs: await api.setNotifyPrefs({ briefingTime }) });
+    });
+
+  const sendBriefing = () =>
+    run(async () => {
+      setNote('');
+      await api.sendBriefing();
+      setNote(t.briefingSent);
     });
 
   const kinds = Object.keys(t.notifyKinds) as (keyof typeof t.notifyKinds)[];
@@ -113,6 +126,13 @@ export function NotificationSettings() {
               </div>
             );
           })}
+          {status.prefs.briefing && (
+            <div className="toggle-row" style={{ flexWrap: 'wrap', gap: 10 }}>
+              <label htmlFor="briefing-time">{t.briefingAt}</label>
+              <input id="briefing-time" type="time" dir="ltr" value={status.prefs.briefingTime} disabled={busy} onChange={(e) => setBriefingTime(e.target.value)} style={{ minHeight: 40, borderRadius: 10, border: '1px solid var(--border)', padding: '6px 10px', background: 'var(--surface)', color: 'var(--text)' }} />
+              <button className="btn secondary" onClick={sendBriefing} disabled={busy} style={{ flexBasis: '100%' }}>{t.briefingSendNow}</button>
+            </div>
+          )}
         </section>
       )}
     </>

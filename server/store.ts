@@ -45,7 +45,7 @@ export interface State {
   alerts: AppAlert[];
 }
 
-export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10 };
+export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10, briefing: false, briefingTime: '07:00' };
 
 const DATA_FILE = process.env.MAAI_DATA_FILE ?? path.join(config.dataDir, 'store.json');
 
@@ -116,6 +116,8 @@ function load(): State {
   try {
     const saved = { ...seed(), ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) } as State;
     for (const e of saved.events) if (SAMPLE_EVENTS.has(`${e.title}|${e.place}`)) e.demo = true;
+    // Settings added after the file was saved get their defaults.
+    saved.notifyPrefs = { ...DEFAULT_PREFS, ...saved.notifyPrefs };
     return saved;
   } catch {
     return seed();

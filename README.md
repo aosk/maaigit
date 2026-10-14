@@ -52,6 +52,13 @@ closed. Reminders can be tied to a prayer ("15 minutes after Maghrib").
   4. iPhone Settings → General → About → Certificate Trust Settings → turn on **MAAI**.
   5. Back in MAAI: **Turn on notifications**.
 
+**Daily briefing:** turn on *Daily briefing* in Settings → Notifications and pick a time (default 07:00).
+At that time MAAI re-reads your calendars, Asana and Gmail, writes the briefing for that time of day
+(*Morning*, *Noon* or *Night*), and sends it as a notification, once a day, in the language each device
+uses. **Send me the briefing now** sends one immediately to check it works. If Claude can't be reached at
+that moment, the notification still arrives and points you to the app. It is sent only if the server is
+running at that minute (online on Render, that means always; a computer at home has to be on).
+
 Alerts come from your computer, so it has to be on with MAAI running. While
 MAAI is open, alerts also appear as a banner at the top.
 

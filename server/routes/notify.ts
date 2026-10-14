@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { DEFAULT_PREFS, audit, save, state } from '../store.js';
-import { publicKey, sendTest, subscribe, unsubscribe } from '../notify.js';
+import { publicKey, sendBriefingNow, sendTest, subscribe, unsubscribe } from '../notify.js';
 import { HttpError, lang, text, wrap } from './http.js';
 
 export const notify = Router();
@@ -11,13 +11,14 @@ notify.get('/notify', (_req, res) => {
 
 notify.patch('/notify/prefs', (req, res) => {
   const p = { ...DEFAULT_PREFS, ...state.notifyPrefs };
-  for (const key of ['reminders', 'leave', 'events', 'prayers'] as const) {
+  for (const key of ['reminders', 'leave', 'events', 'prayers', 'briefing'] as const) {
     if (typeof req.body[key] === 'boolean') p[key] = req.body[key];
   }
   for (const key of ['eventMinutes', 'prayerMinutes'] as const) {
     const n = Number(req.body[key]);
     if (Number.isInteger(n) && n >= 0 && n <= 120) p[key] = n;
   }
+  if (typeof req.body.briefingTime === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(req.body.briefingTime)) p.briefingTime = req.body.briefingTime;
   state.notifyPrefs = p;
   save();
   res.json(p);
@@ -40,6 +41,11 @@ notify.post('/notify/unsubscribe', (req, res) => {
 
 notify.post('/notify/test', wrap(async (_req, res) => {
   await sendTest();
+  res.status(204).end();
+}));
+
+notify.post('/notify/briefing', wrap(async (_req, res) => {
+  await sendBriefingNow();
   res.status(204).end();
 }));
 

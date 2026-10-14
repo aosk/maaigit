@@ -10,7 +10,8 @@ import { pinGuard, phoneSetup } from './phone.js';
 import { startScheduler } from './notify.js';
 import { feedRoutes } from './feed.js';
 import { startGoogleWrite } from './gwrite.js';
-import { startBackgroundSync } from './sync.js';
+import { startBackgroundSync, syncAll } from './sync.js';
+import { briefing } from './ai/briefing.js';
 import { createGuard } from './auth.js';
 
 const phoneMode = process.argv.includes('--phone') || process.env.MAAI_PHONE === '1';
@@ -36,7 +37,11 @@ if (config.production) {
   app.use(vite.middlewares);
 }
 
-startScheduler();
+// The briefing notification is written from freshly read calendars, Asana and mail.
+startScheduler(async (lang) => {
+  await syncAll();
+  return (await briefing(lang)).text;
+});
 startGoogleWrite();
 startBackgroundSync();
 

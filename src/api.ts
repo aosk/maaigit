@@ -119,6 +119,7 @@ export const api = {
   subscribe: (subscription: PushSubscription, lang: Lang) => call<void>('POST', '/notify/subscribe', { subscription: subscription.toJSON(), lang }),
   unsubscribe: (endpoint: string) => call<void>('POST', '/notify/unsubscribe', { endpoint }),
   testNotify: () => call<void>('POST', '/notify/test'),
+  sendBriefing: () => call<void>('POST', '/notify/briefing'),
   alerts: (since: string) => call<AppAlert[]>('GET', `/alerts?since=${encodeURIComponent(since)}`),
 
   admin: () => call<AdminOverview>('GET', '/admin'),
