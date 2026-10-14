@@ -1,11 +1,12 @@
 import type { PrayerName, Proposal } from '../../shared/types.js';
 import { clashesWithPrayer, prayersFor } from '../../shared/prayer.js';
-import { agentEnabled, id } from '../store.js';
+import { agentEnabled, id, state } from '../store.js';
 import { config } from '../config.js';
 import { isEmail, mailConfigured } from '../mail.js';
 import { cachedInbox, getEmail } from '../gmail-inbox.js';
 import { AsanaError, asanaConfigured, cachedTasks, getTask, projects, validateNewTask } from '../asana.js';
-import { emailForClaude } from './context.js';
+import { canAnswer, lastFrom, whatsappConfigured } from '../whatsapp.js';
+import { emailForClaude, dayTime } from './context.js';
 import { neutralize } from './untrusted.js';
 import type { Tool, ToolResult, ToolUse } from './claude.js';
 
@@ -51,6 +52,53 @@ const read_email: ToolSpec<{ uid: number }> = {
     const mail = cachedInbox().find((m) => m.uid === uid);
     return mail ? `${mail.fromName}: ${mail.subject}` : undefined;
   },
+};
+
+const read_whatsapp: ToolSpec<{ phone: string }> = {
+  definition: {
+    description: "Read the recent WhatsApp messages one person sent to the user's WhatsApp Business number (their number is listed in the context, digits only). Read-only.",
+    input_schema: {
+      type: 'object',
+      properties: { phone: { type: 'string', description: 'The person\'s number as listed in the context, e.g. 966511111111.' } },
+      required: ['phone'],
+      additionalProperties: false,
+    },
+  },
+  run({ phone }) {
+    const digits = phone.replace(/\D/g, '');
+    const messages = state.inbox.filter((m) => m.channel === 'whatsapp' && m.phone === digits).sort((a, b) => a.receivedAt.localeCompare(b.receivedAt)).slice(-15);
+    if (!messages.length) throw new ToolError(`No WhatsApp messages from ${phone || 'that number'} in the last days. Use a number from the context.`);
+    const last = messages[messages.length - 1];
+    return `WhatsApp conversation with ${neutralize(last.from)} (+${digits}). ${canAnswer(digits) ? 'MAAI can send a reply.' : 'More than 24 hours since they wrote, so MAAI cannot send; the user must open WhatsApp.'}\n<message>\n${messages.map((m) => `[${dayTime(m.receivedAt)}${m.replied ? ', answered' : ''}] ${neutralize(m.text)}`).join('\n')}\n</message>`;
+  },
+  detail: ({ phone }) => lastFrom(phone.replace(/\D/g, ''))?.from,
+};
+
+const propose_whatsapp: ToolSpec<{ phone: string; body: string }> = {
+  definition: {
+    description: "Show the user an editable approval card with a WhatsApp reply to someone who wrote to the user's WhatsApp Business number. Nothing is sent until the user taps Send.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        phone: { type: 'string', description: "The person's number as listed in the context, digits only." },
+        body: { type: 'string', description: 'The reply, written as the user in first person, in the language the person used. Short, as a WhatsApp message.' },
+      },
+      required: ['phone', 'body'],
+      additionalProperties: false,
+    },
+  },
+  run(input, created) {
+    requireAgent('messaging', 'Messaging is switched off by the admin.');
+    const phone = input.phone.replace(/\D/g, '');
+    const last = lastFrom(phone);
+    if (!last) throw new ToolError(`Nobody with the number ${input.phone || '(empty)'} wrote to the WhatsApp Business number. Use a number from the context.`);
+    if (!input.body.trim()) throw new ToolError('The reply is empty.');
+    created.push({ id: id(), kind: 'whatsapp', status: 'pending', title: `WhatsApp to ${last.from}`, toName: last.from, phone, body: input.body.trim(), canSend: whatsappConfigured && canAnswer(phone) });
+    return canAnswer(phone) && whatsappConfigured
+      ? 'WhatsApp card shown. Not sent yet; waiting for the user to tap Send.'
+      : 'WhatsApp card shown. MAAI cannot send this one itself (more than 24 hours since they wrote), so the user can open it in WhatsApp instead. Not sent.';
+  },
+  detail: lastTitle,
 };
 
 const read_asana_task: ToolSpec<{ task_gid: string }> = {
@@ -268,7 +316,7 @@ const propose_reminder: ToolSpec<{ title: string; when: string; at: string; afte
   detail: lastTitle,
 };
 
-const SPECS: Record<string, ToolSpec<any>> = { read_email, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder };
+const SPECS: Record<string, ToolSpec<any>> = { read_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder };
 
 export const tools: Tool[] = Object.entries(SPECS).map(([name, spec]) => ({ name, strict: true, ...spec.definition }) as Tool);
 

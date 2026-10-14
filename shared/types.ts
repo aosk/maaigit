@@ -104,6 +104,19 @@ export type Proposal =
     }
   | {
       id: string;
+      kind: 'whatsapp';
+      status: ProposalStatus;
+      title: string;
+      /** Who the reply is to. */
+      toName: string;
+      /** Their number, digits only. */
+      phone: string;
+      body: string;
+      /** MAAI can send it itself: the number is connected and they wrote within the last 24 hours. */
+      canSend: boolean;
+    }
+  | {
+      id: string;
       kind: 'asana';
       status: ProposalStatus;
       title: string;

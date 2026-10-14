@@ -178,8 +178,12 @@ personal WhatsApp chats, and it never sends anything by itself: you edit the dra
 2. On Render → **Environment** add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_WHATSAPP_FROM`
    (like `whatsapp:+9665XXXXXXXX`). Never put them in the code or in chat.
 3. In Twilio, set the incoming-message webhook (method POST) to `https://YOUR-APP.onrender.com/webhook/whatsapp`.
-4. Open **Inbox → WhatsApp**. Messages are deleted after 7 days (`MAAI_WHATSAPP_DAYS`).
-5. WhatsApp only lets a business answer freely within 24 hours of the person's last message; after that MAAI
+4. The first time someone writes (and again after 6 hours), MAAI sends one fixed note: *"This is MAAI, the AI assistant of
+   Abdulrahman. Your message was received and he will get back to you as soon as possible."* (in Arabic if they wrote in
+   Arabic). It is the only thing MAAI sends on its own. Set `MAAI_WHATSAPP_ACK=off` to turn it off.
+   You can also ask the assistant chat: *"Reply to Ahmed on WhatsApp"*. It reads the conversation and shows an editable card.
+5. Open **Inbox → WhatsApp**. Messages are deleted after 7 days (`MAAI_WHATSAPP_DAYS`).
+6. WhatsApp only lets a business answer freely within 24 hours of the person's last message; after that MAAI
    offers "Open in WhatsApp" so you write to them yourself.
 
 ### Asana

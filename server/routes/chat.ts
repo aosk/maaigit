@@ -4,6 +4,7 @@ import { chat } from '../ai/chat.js';
 import { sendMail } from '../mail.js';
 import { createTask, updateTask, validateNewTask } from '../asana.js';
 import { mirrorToGoogle } from '../gwrite.js';
+import { canAnswer, sendWhatsApp, whatsappConfigured } from '../whatsapp.js';
 import { audit, id, save, state, type Conversation } from '../store.js';
 import { HttpError, explain, find, lang, text, wrap } from './http.js';
 
@@ -62,6 +63,16 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
       await sendMail(mail);
       Object.assign(p, mail, { title: mail.subject });
       return `Emailed ${mail.to}: ${mail.subject}`;
+    }
+    case 'whatsapp': {
+      const reply = text(body.body, 1500) || p.body;
+      if (!reply) throw new HttpError(400, 'The reply is empty');
+      if (!whatsappConfigured) throw new HttpError(400, 'WhatsApp is not connected yet.');
+      if (!canAnswer(p.phone)) throw new HttpError(409, 'WhatsApp only allows a reply within 24 hours of their last message. Open WhatsApp and write to them yourself.');
+      await sendWhatsApp(p.phone, reply);
+      for (const m of state.inbox) if (m.phone === p.phone) m.replied = true;
+      Object.assign(p, { body: reply });
+      return `Sent a WhatsApp reply to ${p.toName}`;
     }
     case 'meeting': {
       const option = p.options.find((o) => o.start === text(body.start, 40)) ?? p.options[0];

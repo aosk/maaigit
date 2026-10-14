@@ -44,6 +44,8 @@ interface State {
   sentAlerts: string[];
   /** Recent alerts, for the banner in the open app. */
   alerts: AppAlert[];
+  /** When each WhatsApp number was last sent the automatic "received" note. */
+  whatsappAcks: Record<string, string>;
 }
 
 export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10, briefing: false, briefingTime: '07:00' };
@@ -107,6 +109,7 @@ function seed(): State {
     notifyPrefs: { ...DEFAULT_PREFS },
     sentAlerts: [],
     alerts: [],
+    whatsappAcks: {},
   };
 }
 

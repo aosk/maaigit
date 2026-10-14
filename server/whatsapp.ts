@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import express, { Router } from 'express';
 import type { InboxMessage, WhatsAppStatus } from '../shared/types.js';
 import { config } from './config.js';
-import { id, save, state } from './store.js';
+import { agentEnabled, audit, id, save, state } from './store.js';
 
 /**
  * WhatsApp through Twilio, on a separate business number. Messages people send to that number
@@ -53,12 +53,38 @@ export function pruneWhatsApp(now = Date.now()): void {
   }
 }
 
-/** Stores one message Twilio delivered. Returns null for something that is not a WhatsApp text. */
-export function receive(params: Record<string, string>): InboxMessage | null {
+// ---------- The automatic "received" note ----------
+
+/** Set MAAI_WHATSAPP_ACK=off to stop it. */
+const ackEnabled = (process.env.MAAI_WHATSAPP_ACK ?? 'on').trim().toLowerCase() !== 'off';
+/** Someone who keeps writing gets the note once, not after every message (and two auto-replying bots cannot loop). */
+export const ACK_EVERY_MS = 6 * 3_600_000;
+
+const ACK = {
+  en: 'Hello! This is MAAI, the AI assistant of Abdulrahman. Your message was received and he will get back to you as soon as possible.',
+  ar: 'مرحباً! أنا MAAI، المساعد الذكي لعبدالرحمن. وصلتني رسالتك وسيتواصل معك في أقرب وقت ممكن.',
+};
+
+/** The note for this person, in the language they wrote in, or null if they already got one lately. Fixed text: nothing a sender writes can change it. */
+function acknowledgement(message: InboxMessage, now = Date.now()): string | null {
+  if (!ackEnabled || !message.phone || !agentEnabled('messaging')) return null;
+  const last = Date.parse(state.whatsappAcks[message.phone] ?? '');
+  if (Number.isFinite(last) && now - last < ACK_EVERY_MS) return null;
+  state.whatsappAcks[message.phone] = new Date(now).toISOString();
+  for (const [phone, at] of Object.entries(state.whatsappAcks)) if (now - Date.parse(at) > 2 * ACK_EVERY_MS) delete state.whatsappAcks[phone];
+  audit(`Sent the automatic "received" note to ${message.from}`, 'MAAI', 'done');
+  return /[\u0600-\u06FF]/.test(message.text) ? ACK.ar : ACK.en;
+}
+
+const xml = (text: string) => text.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+/** Stores one message Twilio delivered. Returns null for something that is not a WhatsApp text; `fresh` is false for a repeat delivery. */
+export function receive(params: Record<string, string>): { message: InboxMessage; fresh: boolean } | null {
   const from = params.From ?? '';
   if (!/^whatsapp:\+?\d{5,20}$/i.test(from)) return null;
   const externalId = (params.MessageSid ?? '').slice(0, 64);
-  if (externalId && state.inbox.some((m) => m.externalId === externalId)) return state.inbox.find((m) => m.externalId === externalId)!;
+  const repeat = externalId ? state.inbox.find((m) => m.externalId === externalId) : undefined;
+  if (repeat) return { message: repeat, fresh: false };
 
   const phone = digits(from);
   const body = (params.Body ?? '').trim().slice(0, 4000);
@@ -84,11 +110,11 @@ export function receive(params: Record<string, string>): InboxMessage | null {
   }
   pruneWhatsApp();
   save();
-  return message;
+  return { message, fresh: true };
 }
 
 /** The person's last message to the business number, if any. */
-function lastFrom(phone: string): InboxMessage | undefined {
+export function lastFrom(phone: string): InboxMessage | undefined {
   return state.inbox.filter((m) => m.via === 'twilio' && m.phone === phone).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
 }
 
@@ -135,7 +161,8 @@ whatsappWebhook.post('/webhook/whatsapp', express.urlencoded({ extended: false, 
   const url = process.env.WHATSAPP_WEBHOOK_URL?.trim() || `${req.protocol}://${req.get('host')}${req.originalUrl}`;
   if (!validSignature(url, params, req.get('x-twilio-signature') ?? '', secret)) return res.status(403).end();
 
-  receive(params);
-  // An empty reply: MAAI never answers by itself.
-  res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+  const got = receive(params);
+  // The only thing MAAI says by itself is the fixed "received" note; everything else waits for the user.
+  const note = got?.fresh ? acknowledgement(got.message) : null;
+  res.type('text/xml').send(`<?xml version="1.0" encoding="UTF-8"?><Response>${note ? `<Message>${xml(note)}</Message>` : ''}</Response>`);
 });

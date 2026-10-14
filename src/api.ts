@@ -92,6 +92,7 @@ export const api = {
   resetChat: () => call<void>('POST', '/chat/reset'),
   approve: (id: string, start?: string) => call<Proposal>('POST', `/proposals/${id}/approve`, { start }),
   approveEmail: (id: string, mail: { to: string; subject: string; body: string }) => call<Proposal>('POST', `/proposals/${id}/approve`, mail),
+  approveWhatsApp: (id: string, body: string) => call<Proposal>('POST', `/proposals/${id}/approve`, { body }),
   approveAsana: (id: string, change: { comment: string; complete: boolean; dueOn: string }) => call<Proposal>('POST', `/proposals/${id}/approve`, change),
   cancel: (id: string) => call<Proposal>('POST', `/proposals/${id}/cancel`, {}),
 
