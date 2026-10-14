@@ -106,7 +106,7 @@ MAAI shows one calendar made from three places, each meeting once:
 
 | Source | How it gets to MAAI | Direction |
 |---|---|---|
-| **Google (Gmail) Calendar** | Its private address, `GOOGLE_CALENDAR_ICS_URL` | Google → MAAI |
+| **Google (Gmail) Calendar** | **Live** (about every minute) once *Write meetings into Google Calendar* is set up below; otherwise its private address, `GOOGLE_CALENDAR_ICS_URL` (Google can be slow to update that, even hours) | Google ↔ MAAI |
 | **iPhone calendar** | If the phone uses your Google account, it's the same calendar as above. For an iCloud calendar, share it publicly (below) and add that link too | Phone → MAAI |
 | **Meetings MAAI books** | Written straight into your Google Calendar (below), so they show up on the iPhone too if it uses your Google account. Without that: a private link the phone and Google subscribe to (Settings → *MAAI calendar on your phone*) | MAAI → Google and phone |
 
@@ -123,7 +123,16 @@ MAAI shows one calendar made from three places, each meeting once:
    MAAI stay in MAAI; the subscription link (Settings → **Add to iPhone Calendar**, or in Google Calendar:
    Settings → Add calendar → From URL) only reaches Google about once a day.
 
-Reading refreshes every 10 minutes. MAAI never edits events you made in Google or iCloud; changes there
+**Live sync.** With the Google service account set up, MAAI reads your calendar through it about once a
+minute (`MAAI_LIVE_SECONDS`), instead of through the private address, which Google can leave out of date.
+What you add, move or delete on your iPhone shows up in MAAI within about a minute, as long as the iPhone
+puts that event in your **Google** calendar (iPhone Settings → Calendar → **Default Calendar** → your Google
+calendar; the Google account must be added under Calendar → Accounts). Meetings MAAI wrote to Google follow
+too: move, rename or delete one on the phone and MAAI's copy changes with it. If the live reading ever fails,
+Settings shows why and the private address takes over until it works again. Events kept only in iCloud or
+"On My iPhone" can't be seen live: move them to the Google calendar.
+
+Without the service account, reading refreshes every 10 minutes. MAAI never edits events you made in Google or iCloud; changes there
 show in MAAI, and the meetings MAAI creates go out as described below. Keep all these addresses
 private: anyone with one can see your calendar. The sample events from the first run are hidden as
 soon as a calendar is connected.
@@ -249,7 +258,9 @@ server/
   mail.ts         Sending email through Gmail
   gmail-inbox.ts  Reading the Gmail inbox (IMAP, read-only)
   gcal.ts         Reading calendars (Google, iPhone/iCloud) through their private iCal links
-  gwrite.ts       Writing the meetings you approve into Google Calendar (service account)
+  gauth.ts        Signing in to Google Calendar as a service account
+  gwrite.ts       Writing the meetings you approve into Google Calendar
+  livecal.ts      Reading Google Calendar live, and keeping MAAI's meetings in step with it
   feed.ts         MAAI's own calendar as a private link the phone and Google subscribe to
   asana.ts        Asana tasks (read; changes only after you approve a card)
 shared/           Types, prayer times (Umm al-Qura) and schedule rules, used by both sides

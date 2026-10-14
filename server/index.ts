@@ -11,6 +11,7 @@ import { startScheduler } from './notify.js';
 import { feedRoutes } from './feed.js';
 import { startGoogleWrite } from './gwrite.js';
 import { startBackgroundSync, syncAll } from './sync.js';
+import { startLiveCalendar } from './livecal.js';
 import { briefing } from './ai/briefing.js';
 import { createGuard } from './auth.js';
 
@@ -44,6 +45,7 @@ startScheduler(async (lang) => {
 });
 startGoogleWrite();
 startBackgroundSync();
+startLiveCalendar();
 
 const ai = process.env.ANTHROPIC_API_KEY ? 'Claude connected' : 'demo mode (no ANTHROPIC_API_KEY in .env)';
 

@@ -25,6 +25,8 @@ export const config = {
   timezone,
   /** How often everything (calendars, Asana, mail) is refreshed in the background. */
   syncHours: Math.max(0.25, num(process.env.MAAI_SYNC_HOURS, 3)),
+  /** How often your Google calendar is read live (seconds). */
+  liveSeconds: Math.max(2, num(process.env.MAAI_LIVE_SECONDS, 60)),
   /** Required online: the password that protects MAAI. */
   password: process.env.MAAI_PASSWORD ?? '',
 };

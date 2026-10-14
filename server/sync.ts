@@ -1,5 +1,6 @@
 import { config } from './config.js';
 import { refreshCalendar } from './gcal.js';
+import { refreshLiveCalendar } from './livecal.js';
 import { asanaConfigured, openTasks, projects } from './asana.js';
 import { fetchInbox, inboxConfigured } from './gmail-inbox.js';
 import { sendPendingToGoogle } from './gwrite.js';
@@ -29,7 +30,7 @@ export const lastSyncAt = (): string | undefined => last?.at;
 
 async function run(): Promise<SyncResult> {
   const steps: [string, () => Promise<unknown>][] = [
-    ['Calendars', () => refreshCalendar(true)],
+    ['Calendars', () => Promise.all([refreshLiveCalendar(), refreshCalendar(true)])],
     ['Asana', () => (asanaConfigured ? Promise.all([openTasks(true), projects(true)]) : Promise.resolve())],
     ['Gmail', () => (inboxConfigured ? fetchInbox({ refresh: true }) : Promise.resolve())],
     ['Google Calendar writing', () => sendPendingToGoogle()],

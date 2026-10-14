@@ -16,7 +16,8 @@ const event = (e: Partial<CalendarEvent> = {}): CalendarEvent => ({ id: 'a1b2c3d
 
 describe('writing meetings to Google Calendar', () => {
   it('signs the request with the service account key so Google can verify it', async () => {
-    const { signJwt } = await load({});
+    await load({});
+    const { signJwt } = await import('./gauth');
     const jwt = signJwt(keyFile, 1_000_000);
     const [head, claim, signature] = jwt.split('.');
     expect(JSON.parse(Buffer.from(head, 'base64url').toString())).toEqual({ alg: 'RS256', typ: 'JWT' });

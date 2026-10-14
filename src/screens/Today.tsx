@@ -58,8 +58,13 @@ export function Today() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(timer);
+    const clock = setInterval(() => setNow(new Date()), 30_000);
+    // Changes made elsewhere (an event added or deleted on the phone) show up within a minute.
+    const poll = setInterval(() => !document.hidden && load(), 60_000);
+    return () => {
+      clearInterval(clock);
+      clearInterval(poll);
+    };
   }, [load]);
 
   // Morning, noon or night: a new briefing is written when the time of day changes.

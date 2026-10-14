@@ -1,6 +1,7 @@
 import ical, { type VEvent } from 'node-ical';
 import type { CalendarEvent, CalendarStatus } from '../shared/types.js';
 import { dedupeEvents } from '../shared/schedule.js';
+import { calendarId as liveCalendarId, googleCalendarConfigured } from './gauth.js';
 
 /**
  * Reads calendars through their private iCal addresses: Google Calendar → Settings →
@@ -17,7 +18,8 @@ const urls = (process.env.GOOGLE_CALENDAR_ICS_URL ?? '')
   .map((u) => toHttps(u.trim()))
   .filter((u) => /^https:\/\//.test(u));
 
-export const calendarConfigured = urls.length > 0;
+/** Something to read: calendar addresses, or the live Google connection. */
+export const calendarConfigured = urls.length > 0 || googleCalendarConfigured;
 
 /** A name people recognise for a calendar address, so Settings can say which one is missing. */
 function sourceName(url: string): string {
@@ -128,7 +130,55 @@ const failure = (status: number) =>
     ? 'The calendar address was not found. Copy the secret address again.'
     : `The calendar answered ${status}.`;
 
+// ---------- The live reading of your own Google calendar (livecal.ts) ----------
+
+/** The live source's name in Settings. */
+export const LIVE_NAME = 'Google Calendar (live)';
+/** The live reading counts as working if it last succeeded within this long. */
+const LIVE_FRESH_MS = 5 * 60_000;
+let liveOkAt = 0;
+
+const liveWorking = () => Date.now() - liveOkAt < LIVE_FRESH_MS;
+
+/** The Google calendar an address is for ("…/calendar/ical/<id>/private-…/basic.ics"), or undefined. */
+function icalCalendarId(url: string): string | undefined {
+  const match = new URL(url).pathname.match(/\/calendar\/ical\/([^/]+)\//);
+  return match ? decodeURIComponent(match[1]).toLowerCase() : undefined;
+}
+
+/**
+ * While the live reading works, the address of the same calendar is left alone: Google can be
+ * slow to update it, so it would bring back events that were just deleted.
+ */
+const replacedByLive = (source: (typeof sources)[number]) => liveWorking() && Boolean(liveCalendarId) && icalCalendarId(source.url) === liveCalendarId?.toLowerCase();
+
+function rebuild() {
+  const all = [...bySource.values()].flat().sort((a, b) => a.start.localeCompare(b.start));
+  ({ events, merged } = dedupeEvents(all));
+}
+
+/** The live reading worked: these are the calendar's events now. */
+export function setLiveEvents(list: CalendarEvent[]) {
+  bySource.set(LIVE_NAME, list);
+  problems.delete(LIVE_NAME);
+  liveOkAt = Date.now();
+  lastSync = new Date().toISOString();
+  for (const source of sources) if (replacedByLive(source)) bySource.delete(source.name);
+  rebuild();
+}
+
+/** The live reading failed: forget its events so the calendar's address takes over again. */
+export function setLiveProblem(message: string) {
+  if (!problems.has(LIVE_NAME)) console.error(`${LIVE_NAME} failed:`, message);
+  bySource.delete(LIVE_NAME);
+  problems.set(LIVE_NAME, message);
+  liveOkAt = 0;
+  nextTryAt = 0; // read the addresses again right away
+  rebuild();
+}
+
 async function readSource(source: (typeof sources)[number]): Promise<void> {
+  if (replacedByLive(source)) return;
   try {
     const res = await fetch(source.url, { headers: { 'User-Agent': 'MAAI' } });
     if (!res.ok) throw new Error(failure(res.status));
@@ -143,10 +193,10 @@ async function readSource(source: (typeof sources)[number]): Promise<void> {
 
 async function sync(): Promise<void> {
   await Promise.all(sources.map(readSource));
-  const all = [...bySource.values()].flat().sort((a, b) => a.start.localeCompare(b.start));
-  ({ events, merged } = dedupeEvents(all));
-  if (problems.size < sources.length) lastSync = new Date().toISOString();
-  nextTryAt = Date.now() + (problems.size ? RETRY_MS : REFRESH_MS);
+  rebuild();
+  const failed = sources.filter((s) => problems.has(s.name)).length;
+  if (sources.length === 0 || failed < sources.length) lastSync = new Date().toISOString();
+  nextTryAt = Date.now() + (failed ? RETRY_MS : REFRESH_MS);
 }
 
 /** Fetches again if the copy is older than 10 minutes (or when forced). Never throws. */
@@ -166,12 +216,15 @@ export function googleEvents(): CalendarEvent[] {
 }
 
 export function calendarStatus(): CalendarStatus {
+  const shown = sources.filter((s) => !replacedByLive(s)).map((s) => s.name);
+  if (bySource.has(LIVE_NAME) || problems.has(LIVE_NAME)) shown.unshift(LIVE_NAME);
+  const issues = shown.filter((name) => problems.has(name));
   return {
     configured: calendarConfigured,
     events: events.length,
     lastSync,
-    error: [...problems.entries()].map(([name, message]) => (sources.length > 1 ? `${name}: ${message}` : message)).join(' ') || undefined,
-    sources: sources.map((s) => ({ name: s.name, events: bySource.get(s.name)?.length ?? 0, error: problems.get(s.name) })),
+    error: issues.map((name) => (shown.length > 1 ? `${name}: ${problems.get(name)}` : problems.get(name))).join(' ') || undefined,
+    sources: shown.map((name) => ({ name, events: bySource.get(name)?.length ?? 0, error: problems.get(name) })),
     merged,
   };
 }
