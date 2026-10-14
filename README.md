@@ -101,7 +101,7 @@ MAAI shows one calendar made from three places, each meeting once:
 |---|---|---|
 | **Google (Gmail) Calendar** | Its private address, `GOOGLE_CALENDAR_ICS_URL` | Google → MAAI |
 | **iPhone calendar** | If the phone uses your Google account, it's the same calendar as above. For an iCloud calendar, share it publicly (below) and add that link too | Phone → MAAI |
-| **Meetings MAAI books** | A private link MAAI publishes (Settings → *MAAI calendar on your phone*) that the phone and Google subscribe to | MAAI → phone and Google |
+| **Meetings MAAI books** | Written straight into your Google Calendar (below), so they show up on the iPhone too if it uses your Google account. Without that: a private link the phone and Google subscribe to (Settings → *MAAI calendar on your phone*) | MAAI → Google and phone |
 
 1. **Google:** Google Calendar on a computer → gear → **Settings** → your calendar under
    *Settings for my calendars* → **Integrate calendar** → copy **Secret address in iCal format**.
@@ -112,13 +112,44 @@ MAAI shows one calendar made from three places, each meeting once:
 3. Put every address in `GOOGLE_CALENDAR_ICS_URL` (`.env`, or Render → **Environment**), separated by
    spaces. Settings → **Connections** then lists each calendar with its event count, a ✗ if one
    can't be read, and how many repeated meetings were shown once.
-4. **MAAI → phone:** Settings → **Add to iPhone Calendar**. For Google Calendar: Settings → Add
-   calendar → From URL → paste the copied link (Google refreshes it about once a day).
+4. **MAAI → Google:** follow *Write meetings into Google Calendar* below. Without it, meetings booked in
+   MAAI stay in MAAI; the subscription link (Settings → **Add to iPhone Calendar**, or in Google Calendar:
+   Settings → Add calendar → From URL) only reaches Google about once a day.
 
-Reading is read-only and refreshes every 10 minutes. MAAI can't edit Google or iCloud events; changes
-there show in MAAI, and meetings MAAI books flow out through the link. Keep all these addresses
+Reading refreshes every 10 minutes. MAAI never edits events you made in Google or iCloud; changes there
+show in MAAI, and the meetings MAAI creates go out as described below. Keep all these addresses
 private: anyone with one can see your calendar. The sample events from the first run are hidden as
 soon as a calendar is connected.
+
+### Write meetings into Google Calendar
+
+With this on, a meeting you approve in MAAI (or a focus block you add on Today) appears in your Google
+Calendar within seconds, and on every device that shows it, such as the iPhone Calendar when the phone
+uses your Google account. Deleting it in MAAI removes it from Google. If Google can't be reached, the
+meeting is still saved in MAAI, the card says so, and MAAI retries every 30 minutes. At start-up MAAI also
+sends any upcoming meetings it made earlier that Google doesn't have yet.
+
+It signs in as a "service account", a robot account you create once. There is no sign-in screen and
+nothing that expires.
+
+1. Open <https://console.cloud.google.com>, sign in with the Google account that owns the calendar, and
+   create a project (name it MAAI).
+2. **APIs & Services → Library**, search **Google Calendar API**, click **Enable**.
+3. **IAM & Admin → Service Accounts → Create service account**. Name it `maai`, click **Done** (no roles needed).
+4. Click the new account → **Keys → Add key → Create new key → JSON → Create**. A file downloads.
+5. Open the downloaded file in Notepad and copy the `client_email` value (like
+   `maai@your-project.iam.gserviceaccount.com`).
+6. Google Calendar on a computer → **Settings** → your calendar under *Settings for my calendars* →
+   **Share with specific people or groups → Add people** → paste that email → permission **Make changes to
+   events** → **Send**.
+7. On the same settings page, under **Integrate calendar**, copy the **Calendar ID** (usually your Gmail address).
+8. On Render → **Environment**, add `GOOGLE_SERVICE_ACCOUNT` (paste the **whole contents** of the downloaded
+   file) and `GOOGLE_CALENDAR_ID` (the ID from step 7). **Manual Deploy**.
+
+Settings → **Connections → Calendars** then shows "Meetings you book are added to …", or the exact reason
+it can't (for example, which email to share the calendar with). The downloaded key is a password for your
+calendar: keep it only in Render, never in GitHub or a chat, and delete it in Google Cloud to cut MAAI off.
+Don't also subscribe Google Calendar to MAAI's link: each meeting would show twice.
 
 ### Asana
 
@@ -195,6 +226,7 @@ server/
   mail.ts         Sending email through Gmail
   gmail-inbox.ts  Reading the Gmail inbox (IMAP, read-only)
   gcal.ts         Reading calendars (Google, iPhone/iCloud) through their private iCal links
+  gwrite.ts       Writing the meetings you approve into Google Calendar (service account)
   feed.ts         MAAI's own calendar as a private link the phone and Google subscribe to
   asana.ts        Asana tasks (read; changes only after you approve a card)
 shared/           Types, prayer times (Umm al-Qura) and schedule rules, used by both sides
@@ -227,6 +259,5 @@ Other settings in `.env`: `PORT`, `MAAI_DATA_DIR` (where data is kept), and `MAA
 
 ## Not built yet
 
-Writing events straight into Google Calendar (it flows through the link above
-instead), WhatsApp, Outlook, accounts for more than one person, and a native iPhone app. The old StockPlay
+WhatsApp, Outlook, accounts for more than one person, and a native iPhone app. The old StockPlay
 project is kept in `archive/stockplay`.

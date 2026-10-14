@@ -38,6 +38,11 @@ services:
         sync: false
       - key: GOOGLE_CALENDAR_ICS_URL
         sync: false
+      # Optional: write MAAI meetings into Google Calendar (service account key + calendar id).
+      - key: GOOGLE_SERVICE_ACCOUNT
+        sync: false
+      - key: GOOGLE_CALENDAR_ID
+        sync: false
       # Optional: Asana personal access token.
       - key: ASANA_TOKEN
         sync: false

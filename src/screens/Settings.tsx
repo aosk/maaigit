@@ -64,6 +64,11 @@ export function SettingsScreen() {
               ) : (
                 t.calendarOff
               )}
+                          {status.calendar?.write && (
+                <span style={{ display: 'block', marginTop: 4 }}>
+                  {status.calendar.write.configured ? (status.calendar.write.error ? `✗ ${t.googleWriteError(status.calendar.write.error)}` : `✓ ${t.googleWriteOn(status.calendar.write.calendar ?? 'Google Calendar')}`) : <span className="sub">{t.googleWriteOff}</span>}
+                </span>
+              )}
             </Conn>
             <Conn state={status.asana?.error ? 'bad' : status.asana?.configured ? 'on' : 'off'} name={t.asana}>
               {status.asana?.error
@@ -84,7 +89,7 @@ export function SettingsScreen() {
         </div>
       </section>
 
-      <CalendarFeed />
+      <CalendarFeed googleDirect={Boolean(status?.calendar?.write?.working)} />
 
       <NotificationSettings />
 

@@ -69,10 +69,14 @@ function PlanCard({ proposal, onChange }: { proposal: Exclude<Proposal, { kind: 
       {error && <div className="error" role="alert">{error}</div>}
 
       {done ? (
-        <div className={`status-tag ${proposal.status}`} role="status">
-          {proposal.status === 'approved' ? `✓ ${t.approved}` : t.cancelled}
-          {proposal.kind === 'meeting' && proposal.chosen ? ` · ${dayTime(proposal.chosen, lang)}` : ''}
-        </div>
+        <>
+          <div className={`status-tag ${proposal.status}`} role="status">
+            {proposal.status === 'approved' ? `✓ ${t.approved}` : t.cancelled}
+            {proposal.kind === 'meeting' && proposal.chosen ? ` · ${dayTime(proposal.chosen, lang)}` : ''}
+            {proposal.kind === 'meeting' && proposal.google === 'added' && ` · ${t.googleAdded}`}
+          </div>
+          {proposal.kind === 'meeting' && proposal.google === 'failed' && <div className="banner" role="status">{t.googleFailed(proposal.googleError ?? '')}</div>}
+        </>
       ) : (
         <div className="row">
           <button className="btn primary big" style={{ flex: 2 }} disabled={busy} onClick={() => act('approve')}>

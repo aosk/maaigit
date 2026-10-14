@@ -18,6 +18,10 @@ export interface CalendarEvent {
   allDay?: boolean;
   /** Sample data from the first run; hidden once a real calendar is connected. */
   demo?: boolean;
+  /** Set once the event has been added to Google Calendar. */
+  googleId?: string;
+  /** Why adding it to Google Calendar failed, if it did. */
+  googleError?: string;
   /** Set when MAAI booked it on the user's behalf. */
   bookedByMaai?: boolean;
 }
@@ -63,6 +67,9 @@ export type Proposal =
       minutes: number;
       options: { start: string; note?: string }[];
       chosen?: string;
+      /** Whether the booked meeting also reached Google Calendar. */
+      google?: 'added' | 'failed';
+      googleError?: string;
     }
   | {
       id: string;
@@ -257,6 +264,19 @@ export interface CalendarStatus {
   sources?: { name: string; events: number; error?: string }[];
   /** Same event in two calendars, shown once. */
   merged?: number;
+  /** Whether meetings made in MAAI are also written into Google Calendar. */
+  write?: CalendarWriteStatus;
+}
+
+export interface CalendarWriteStatus {
+  /** Any of the Google Calendar writing settings has been added. */
+  configured: boolean;
+  /** Set up and the last attempt worked. */
+  working: boolean;
+  calendar?: string;
+  /** The robot account's address, which the calendar must be shared with. */
+  shareWith?: string;
+  error?: string;
 }
 
 /** An Asana task assigned to the user. */

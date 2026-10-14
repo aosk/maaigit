@@ -6,6 +6,7 @@ import { briefing } from '../ai/briefing.js';
 import { refreshCalendar } from '../gcal.js';
 import { config } from '../config.js';
 import { allEvents, audit, id, save, state } from '../store.js';
+import { mirrorToGoogle, removeFromGoogle } from '../gwrite.js';
 import { HttpError, find, lang, text, wrap } from './http.js';
 
 export const today = Router();
@@ -27,7 +28,7 @@ today.get('/today', wrap(async (_req, res) => {
 
 today.get('/briefing', wrap(async (req, res) => res.json(await briefing(lang(req.query.lang)))));
 
-today.post('/events', (req, res) => {
+today.post('/events', wrap(async (req, res) => {
   const title = text(req.body.title, 200);
   const start = text(req.body.start, 40);
   const minutes = Number(req.body.minutes);
@@ -37,15 +38,17 @@ today.post('/events', (req, res) => {
   const event = { id: id(), title, start: new Date(start).toISOString(), minutes, place: text(req.body.place, 200) || undefined };
   state.events.push(event);
   audit(`Added "${title}" to the calendar`, 'User', 'done');
+  await mirrorToGoogle(event);
   res.status(201).json(event);
-});
+}));
 
-today.delete('/events/:id', (req, res) => {
+today.delete('/events/:id', wrap(async (req, res) => {
   const event = find(state.events, req.params.id);
   state.events = state.events.filter((e) => e !== event);
   audit(`Removed "${event.title}"`, 'User', 'done');
+  await removeFromGoogle(event);
   res.status(204).end();
-});
+}));
 
 today.post('/reminders/:id/done', (req, res) => {
   const reminder = find(state.reminders, req.params.id);

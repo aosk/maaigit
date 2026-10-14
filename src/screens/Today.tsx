@@ -99,8 +99,8 @@ export function Today() {
   }
 
   async function addFocus(start: Date) {
-    await api.addEvent({ title: t.focusTitle, start: start.toISOString(), minutes: 120 });
-    setNote(t.added);
+    const event = await api.addEvent({ title: t.focusTitle, start: start.toISOString(), minutes: 120 });
+    setNote(event.googleError ? t.googleFailed(event.googleError) : event.googleId ? `${t.added} ${t.googleAdded}.` : t.added);
     setDismissed(true);
     load();
   }

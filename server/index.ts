@@ -11,6 +11,7 @@ import { startScheduler } from './notify.js';
 import { refreshCalendar } from './gcal.js';
 import { openTasks } from './asana.js';
 import { feedRoutes } from './feed.js';
+import { startGoogleWrite } from './gwrite.js';
 import { createGuard } from './auth.js';
 
 const phoneMode = process.argv.includes('--phone') || process.env.MAAI_PHONE === '1';
@@ -38,6 +39,7 @@ if (config.production) {
 
 startScheduler();
 void refreshCalendar(true);
+startGoogleWrite();
 void openTasks(true).catch((e: Error) => console.error('Asana:', e.message));
 
 const ai = process.env.ANTHROPIC_API_KEY ? 'Claude connected' : 'demo mode (no ANTHROPIC_API_KEY in .env)';

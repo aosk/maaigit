@@ -3,6 +3,7 @@ import type { Proposal, StreamEvent } from '../../shared/types.js';
 import { chat } from '../ai/chat.js';
 import { sendMail } from '../mail.js';
 import { createTask, updateTask, validateNewTask } from '../asana.js';
+import { mirrorToGoogle } from '../gwrite.js';
 import { audit, id, save, state, type Conversation } from '../store.js';
 import { HttpError, explain, find, lang, text, wrap } from './http.js';
 
@@ -65,8 +66,11 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
     case 'meeting': {
       const option = p.options.find((o) => o.start === text(body.start, 40)) ?? p.options[0];
       p.chosen = option.start;
-      state.events.push({ id: id(), title: p.title, start: option.start, minutes: p.minutes, place: p.attendeeEmail, bookedByMaai: true });
-      return `Booked: ${p.title}`;
+      const event = { id: id(), title: p.title, start: option.start, minutes: p.minutes, place: p.attendeeEmail, bookedByMaai: true };
+      state.events.push(event);
+      const google = await mirrorToGoogle(event);
+      if (google) Object.assign(p, { google: google.status, googleError: google.status === 'failed' ? google.error : undefined });
+      return `Booked: ${p.title}${google?.status === 'added' ? ' (also in Google Calendar)' : ''}`;
     }
     case 'asana': {
       // The card is editable: apply exactly what the user approved.

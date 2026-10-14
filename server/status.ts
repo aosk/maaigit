@@ -4,6 +4,7 @@ import { mailConfigured, mailFrom } from './mail.js';
 import { inboxConfigured } from './gmail-inbox.js';
 import { calendarStatus } from './gcal.js';
 import { asanaStatus } from './asana.js';
+import { googleWriteStatus } from './gwrite.js';
 import { config } from './config.js';
 
 /** What is connected, for Settings → Connections and the admin portal. */
@@ -11,7 +12,7 @@ export function status(): StatusInfo {
   return {
     aiConfigured: Boolean(client),
     mail: { configured: mailConfigured, from: mailFrom, inbox: inboxConfigured },
-    calendar: calendarStatus(),
+    calendar: { ...calendarStatus(), write: googleWriteStatus() },
     asana: asanaStatus(),
     model: MODEL,
     location: { latitude: config.latitude, longitude: config.longitude, timezone: config.timezone },

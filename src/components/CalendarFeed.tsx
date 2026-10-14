@@ -3,7 +3,7 @@ import { api } from '../api';
 import { useSettings } from '../settings';
 
 /** MAAI's own calendar as a private link, so meetings it books also show on the phone and in Google Calendar. */
-export function CalendarFeed() {
+export function CalendarFeed({ googleDirect }: { googleDirect: boolean }) {
   const { t } = useSettings();
   const [feed, setFeed] = useState<{ https: string; webcal: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -33,7 +33,7 @@ export function CalendarFeed() {
           <a className="btn primary grow" href={feed.webcal} style={{ textDecoration: 'none' }}>{t.subscribeIphone}</a>
           <button className="btn secondary grow" onClick={copy}>{copied ? t.copied : t.copyLink}</button>
         </div>
-        <p className="sub">{t.calendarFeedGoogle}</p>
+        <p className="sub">{googleDirect ? t.calendarFeedGoogleDirect : t.calendarFeedGoogle}</p>
       </section>
     </>
   );
