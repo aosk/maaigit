@@ -5,7 +5,6 @@ import { randomBytes } from 'node:crypto';
 import express from 'express';
 import qrcode from 'qrcode-terminal';
 import { config } from './config.js';
-import { api } from './routes/index.js';
 import { pinGuard, phoneSetup } from './phone.js';
 import { startScheduler } from './notify.js';
 import { feedRoutes } from './feed.js';
@@ -13,13 +12,11 @@ import { startGoogleWrite } from './gwrite.js';
 import { startBackgroundSync, syncAll } from './sync.js';
 import { startLiveCalendar } from './livecal.js';
 import { briefing } from './ai/briefing.js';
-import { createGuard } from './auth.js';
+import { createApp, createInnerApp, createOnlineSite } from './site.js';
 
 const phoneMode = process.argv.includes('--phone') || process.env.MAAI_PHONE === '1';
 
-const app = express();
-app.use(express.json({ limit: '1mb' }));
-app.use('/api', api);
+const app = createInnerApp();
 
 if (config.production) {
   const dist = path.resolve('dist');
@@ -61,14 +58,7 @@ if (config.production) {
     fs.mkdirSync(config.dataDir, { recursive: true });
     fs.writeFileSync(secretFile, randomBytes(32).toString('hex'));
   }
-  const site = express();
-  // The hosting service checks this to know MAAI is up; it reveals nothing.
-  site.get('/api/health', (_req, res) => res.json({ ok: true }));
-  // Calendar apps can't sign in; their link is a long random key (see feed.ts).
-  site.use(feedRoutes);
-  site.use(express.json({ limit: '1mb' }));
-  site.use(createGuard('password', config.password, fs.readFileSync(secretFile, 'utf8').trim()));
-  site.use(app);
+  const site = createOnlineSite(app, { password: config.password, secret: fs.readFileSync(secretFile, 'utf8').trim() });
   site.listen(config.port, '0.0.0.0', () => console.log(`MAAI is online on port ${config.port} [${ai}]`));
 } else {
   // The computer itself: no sign-in, and only reachable from this computer.
@@ -80,14 +70,14 @@ if (config.production) {
 
 if (phoneMode && !config.production) {
   const { pin, key, cert, ips } = await phoneSetup();
-  const phone = express();
+  const phone = createApp();
   phone.use(express.json({ limit: '1mb' }));
   // The public certificate, so the phone can trust it; it holds no secret.
   phone.get('/maai-cert.crt', (_req, res) => {
     res.attachment('MAAI.crt').setHeader('Content-Type', 'application/x-x509-ca-cert');
     res.send(Buffer.from(cert));
   });
-  phone.use(pinGuard());
+  phone.use('/api', pinGuard());
   phone.use(app);
   https.createServer({ key, cert }, phone).listen(config.phonePort, '0.0.0.0', () => {
     if (ips.length === 0) {
