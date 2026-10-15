@@ -220,8 +220,8 @@ export function Today() {
 
       <div id="today-tasks"><AsanaTasks /></div>
 
-      <h2 className="h2 extra sec sec-reminder" id="today-reminders">{t.reminders}</h2>
-      <section className="card flush extra" aria-label={t.reminders}>
+      <h2 className="h2 sec sec-reminder" id="today-reminders">{t.reminders}</h2>
+      <section className="card flush" aria-label={t.reminders}>
         {openReminders.length === 0 && <div className="check"><span className="sub">{t.noReminders}</span></div>}
         {openReminders.map((r) => (
           <div key={r.id} className="check">
@@ -248,6 +248,10 @@ export function Today() {
             ))}
           </section>
         </>
+      )}
+
+      {settings.toggles.simple && (
+        <a className="sub" href="#/settings" style={{ textAlign: 'center' }}>{t.simpleHides}</a>
       )}
 
       {data?.syncedAt && <div className="updated-at">{t.updatedAt(time(data.syncedAt, lang))}</div>}

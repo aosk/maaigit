@@ -73,9 +73,9 @@ export function AsanaTasks() {
     // Never vanish without a word: say that it is loading, or why it could not be loaded.
     return (
       <>
-        <div className="between extra"><h2 className="h2 sec sec-task">{t.asanaTasks}</h2></div>
+        <div className="between"><h2 className="h2 sec sec-task">{t.asanaTasks}</h2></div>
         {loadError ? (
-          <div className="card soft extra" role="alert">
+          <div className="card soft" role="alert">
             <span className="sub">{t.asanaLoadFailed(loadError)}</span>
             <div className="row">
               <button className="btn secondary round" onClick={() => void load()}>{t.asanaRetry}</button>
@@ -84,7 +84,7 @@ export function AsanaTasks() {
             {report && <ul className="sub" style={{ margin: 0, paddingInlineStart: 18 }}>{report.map((line) => <li key={line}>{line}</li>)}</ul>}
           </div>
         ) : (
-          <div className="skeleton extra" aria-label={t.loading}><span /><span /></div>
+          <div className="skeleton" aria-label={t.loading}><span /><span /></div>
         )}
       </>
     );
@@ -125,7 +125,7 @@ export function AsanaTasks() {
 
   return (
     <>
-      <div className="between extra">
+      <div className="between">
         <h2 className="h2 sec sec-task">{t.asanaTasks}</h2>
         <div className="row" style={{ gap: 8 }}>
           {data.overdue > 0 && <div className="pill warn">{t.asanaOverdue(data.overdue)}</div>}
@@ -138,7 +138,7 @@ export function AsanaTasks() {
       </div>
 
       {adding && (
-        <section className="card extra" aria-label={t.asanaNewTitle}>
+        <section className="card" aria-label={t.asanaNewTitle}>
           <AsanaNewFields idPrefix="today-new" value={draft} projects={projects} disabled={busy} onChange={setDraft} />
           <div className="row">
             <button className="btn primary big" style={{ flex: 2 }} disabled={busy || !draft.name.trim()} onClick={create}>{busy ? t.sending : t.asanaCreate}</button>
@@ -147,22 +147,22 @@ export function AsanaTasks() {
         </section>
       )}
 
-      {error && <div className="error extra" role="alert">{error}</div>}
+      {error && <div className="error" role="alert">{error}</div>}
       {created && !adding && (
-        <div className="undo-bar extra" role="status">
+        <div className="undo-bar" role="status">
           <span>✓ {t.asanaCreated}: {created.name}</span>
           <a href={created.url} target="_blank" rel="noreferrer" className="link-btn">{t.asanaOpen}</a>
         </div>
       )}
       {finished && (
-        <div className="undo-bar extra" role="status">
+        <div className="undo-bar" role="status">
           <span>✓ {t.asanaMarkedDone(finished.name)}</span>
           <button className="link-btn" onClick={() => undo(finished)}>{t.undo}</button>
         </div>
       )}
 
       {note ? (
-        <div className="card soft extra">
+        <div className="card soft">
           <a href="#/settings" style={{ textDecoration: 'none', color: 'inherit' }}><span className="sub">{note}</span></a>
           {data.configured && (
             <>
@@ -175,7 +175,7 @@ export function AsanaTasks() {
         </div>
       ) : (
         data.tasks.length > 0 && (
-          <section className="card flush extra" aria-label={t.asanaTasks}>
+          <section className="card flush" aria-label={t.asanaTasks}>
             {(showAll ? data.tasks : data.tasks.slice(0, SHOWN)).map((task) => (
               <TaskRow key={task.gid} task={task} disabled={busy} onComplete={() => complete(task)} onChanged={load} />
             ))}
