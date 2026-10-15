@@ -3,6 +3,7 @@ import { PRAYER_BUFFER_MINUTES, prayersFor } from '../../shared/prayer.js';
 import { config } from '../config.js';
 import { allEvents, state } from '../store.js';
 import { cachedInbox, inboxConfigured } from '../gmail-inbox.js';
+import { handledOf } from '../mail-handled.js';
 import { neutralize as n } from './untrusted.js';
 import { asanaConfigured, cachedProjects, cachedTasks, openTasks, projects, todayIso } from '../asana.js';
 
@@ -22,7 +23,7 @@ export function emailForClaude(m: MailItem): string {
 function inboxOverview(): string {
   const mails = cachedInbox().slice(0, 25);
   if (!mails.length) return inboxConfigured ? 'Gmail inbox: connected (not loaded yet; use read_email with a number the user mentions).' : 'Gmail inbox: not connected.';
-  return `Recent Gmail inbox (use read_email to open one):\n${mails.map((m) => `- #${m.uid} ${dayTime(m.date)} from ${n(m.fromName)}: ${n(m.subject)}${m.unread ? ' (unread)' : ''}`).join('\n')}`;
+  return `Recent Gmail inbox (use read_email to open one):\n${mails.map((m) => `- #${m.uid} ${dayTime(m.date)} from ${n(m.fromName)}: ${n(m.subject)}${m.unread ? ' (unread)' : ''}${handledOf(m.uid) ? ' (already handled by the user)' : ''}`).join('\n')}`;
 }
 
 /** WhatsApp people are still waiting on, newest first: who, how many, and the latest words. */

@@ -80,6 +80,8 @@ export type Proposal =
       /** Whether the booked meeting also reached Google Calendar. */
       google?: 'added' | 'failed';
       googleError?: string;
+      /** The inbox email this meeting came from, so it can be marked as handled once booked. */
+      emailUid?: number;
     }
   | {
       id: string;
@@ -101,6 +103,8 @@ export type Proposal =
       toName?: string;
       subject: string;
       body: string;
+      /** The inbox email this answers, so it can be marked as handled once sent. */
+      replyToUid?: number;
     }
   | {
       id: string;
@@ -303,7 +307,7 @@ export interface MailDigest {
   fetchedAt: string;
   summary: string;
   source: 'claude' | 'demo';
-  emails: (MailItem & { insight?: MailInsight })[];
+  emails: (MailItem & { insight?: MailInsight; handled?: { how: 'replied' | 'meeting'; at: string } })[];
 }
 
 /** One person's WhatsApp messages, read and sorted by MAAI. */

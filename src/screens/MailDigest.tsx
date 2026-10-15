@@ -7,7 +7,9 @@ import { useOnRefresh } from '../refresh';
 import { askAssistant } from '../nav';
 import { Chat, Sun } from '../components/Icons';
 
-const ORDER: MailCategory[] = ['decide', 'reply', 'fyi', 'ignore'];
+const ORDER: (MailCategory | 'done')[] = ['decide', 'reply', 'fyi', 'ignore', 'done'];
+/** Where an email belongs: handled ones (a reply sent, a meeting booked) stop asking for a decision. */
+const groupOf = (m: Digest['emails'][number]): MailCategory | 'done' => (m.handled ? 'done' : (m.insight?.category ?? 'fyi'));
 
 /** The Gmail inbox, read and sorted by MAAI: what to decide, answer, know, or skip. */
 export function MailDigest({ gmail }: { gmail: boolean }) {
@@ -46,9 +48,9 @@ export function MailDigest({ gmail }: { gmail: boolean }) {
 
   const groups = ORDER.map((cat) => ({
     cat,
-    emails: (digest?.emails ?? []).filter((m) => (m.insight?.category ?? 'fyi') === cat),
+    emails: (digest?.emails ?? []).filter((m) => groupOf(m) === cat),
   })).filter((g) => g.emails.length && (g.cat !== 'ignore' || showIgnored));
-  const ignored = (digest?.emails ?? []).filter((m) => m.insight?.category === 'ignore').length;
+  const ignored = (digest?.emails ?? []).filter((m) => groupOf(m) === 'ignore').length;
 
   return (
     <>
@@ -84,10 +86,10 @@ export function MailDigest({ gmail }: { gmail: boolean }) {
                       </span>
                     </span>
                     <span style={{ fontSize: '0.88em' }} dir="auto">{m.subject}</span>
-                    <span className="sub" dir="auto">{ins?.gist ?? m.body.slice(0, 120)}</span>
+                    <span className="sub" dir="auto">{m.handled ? t.handledHow[m.handled.how] : (ins?.gist ?? m.body.slice(0, 120))}</span>
                   </button>
 
-                  {ins && cat !== 'ignore' && (
+                  {ins && cat !== 'ignore' && cat !== 'done' && (
                     <div className="mail-actions">
                       <div className="sub" dir="auto"><strong>{t.maaiSuggests}</strong> {ins.suggestion}</div>
                       {ins.options.length > 0 && (

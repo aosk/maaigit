@@ -189,7 +189,7 @@ const propose_asana_task: ToolSpec<{ name: string; notes: string; due_on: string
   detail: lastTitle,
 };
 
-const propose_email: ToolSpec<{ to: string; to_name: string; subject: string; body: string }> = {
+const propose_email: ToolSpec<{ to: string; to_name: string; subject: string; body: string; reply_to_uid: number }> = {
   definition: {
     description: 'Show the user an editable approval card for an email from their own Gmail. Nothing is sent until the user taps Send.',
     input_schema: {
@@ -199,8 +199,9 @@ const propose_email: ToolSpec<{ to: string; to_name: string; subject: string; bo
         to_name: { type: 'string', description: 'Recipient name if known, else an empty string.' },
         subject: { type: 'string', description: 'Short subject line.' },
         body: { type: 'string', description: 'The full email text, signed as the user.' },
+        reply_to_uid: { type: 'integer', description: 'The number (#uid) of the inbox email this answers, or 0 if it does not answer one.' },
       },
-      required: ['to', 'to_name', 'subject', 'body'],
+      required: ['to', 'to_name', 'subject', 'body', 'reply_to_uid'],
       additionalProperties: false,
     },
   },
@@ -216,6 +217,7 @@ const propose_email: ToolSpec<{ to: string; to_name: string; subject: string; bo
       toName: input.to_name || undefined,
       subject: input.subject,
       body: input.body,
+      replyToUid: input.reply_to_uid > 0 ? input.reply_to_uid : undefined,
     });
     return mailConfigured
       ? 'Email card shown. Not sent yet; waiting for the user to tap Send.'
@@ -224,7 +226,7 @@ const propose_email: ToolSpec<{ to: string; to_name: string; subject: string; bo
   detail: lastTitle,
 };
 
-const propose_meeting: ToolSpec<{ title: string; attendee: string; attendee_email: string; minutes: number; options: { start: string; note: string }[] }> = {
+const propose_meeting: ToolSpec<{ title: string; attendee: string; attendee_email: string; minutes: number; options: { start: string; note: string }[]; email_uid: number }> = {
   definition: {
     description: 'Show the user an approval card for booking a meeting. Nothing is booked until the user approves and picks one of the options.',
     input_schema: {
@@ -234,6 +236,7 @@ const propose_meeting: ToolSpec<{ title: string; attendee: string; attendee_emai
         attendee: { type: 'string', description: 'Who the meeting is with.' },
         attendee_email: { type: 'string', description: 'Email if the user gave one, else an empty string.' },
         minutes: { type: 'integer', description: 'Length in minutes.' },
+        email_uid: { type: 'integer', description: 'The number (#uid) of the inbox email this meeting comes from (an invitation the user is accepting), or 0 if it does not come from one.' },
         options: {
           type: 'array',
           description: 'One to three candidate start times.',
@@ -248,7 +251,7 @@ const propose_meeting: ToolSpec<{ title: string; attendee: string; attendee_emai
           },
         },
       },
-      required: ['title', 'attendee', 'attendee_email', 'minutes', 'options'],
+      required: ['title', 'attendee', 'attendee_email', 'minutes', 'options', 'email_uid'],
       additionalProperties: false,
     },
   },
@@ -270,6 +273,7 @@ const propose_meeting: ToolSpec<{ title: string; attendee: string; attendee_emai
       attendeeEmail: input.attendee_email || undefined,
       minutes: input.minutes,
       options,
+      emailUid: input.email_uid > 0 ? input.email_uid : undefined,
     });
     return `Approval card shown with ${options.length} option(s). Not booked yet; waiting for the user.`;
   },

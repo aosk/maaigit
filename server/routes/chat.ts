@@ -5,6 +5,7 @@ import { sendMail } from '../mail.js';
 import { createTask, updateTask, validateNewTask } from '../asana.js';
 import { mirrorToGoogle } from '../gwrite.js';
 import { canAnswer, sendWhatsApp, whatsappConfigured } from '../whatsapp.js';
+import { markHandled, markReplyTo } from '../mail-handled.js';
 import { audit, id, save, state, type Conversation } from '../store.js';
 import { HttpError, explain, find, lang, text, wrap } from './http.js';
 
@@ -62,6 +63,8 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
       const mail = { to: text(body.to, 320) || p.to, subject: text(body.subject, 300) || p.subject, body: text(body.body, 20_000) || p.body };
       await sendMail(mail);
       Object.assign(p, mail, { title: mail.subject });
+      if (p.replyToUid) markHandled(p.replyToUid, 'replied');
+      else markReplyTo(mail.to, 'replied');
       return `Emailed ${mail.to}: ${mail.subject}`;
     }
     case 'whatsapp': {
@@ -79,6 +82,7 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
       p.chosen = option.start;
       const event = { id: id(), title: p.title, start: option.start, minutes: p.minutes, place: p.attendeeEmail, bookedByMaai: true };
       state.events.push(event);
+      markHandled(p.emailUid, 'meeting');
       const google = await mirrorToGoogle(event);
       if (google) Object.assign(p, { google: google.status, googleError: google.status === 'failed' ? google.error : undefined });
       return `Booked: ${p.title}${google?.status === 'added' ? ' (also in Google Calendar)' : ''}`;
