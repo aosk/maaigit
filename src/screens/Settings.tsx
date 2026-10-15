@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Lang, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings, type Look, type ToggleId } from '../settings';
+import type { LayoutChoice } from '../layout';
 import { useOnRefresh } from '../refresh';
 import { CalendarFeed } from '../components/CalendarFeed';
 import { NotificationSettings } from '../components/NotificationSettings';
@@ -11,7 +12,7 @@ import { VoiceSettings } from '../components/VoiceSettings';
 import { Chevron } from '../components/Icons';
 
 export function SettingsScreen() {
-  const { t, settings, update, toggle } = useSettings();
+  const { t, settings, update, toggle, detected, width } = useSettings();
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [known, setKnown] = useState<number | null>(null);
 
@@ -29,10 +30,11 @@ export function SettingsScreen() {
     { id: 'ar', label: 'العربية' },
   ];
   const looks: Look[] = ['system', 'light', 'dark'];
+  const layouts: LayoutChoice[] = ['auto', 'phone', 'tablet', 'desktop'];
   const toggles = Object.keys(t.toggles) as ToggleId[];
 
   return (
-    <div className="screen">
+    <div className="screen cols">
       <h1 className="title">{t.settings}</h1>
 
       <section className="card">
@@ -51,6 +53,15 @@ export function SettingsScreen() {
               <button key={l} role="radio" aria-checked={settings.look === l} onClick={() => update({ look: l })}>{t.looks[l]}</button>
             ))}
           </div>
+        </div>
+        <div className="field">
+          <span className="section-label" id="layout-label" style={{ padding: 0 }}>{t.layoutTitle}</span>
+          <div className="seg wrap" role="radiogroup" aria-labelledby="layout-label">
+            {layouts.map((l) => (
+              <button key={l} role="radio" aria-checked={settings.layout === l} onClick={() => update({ layout: l })}>{t.layoutChoices[l]}</button>
+            ))}
+          </div>
+          <span className="sub">{t.layoutNow(t.layoutNames[detected], width)}. {t.layoutHint}</span>
         </div>
       </section>
 

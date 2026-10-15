@@ -452,3 +452,40 @@ html[dir='rtl'] .link-row svg { transform: scaleX(-1); }
 /* Small round controls keep their look but get a 44 px touch area (Apple's minimum for a finger). */
 .check button, .task-row .circle, .file-x { position: relative; }
 .check button::after, .task-row .circle::after, .file-x::after { content: ''; position: absolute; inset: -8px; }
+
+/* ---------- Screen types ----------
+   <html data-layout> is phone, tablet or desktop: chosen from the window's width, or fixed in Settings.
+   Phone is the base design above; the rules below only widen it. */
+.seg.wrap { grid-auto-flow: row; grid-template-columns: repeat(2, 1fr); }
+
+/* Tablet, and a fold when open: a wider column, cards in two columns, tabs still at the bottom. */
+:root[data-layout='tablet'] .shell, :root[data-layout='tablet'] .tabs { max-width: 860px; }
+:root[data-layout='tablet'] .alerts { max-width: 844px; }
+
+/* Computer: the tabs become a side rail (on the right in Arabic), and the content gets room. */
+:root[data-layout='desktop'] .shell { max-width: 1320px; display: grid; grid-template-columns: 224px minmax(0, 1fr); box-shadow: 0 0 0 1px var(--sep); }
+:root[data-layout='desktop'] .shell > main { grid-column: 2; grid-row: 1; min-width: 0; }
+:root[data-layout='desktop'] .tabs { grid-column: 1; grid-row: 1; position: sticky; top: 0; left: auto; transform: none; width: auto; max-width: none; height: 100dvh; min-height: 0; flex-direction: column; justify-content: flex-start; gap: 4px; padding: 24px 12px; border-top: 0; border-inline-end: 1px solid var(--border); }
+:root[data-layout='desktop'] .tab { position: relative; flex-direction: row; justify-content: flex-start; gap: 12px; font-size: 0.95em; padding: 10px 14px; border-radius: 12px; min-height: 48px; }
+:root[data-layout='desktop'] .tab:hover { background: var(--tint-soft); }
+:root[data-layout='desktop'] .tab[aria-current='page'] { background: var(--tint-soft); }
+:root[data-layout='desktop'] .tab-badge { position: static; margin-inline-start: auto; }
+:root[data-layout='desktop'] .alerts { max-width: 560px; }
+
+/* Wider screens use two columns for the screens made of cards (Today, News, Settings, Profile). */
+:root[data-layout='tablet'] .screen.cols, :root[data-layout='desktop'] .screen.cols { display: block; column-count: 2; column-gap: 20px; padding-bottom: 120px; }
+:root[data-layout='desktop'] .screen.cols { column-count: auto; column-width: 400px; padding: 32px 36px 48px; }
+.screen.cols > * { break-inside: avoid; }
+:root[data-layout='tablet'] .screen.cols > *, :root[data-layout='desktop'] .screen.cols > * { margin-block-end: 16px; }
+:root[data-layout='tablet'] .screen.cols > .top, :root[data-layout='tablet'] .screen.cols > .title,
+:root[data-layout='desktop'] .screen.cols > .top, :root[data-layout='desktop'] .screen.cols > .title { column-span: all; }
+.screen.cols > .section-label, .screen.cols > h2 { break-after: avoid; }
+
+/* The assistant keeps a readable width, and its input sits at the bottom of the window instead of above the tabs. */
+:root[data-layout='tablet'] .chat-screen > *, :root[data-layout='desktop'] .chat-screen > * { width: 100%; max-width: 820px; margin-inline: auto; }
+:root[data-layout='desktop'] .chat-screen { padding-bottom: 0; }
+:root[data-layout='desktop'] .composer { bottom: 0; border-radius: 16px 16px 0 0; border: 1px solid var(--sep); border-bottom: 0; }
+:root[data-layout='desktop'] .chat-end { scroll-margin-bottom: 120px; }
+:root[data-layout='desktop'] .bubble { max-width: 75%; }
+/* A heading never ends a column on its own: it stays with the card under it. */
+.screen.cols > .between, .screen.cols > :has(> h2) { break-after: avoid; }

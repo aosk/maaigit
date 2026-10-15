@@ -155,7 +155,7 @@ export function Today() {
   }
 
   return (
-    <div className="screen">
+    <div className="screen cols">
       <div className="top">
         <div>
           <div className="eyebrow">{dayHeading(now, lang)}</div>

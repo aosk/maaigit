@@ -34,7 +34,7 @@ export function ProfileScreen() {
   const facts = info?.facts ?? [];
 
   return (
-    <div className="screen">
+    <div className="screen cols">
       <a href="#/settings" className="btn ghost back-link"><Back size={18} />{t.settings}</a>
       <h1 className="title">{t.profileTitle}</h1>
       <p className="sub">{t.profileIntro}</p>

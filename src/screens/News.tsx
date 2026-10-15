@@ -63,7 +63,7 @@ export function News() {
   const sources = (digest?.sources ?? []).filter((s) => s.section === section);
 
   return (
-    <div className="screen">
+    <div className="screen cols">
       <div className="between wrap">
         <h1 className="title">{t.news}</h1>
         <button className="btn secondary round" onClick={refresh} disabled={busy}>{busy ? t.newsRefreshing : t.newsRefresh}</button>

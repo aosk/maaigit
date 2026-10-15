@@ -3,6 +3,11 @@ import type { Lang } from '../shared/types';
 const en = {
   appName: 'MAAI',
   tabsLabel: 'Main sections',
+  layoutTitle: 'Screen layout',
+  layoutHint: 'MAAI fits itself to your screen. Choose one here to override it.',
+  layoutChoices: { auto: 'Automatic', phone: 'Phone', tablet: 'Tablet or fold', desktop: 'Computer' } as Record<'auto' | 'phone' | 'tablet' | 'desktop', string>,
+  layoutNow: (name: string, width: number) => `Detected: ${name} (${width} px wide)`,
+  layoutNames: { phone: 'phone', tablet: 'tablet or fold', desktop: 'computer' } as Record<'phone' | 'tablet' | 'desktop', string>,
   today: 'Today',
   assistant: 'Assistant',
   inbox: 'Inbox',
@@ -404,6 +409,11 @@ const n = (x: number) => x.toLocaleString('ar-SA');
 
 const ar: Strings = {
   tabsLabel: 'الأقسام الرئيسية',
+  layoutTitle: 'تخطيط الشاشة',
+  layoutHint: 'يتكيّف مساعد مع شاشتك تلقائياً. اختر واحداً هنا لتغيير ذلك.',
+  layoutChoices: { auto: 'تلقائي', phone: 'جوال', tablet: 'تابلت أو جهاز قابل للطي', desktop: 'كمبيوتر' },
+  layoutNow: (name, width) => `المُكتشَف: ${name} (العرض ${width} بكسل)`,
+  layoutNames: { phone: 'جوال', tablet: 'تابلت أو جهاز قابل للطي', desktop: 'كمبيوتر' },
   appName: 'مساعد',
   today: 'اليوم',
   assistant: 'المساعد',
