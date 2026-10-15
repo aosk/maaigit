@@ -11,6 +11,7 @@ import type {
   BriefingFacts,
   ChatEvent,
   CalendarEvent,
+  CloudUsage,
   ChatTurn,
   InboxMessage,
   Lang,
@@ -150,6 +151,7 @@ export const api = {
   sendBriefing: () => call<void>('POST', '/notify/briefing'),
   alerts: (since: string) => call<AppAlert[]>('GET', `/alerts?since=${encodeURIComponent(since)}`, undefined, true),
 
+  adminCloud: (refresh = false) => call<CloudUsage>('GET', `/admin/cloud${refresh ? '?refresh=1' : ''}`),
   admin: (background = false) => call<AdminOverview>('GET', '/admin', undefined, background),
   setAgent: (id: AgentSetting['id'], enabled: boolean) => call<AgentSetting>('PATCH', `/admin/agents/${id}`, { enabled }),
 };

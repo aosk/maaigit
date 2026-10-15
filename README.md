@@ -192,6 +192,13 @@ Online, open **Settings → Face ID → Set up Face ID** (on the iPhone, from th
 Face ID. From then on the sign-in screen has a **Sign in with Face ID** button. MAAI keeps only a public key, never your face
 or fingerprint; the password still works. Remove a device any time in the same place.
 
+### Anthropic account usage (Admin → Anthropic account)
+
+The admin portal shows what **Anthropic itself** reports for the key MAAI uses:
+- **Rate limits, live:** how much of the key's request and token allowance is left, taken from the headers Anthropic sends with every answer. No extra setup.
+- **Tokens and cost, last 30 days:** needs an **Admin API key** (Claude Console → Settings → Admin keys; organization accounts only, not individual ones). Add it on Render as `ANTHROPIC_ADMIN_KEY`. MAAI finds which key in your organization is its own by how it starts and ends, and shows that key's tokens per day next to what MAAI itself counted. Anthropic reports **cost** only for the whole organization, so that number is the organization's. An Admin key can manage the organization: add one only if you are comfortable, and delete it in the Console to cut MAAI off.
+- Your **remaining prepaid credit** is not available through any API. See it in the Claude Console under Usage and Cost.
+
 ### News
 
 The **News** tab has two sections: **AI & Tech** and **Saudi Arabia**. MAAI reads only a fixed list of trusted sources (listed

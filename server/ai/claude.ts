@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ChatEvent, UsagePurpose } from '../../shared/types.js';
 import { recordUsage } from '../usage.js';
+import { noteRateLimits } from '../anthropic-limits.js';
 
 /** The one place MAAI talks to the Claude API. */
 
@@ -14,7 +15,13 @@ export type OnEvent = (event: ChatEvent) => void;
 export const MODEL = 'claude-opus-5-5';
 
 /** Present only when an API key is set; otherwise MAAI runs in demo mode. */
-export const client = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
+// Every answer from Anthropic carries the key's current rate limits in its headers; keep the latest for the admin portal.
+const watching: typeof fetch = async (input, init) => {
+  const response = await fetch(input, init);
+  noteRateLimits(response.headers);
+  return response;
+};
+export const client = process.env.ANTHROPIC_API_KEY ? new Anthropic({ fetch: watching }) : null;
 
 interface Request {
   /** What the request is for, so the admin portal can split token use by feature. */

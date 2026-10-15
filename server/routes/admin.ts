@@ -3,7 +3,8 @@ import type { AdminOverview } from '../../shared/types.js';
 import { allEvents, audit, state } from '../store.js';
 import { status } from '../status.js';
 import { recentUsage } from '../usage.js';
-import { find } from './http.js';
+import { cloudUsage } from '../anthropic-usage.js';
+import { find, wrap } from './http.js';
 
 export const admin = Router();
 
@@ -29,6 +30,9 @@ admin.get('/admin', (_req, res) => {
   };
   res.json(overview);
 });
+
+/** What Anthropic reports for the key MAAI uses: rate limits, and tokens and cost when an Admin API key is available. */
+admin.get('/admin/cloud', wrap(async (req, res) => res.json(await cloudUsage({ force: req.query.refresh === '1' }))));
 
 admin.patch('/admin/agents/:id', (req, res) => {
   const agent = find(state.agents, req.params.id);

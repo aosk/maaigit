@@ -36,6 +36,7 @@ Express server (server/)
 | `server/news/*`, `server/ai/news.ts` | The News tab: reads a fixed list of trusted feeds every 6 h, ranks stories, Claude picks and summarises |
 | `server/ai/facts.ts` | The counts and next event on the Today briefing card (no AI call), from `GET /api/briefing/facts` |
 | `server/mail-handled.ts` | Remembers which inbox emails were dealt with (reply sent, meeting booked), so they leave "Needs your decision" |
+| `server/anthropic-usage.ts`, `anthropic-limits.ts` | What Anthropic reports for the key MAAI uses: live rate limits (from response headers) and, with an Admin API key, tokens and cost (Admin API) |
 | `server/ai/memo.ts` | Saved Claude answers (briefing, email and WhatsApp summaries), rewritten only when their data changes |
 | `server/usage.ts` | Counts Claude tokens per day and feature (kept 90 days) for Admin → Token usage |
 | `server/notify.ts` | Prayer/meeting/briefing alerts, Web Push |
@@ -75,6 +76,7 @@ Layering rule: `routes → services (ai, asana, gcal…) → store`. No module i
 | Variable | Purpose |
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude (without it: demo mode) |
+| `ANTHROPIC_ADMIN_KEY` | Optional Admin API key: lets Admin → Anthropic account show your usage and cost from Anthropic (organization accounts only) |
 | `MAAI_PASSWORD` | Online sign-in password |
 | `MAAI_PIN`, `MAAI_PHONE`, `MAAI_PHONE_PORT` | Home-Wi-Fi mode |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Send/read mail |

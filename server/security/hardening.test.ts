@@ -7,6 +7,7 @@ import express from 'express';
 const SECRETS = vi.hoisted(() => {
   const secrets = {
     anthropic: 'sk-ant-api03-SECRETSECRETSECRET0123456789',
+    anthropicAdmin: 'sk-ant-admin01-ADMINSECRETADMINSECRET0123456789',
     gmailUser: 'owner@example.com',
     gmailPass: 'abcdwxyzabcdwxyz',
     asana: '1/1200000000000:deadbeefdeadbeefdeadbeefdeadbeef',
@@ -18,6 +19,7 @@ const SECRETS = vi.hoisted(() => {
     MAAI_DATA_DIR: '/tmp/claude-0/hardening-data',
     MAAI_DATA_FILE: '/tmp/claude-0/hardening-data/store.json',
     ANTHROPIC_API_KEY: secrets.anthropic,
+    ANTHROPIC_ADMIN_KEY: secrets.anthropicAdmin,
     ANTHROPIC_BASE_URL: 'http://127.0.0.1:9',
     ASANA_TOKEN: secrets.asana,
     ASANA_API: 'http://127.0.0.1:9',

@@ -4,7 +4,7 @@ export type Route = 'today' | 'assistant' | 'inbox' | 'news' | 'settings' | 'adm
 const ROUTES: Route[] = ['today', 'assistant', 'inbox', 'news', 'settings', 'admin'];
 
 /** Sections of the admin portal; their links (#/admin/agents, or plain #agents) open the portal there. */
-const ADMIN_SECTIONS = ['agents', 'usage', 'integrations', 'audit'] as const;
+const ADMIN_SECTIONS = ['agents', 'usage', 'cloud', 'integrations', 'audit'] as const;
 
 /** A request another screen asked the assistant to send on arrival. */
 const PROMPT_KEY = 'maai.prompt';

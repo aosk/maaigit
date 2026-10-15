@@ -31,6 +31,9 @@ services:
         sync: false
       - key: MAAI_PASSWORD
         sync: false
+      # Optional: an Admin API key lets the admin portal show your usage and cost from Anthropic.
+      - key: ANTHROPIC_ADMIN_KEY
+        sync: false
       # Optional: send email from your Gmail (myaccount.google.com/apppasswords).
       - key: GMAIL_USER
         sync: false

@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useSettings } from '../settings';
 import { Moon } from '../components/Icons';
 import { TokenUsage } from './TokenUsage';
+import { CloudUsage } from './CloudUsage';
 import { Logo } from '../components/Logo';
 
 const when = (iso: string) =>
@@ -26,6 +27,7 @@ function Badge({ outcome, label }: { outcome: string; label?: string }) {
 const SECTIONS = [
   { id: '', label: 'Overview' },
   { id: 'usage', label: 'Token usage' },
+  { id: 'cloud', label: 'Anthropic account' },
   { id: 'agents', label: 'Agents' },
   { id: 'integrations', label: 'Integrations' },
   { id: 'audit', label: 'Safety & audit' },
@@ -129,6 +131,7 @@ export function Admin() {
         </section>
 
         {data && <TokenUsage rows={data.usageLog} timeZone={data.status.location.timezone} allTime={data.usage} />}
+        {data && <CloudUsage maaiThirtyDayTokens={data.usageLog.reduce((a, r) => a + r.input + r.cached + r.output, 0)} />}
 
         <div className="row wrap" style={{ alignItems: 'stretch', gap: 24 }}>
           <section id="agents" aria-label="Agents" className="admin-card" style={{ flex: '999 1 520px', minWidth: 0 }}>

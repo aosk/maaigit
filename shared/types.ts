@@ -280,6 +280,31 @@ export interface UsageRow {
   hits?: number;
 }
 
+/** What Anthropic reports about a rate limit, from the headers of the latest answer. */
+export interface RateLimitInfo {
+  limit?: number;
+  remaining?: number;
+  /** When the window resets (ISO). */
+  resetAt?: string;
+}
+
+/** The Anthropic account's own numbers for the key MAAI uses, read from Anthropic's cloud. */
+export interface CloudUsage {
+  fetchedAt: string;
+  /** The key MAAI uses, never in full: how it ends, and what Anthropic calls it if it could be matched. */
+  key: { hint: string; matched: boolean; name?: string; id?: string; status?: string; scope?: string };
+  /** Latest rate limits Anthropic reported (from the last request MAAI made). */
+  limits?: { updatedAt: string; requests?: RateLimitInfo; tokens?: RateLimitInfo; inputTokens?: RateLimitInfo; outputTokens?: RateLimitInfo };
+  /** Whether the Admin API could be read (usage and cost). */
+  reports: 'ok' | 'needs-admin-key' | 'error';
+  /** Tokens per day for the last 30 days, for this key when it could be matched, otherwise the whole organization. */
+  days: { day: string; uncachedInput: number; cacheRead: number; cacheWrite: number; output: number }[];
+  scope: 'key' | 'organization';
+  /** Cost in US dollars for the whole organization (Anthropic does not split cost by key). */
+  cost?: { last30: number; today: number; days: { day: string; usd: number }[] };
+  message?: string;
+}
+
 export interface AdminOverview {
   counts: {
     events: number;
