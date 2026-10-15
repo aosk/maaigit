@@ -3,6 +3,7 @@ import { createGuard } from './auth.js';
 import { feedRoutes } from './feed.js';
 import { api } from './routes/index.js';
 import { whatsappWebhook } from './whatsapp.js';
+import { passkeyLogin } from './passkeys.js';
 import { bodyErrors, lastResort, noStore, securityHeaders } from './security.js';
 
 /** An Express app set up the way every MAAI server should be. */
@@ -41,7 +42,10 @@ export function createOnlineSite(inner: express.Express, options: { password: st
   // Twilio cannot sign in either; every request to this one proves itself with Twilio's signature.
   site.use(whatsappWebhook);
   site.use(express.json({ limit: '1mb' }));
-  site.use('/api', createGuard('password', options.password, options.secret));
+  const guard = createGuard('password', options.password, options.secret);
+  // Signing in with Face ID has to be reachable before there is a session; it proves itself with a signature.
+  site.use('/api/passkey/login', noStore, passkeyLogin(guard.startSession));
+  site.use('/api', guard);
   site.use(inner);
   // The body reader runs here, before the sign-in, so its complaints need answering here too.
   site.use(bodyErrors, lastResort);

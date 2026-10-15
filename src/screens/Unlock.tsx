@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { browserSupportsWebAuthn, startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { api } from '../api';
 import { useSettings } from '../settings';
 
@@ -8,6 +9,37 @@ export function Unlock({ kind }: { kind: 'pin' | 'password' }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Face ID, when it was set up on this MAAI: its one-time challenge is fetched ahead, so the tap can open Face ID at once.
+  const faceId = useRef<{ options: PublicKeyCredentialRequestOptionsJSON; at: number } | null>(null);
+  const [faceReady, setFaceReady] = useState(false);
+
+  useEffect(() => {
+    if (kind !== 'password' || !browserSupportsWebAuthn()) return;
+    api
+      .passkeyLoginOptions()
+      .then((options) => {
+        faceId.current = { options, at: Date.now() };
+        setFaceReady(true);
+      })
+      .catch(() => {});
+  }, [kind]);
+
+  async function signInWithFace() {
+    if (!faceId.current) return;
+    setBusy(true);
+    setError('');
+    try {
+      const response = await startAuthentication({ optionsJSON: faceId.current.options });
+      await api.passkeyLogin(response);
+      window.location.reload();
+    } catch (err) {
+      const cancelled = (err as Error).name === 'NotAllowedError';
+      setError(cancelled ? t.faceIdCancelled : (err as Error).message);
+      setBusy(false);
+      // A challenge works once: get a fresh one for the next try.
+      api.passkeyLoginOptions().then((options) => (faceId.current = { options, at: Date.now() })).catch(() => setFaceReady(false));
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -50,8 +82,13 @@ export function Unlock({ kind }: { kind: 'pin' | 'password' }) {
             <input id="pin" type="password" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="current-password" dir="ltr" autoFocus />
           )}
         </div>
+        {faceReady && (
+          <button type="button" className="btn primary big" onClick={signInWithFace} disabled={busy}>
+            {t.faceIdSignIn}
+          </button>
+        )}
         {error && <div className="error" role="alert">{error}</div>}
-        <button className="btn primary big" type="submit" disabled={busy || pin.length < (kind === 'pin' ? 4 : 1)}>{t.unlock}</button>
+        <button className={`btn ${faceReady ? 'secondary' : 'primary'} big`} type="submit" disabled={busy || pin.length < (kind === 'pin' ? 4 : 1)}>{t.unlock}</button>
       </form>
     </div>
   );

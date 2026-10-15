@@ -9,11 +9,14 @@ interface Settings {
   lang: Lang;
   look: Look;
   toggles: Record<ToggleId, boolean>;
+  /** Play MAAI's chime when an alert arrives while the app is open. */
+  sound: boolean;
 }
 
 const DEFAULTS: Settings = {
   lang: 'en',
   look: 'system',
+  sound: true,
   toggles: { longListen: false, simple: false, captions: true, speakReplies: false, slow: false, largeText: false, contrast: false, reduceMotion: false },
 };
 

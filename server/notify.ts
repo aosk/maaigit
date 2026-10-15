@@ -190,6 +190,9 @@ export function dueAlerts(
 
 // ---------- Sending ----------
 
+/** A small picture at the front of each title, so an alert reads as a reminder at a glance. */
+const ICONS: Record<AppAlert['kind'], string> = { reminder: '⏰', leave: '🚗', event: '📅', prayer: '🕌', briefing: '🗓️', test: '🔔' };
+
 async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>) {
   // Written once per language, even with several devices (a briefing costs an AI call).
   const written = new Map<Lang, Promise<Text>>();
@@ -197,7 +200,7 @@ async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>) {
 
   const appLang: Lang = state.subscriptions[0]?.lang ?? 'en';
   const shown = await textFor(appLang);
-  state.alerts.unshift({ id: id(), at: new Date().toISOString(), kind: due.kind, ...shown });
+  state.alerts.unshift({ id: id(), at: new Date().toISOString(), kind: due.kind, ...shown, title: `${ICONS[due.kind]} ${shown.title}` });
   state.alerts.length = Math.min(state.alerts.length, 30);
 
   const gone: string[] = [];
@@ -205,7 +208,9 @@ async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>) {
     state.subscriptions.map(async (s) => {
       try {
         const { title, body } = await textFor(s.lang);
-        await webpush.sendNotification(s.subscription, JSON.stringify({ title, body, tag: due.key, url: '/#/today' }), { TTL: 3600 });
+        // Urgency "high" asks the phone to show it straight away, even when it is saving power.
+        const payload = JSON.stringify({ title: `${ICONS[due.kind]} ${title}`, body, tag: due.key, kind: due.kind, lang: s.lang, url: '/#/today' });
+        await webpush.sendNotification(s.subscription, payload, { TTL: 3600, urgency: 'high' });
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;
         // 404/410: the phone or browser dropped this subscription; stop sending to it.

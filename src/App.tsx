@@ -14,9 +14,10 @@ import { readRoute, type Route } from './nav';
 import { useMailCount } from './useMailCount';
 import { PullToRefresh } from './components/PullToRefresh';
 import { refreshAll } from './refresh';
+import { playChime } from './chime';
 
 export function App() {
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
   const [route, setRoute] = useState<Route>(readRoute);
   const [locked, setLocked] = useState<'pin' | 'password' | null>(null);
   const unread = useMailCount();
@@ -25,6 +26,16 @@ export function App() {
   useEffect(() => {
     void worker();
   }, []);
+
+  // A push arriving while MAAI is open also plays MAAI's own chime.
+  useEffect(() => {
+    if (!settings.sound || !('serviceWorker' in navigator)) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'chime') playChime();
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [settings.sound]);
 
   // Coming back to the app after a while: refresh what it shows.
   useEffect(() => {

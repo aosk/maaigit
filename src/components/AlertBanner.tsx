@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import type { AppAlert } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
+import { playChime } from '../chime';
 import { Bell } from './Icons';
 
 /** While MAAI is open, alerts also slide in at the top, so nothing is missed without notifications on. */
 export function AlertBanner() {
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
+  const sound = useRef(settings.sound);
+  sound.current = settings.sound;
   const [shown, setShown] = useState<AppAlert[]>([]);
   const since = useRef(new Date().toISOString());
 
@@ -17,6 +20,7 @@ export function AlertBanner() {
         .then((alerts) => {
           if (!alerts.length) return;
           since.current = alerts[0].at;
+          if (sound.current) playChime();
           setShown((s) => [...alerts.reverse(), ...s].slice(0, 3));
         })
         .catch(() => {});

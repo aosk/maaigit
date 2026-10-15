@@ -186,6 +186,18 @@ personal WhatsApp chats, and it never sends anything by itself: you edit the dra
 6. WhatsApp only lets a business answer freely within 24 hours of the person's last message; after that MAAI
    offers "Open in WhatsApp" so you write to them yourself.
 
+### Face ID instead of the password
+
+Online, open **Settings → Face ID → Set up Face ID** (on the iPhone, from the Home Screen icon or Safari) and approve with
+Face ID. From then on the sign-in screen has a **Sign in with Face ID** button. MAAI keeps only a public key, never your face
+or fingerprint; the password still works. Remove a device any time in the same place.
+
+### Alert sound
+
+Alerts arrive as push notifications titled like reminders (⏰ Reminder, 🚗 Time to leave…). With MAAI closed, the iPhone plays
+its own notification sound: a web app cannot choose it (check Settings → Notifications → MAAI → Sounds, and that Focus is off).
+With MAAI open, it plays its own soft two-note chime (Settings → Notifications → MAAI chime).
+
 ### Asana
 
 MAAI lists the tasks assigned to you (overdue first) on Today and includes them in the morning briefing.

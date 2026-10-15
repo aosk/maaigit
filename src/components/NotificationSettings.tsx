@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { NotifyPrefs, NotifyStatus } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
+import { playChime } from '../chime';
 import { useAction } from '../useAction';
 import { currentSubscription, disablePush, enablePush, isIos, isStandalone, pushSupported, worker } from '../push';
 
@@ -9,7 +10,7 @@ type Problem = 'denied' | 'unsupported' | 'home' | 'cert' | null;
 
 /** The Notifications card in Settings: turn alerts on for this device and choose which ones. */
 export function NotificationSettings() {
-  const { t, settings } = useSettings();
+  const { t, settings, update } = useSettings();
   const [status, setStatus] = useState<NotifyStatus | null>(null);
   const [on, setOn] = useState(false);
   const [problem, setProblem] = useState<Problem>(null);
@@ -126,6 +127,15 @@ export function NotificationSettings() {
               </div>
             );
           })}
+          <div className="toggle-row">
+            <div>
+              <div>{t.chimeLabel}</div>
+              <div className="sub">{t.chimeHint}</div>
+            </div>
+            <button role="switch" className="switch" aria-checked={settings.sound} aria-label={t.chimeLabel} onClick={() => { update({ sound: !settings.sound }); if (!settings.sound) playChime(); }}>
+              <span />
+            </button>
+          </div>
           {status.prefs.briefing && (
             <div className="toggle-row" style={{ flexWrap: 'wrap', gap: 10 }}>
               <label htmlFor="briefing-time">{t.briefingAt}</label>

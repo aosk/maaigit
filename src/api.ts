@@ -1,3 +1,4 @@
+import type { AuthenticationResponseJSON, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
 import type {
   AdminOverview,
   AgentSetting,
@@ -77,10 +78,24 @@ async function readStream(res: Response, onEvent: (e: ChatEvent) => void): Promi
   throw new Error('The connection closed before MAAI finished. Try again.');
 }
 
+export interface Passkey {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt?: string;
+}
+
 export const api = {
   status: () => call<StatusInfo>('GET', '/status'),
   unlock: (pin: string) => call<void>('POST', '/unlock', { pin }),
   logout: () => call<void>('POST', '/logout'),
+  // Face ID: sign in without the password, and set it up or remove it once signed in.
+  passkeyLoginOptions: () => call<PublicKeyCredentialRequestOptionsJSON>('POST', '/passkey/login/options', {}),
+  passkeyLogin: (response: AuthenticationResponseJSON) => call<void>('POST', '/passkey/login', { response }),
+  passkeys: () => call<Passkey[]>('GET', '/passkeys'),
+  passkeyRegisterOptions: () => call<PublicKeyCredentialCreationOptionsJSON>('POST', '/passkeys/options', {}),
+  passkeyRegister: (response: RegistrationResponseJSON, name: string) => call<{ id: string }>('POST', '/passkeys', { response, name }),
+  deletePasskey: (id: string) => call<void>('DELETE', `/passkeys/${encodeURIComponent(id)}`),
   today: () => call<TodayData>('GET', '/today'),
   briefing: (lang: Lang) => call<Briefing>('GET', `/briefing?lang=${lang}`),
   addEvent: (e: { title: string; start: string; minutes: number }) => call<CalendarEvent>('POST', '/events', e),

@@ -51,7 +51,7 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
   let rounds = 0;
   let lockedUntil = 0;
 
-  return function guard(req: Request, res: Response, next: NextFunction) {
+  function guard(req: Request, res: Response, next: NextFunction) {
     if (req.path === '/unlock' && req.method === 'POST') {
       const wait = lockedUntil - now();
       if (wait > 0) {
@@ -88,5 +88,8 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
       return next();
     }
     res.status(401).json({ error: 'locked', kind });
-  };
+  }
+
+  // Another way in (Face ID) gives out the very same session cookie.
+  return Object.assign(guard, { startSession: (res: Response) => void res.setHeader('Set-Cookie', issue()) });
 }

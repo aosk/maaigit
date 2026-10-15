@@ -6,6 +6,7 @@ import { useSettings, type Look, type ToggleId } from '../settings';
 import { useOnRefresh } from '../refresh';
 import { CalendarFeed } from '../components/CalendarFeed';
 import { NotificationSettings } from '../components/NotificationSettings';
+import { FaceId } from '../components/FaceId';
 
 export function SettingsScreen() {
   const { t, settings, update, toggle } = useSettings();
@@ -96,6 +97,8 @@ export function SettingsScreen() {
       </section>
 
       <CalendarFeed googleDirect={Boolean(status?.calendar?.write?.working)} />
+
+      <FaceId />
 
       <NotificationSettings />
 

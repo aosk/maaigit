@@ -38,6 +38,8 @@ interface State {
   agents: AgentSetting[];
   drafts: number;
   usage: { inputTokens: number; outputTokens: number; requests: number };
+  /** Face ID / fingerprint keys that can sign in without the password (the public half only). */
+  passkeys: { id: string; publicKey: string; counter: number; transports?: string[]; name: string; createdAt: string; lastUsedAt?: string }[];
   /** Inbox emails the user dealt with through MAAI (a reply sent or a meeting booked), by email number. */
   handledMail: Record<string, { how: 'replied' | 'meeting'; at: string }>;
   /** Claude's last answer for each kind of summary, with the data it was based on. */
@@ -115,6 +117,7 @@ function seed(): State {
     usageLog: [],
     aiCache: {},
     handledMail: {},
+    passkeys: [],
     subscriptions: [],
     notifyPrefs: { ...DEFAULT_PREFS },
     sentAlerts: [],
