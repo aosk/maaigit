@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useSettings } from '../settings';
 
 /** Sign-in: the PIN from the computer's terminal at home, or the password when MAAI is online. */
-export function Unlock({ kind }: { kind: 'pin' | 'password' }) {
+export function Unlock({ kind, idle = false }: { kind: 'pin' | 'password'; idle?: boolean }) {
   const { t, settings, update } = useSettings();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -12,6 +12,8 @@ export function Unlock({ kind }: { kind: 'pin' | 'password' }) {
   // Face ID, when it was set up on this MAAI: its one-time challenge is fetched ahead, so the tap can open Face ID at once.
   const faceId = useRef<{ options: PublicKeyCredentialRequestOptionsJSON; at: number } | null>(null);
   const [faceReady, setFaceReady] = useState(false);
+  const [usePassword, setUsePassword] = useState(false);
+  const asked = useRef(false);
 
   useEffect(() => {
     if (kind !== 'password' || !browserSupportsWebAuthn()) return;
@@ -24,7 +26,7 @@ export function Unlock({ kind }: { kind: 'pin' | 'password' }) {
       .catch(() => {});
   }, [kind]);
 
-  async function signInWithFace() {
+  async function signInWithFace(automatic = false) {
     if (!faceId.current) return;
     setBusy(true);
     setError('');
@@ -34,12 +36,21 @@ export function Unlock({ kind }: { kind: 'pin' | 'password' }) {
       window.location.reload();
     } catch (err) {
       const cancelled = (err as Error).name === 'NotAllowedError';
-      setError(cancelled ? t.faceIdCancelled : (err as Error).message);
+      // Opening MAAI tries Face ID by itself; if the phone wants a tap first, that is not an error to show.
+      if (!(automatic && cancelled)) setError(cancelled ? t.faceIdCancelled : (err as Error).message);
       setBusy(false);
       // A challenge works once: get a fresh one for the next try.
       api.passkeyLoginOptions().then((options) => (faceId.current = { options, at: Date.now() })).catch(() => setFaceReady(false));
     }
   }
+
+  // Opening MAAI asks for Face ID straight away.
+  useEffect(() => {
+    if (faceReady && !asked.current) {
+      asked.current = true;
+      void signInWithFace(true);
+    }
+  }, [faceReady]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -54,6 +65,9 @@ export function Unlock({ kind }: { kind: 'pin' | 'password' }) {
     }
   }
 
+  // With Face ID set up, opening MAAI is Face ID alone; the password is a small fallback.
+  const faceFirst = kind === 'password' && faceReady && !usePassword;
+
   return (
     <div className="shell">
       <form className="screen" onSubmit={submit} style={{ minHeight: '100dvh', justifyContent: 'center' }}>
@@ -63,32 +77,43 @@ export function Unlock({ kind }: { kind: 'pin' | 'password' }) {
             {settings.lang === 'ar' ? 'EN' : 'ع'}
           </button>
         </div>
-        <h1 className="title">{kind === 'pin' ? t.unlockTitle : t.passwordTitle}</h1>
-        <p className="sub" style={{ fontSize: '0.9em' }}>{kind === 'pin' ? t.unlockHint : t.passwordHint}</p>
-        <div className="field">
-          <label htmlFor="pin">{kind === 'pin' ? t.pin : t.password}</label>
-          {kind === 'pin' ? (
-            <input
-              id="pin"
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              dir="ltr"
-              style={{ fontSize: '1.6em', letterSpacing: '0.3em', textAlign: 'center' }}
-              autoFocus
-            />
-          ) : (
-            <input id="pin" type="password" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="current-password" dir="ltr" autoFocus />
-          )}
-        </div>
-        {faceReady && (
-          <button type="button" className="btn primary big" onClick={signInWithFace} disabled={busy}>
-            {t.faceIdSignIn}
-          </button>
+        <h1 className="title">{faceFirst ? t.faceIdLockedTitle : kind === 'pin' ? t.unlockTitle : t.passwordTitle}</h1>
+        <p className="sub" style={{ fontSize: '0.9em' }}>{faceFirst ? (idle ? t.faceIdIdleHint : t.faceIdLockedHint) : kind === 'pin' ? t.unlockHint : t.passwordHint}</p>
+
+        {faceFirst ? (
+          <>
+            <button type="button" className="btn primary big" onClick={() => signInWithFace()} disabled={busy} autoFocus>
+              {t.faceIdSignIn}
+            </button>
+            {error && <div className="error" role="alert">{error}</div>}
+            <button type="button" className="btn ghost" onClick={() => setUsePassword(true)}>{t.usePasswordInstead}</button>
+          </>
+        ) : (
+          <>
+            <div className="field">
+              <label htmlFor="pin">{kind === 'pin' ? t.pin : t.password}</label>
+              {kind === 'pin' ? (
+                <input
+                  id="pin"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  dir="ltr"
+                  style={{ fontSize: '1.6em', letterSpacing: '0.3em', textAlign: 'center' }}
+                  autoFocus
+                />
+              ) : (
+                <input id="pin" type="password" value={pin} onChange={(e) => setPin(e.target.value)} autoComplete="current-password" dir="ltr" autoFocus />
+              )}
+            </div>
+            {error && <div className="error" role="alert">{error}</div>}
+            <button className="btn primary big" type="submit" disabled={busy || pin.length < (kind === 'pin' ? 4 : 1)}>{t.unlock}</button>
+            {kind === 'password' && faceReady && (
+              <button type="button" className="btn ghost" onClick={() => setUsePassword(false)}>{t.faceIdSignIn}</button>
+            )}
+          </>
         )}
-        {error && <div className="error" role="alert">{error}</div>}
-        <button className={`btn ${faceReady ? 'secondary' : 'primary'} big`} type="submit" disabled={busy || pin.length < (kind === 'pin' ? 4 : 1)}>{t.unlock}</button>
       </form>
     </div>
   );

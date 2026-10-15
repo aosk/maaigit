@@ -59,13 +59,13 @@ export function Admin() {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
 
-  const load = useCallback(() => {
-    api.admin().then(setData).catch((e: Error) => setError(e.message));
+  const load = useCallback((background = false) => {
+    api.admin(background).then(setData).catch((e: Error) => setError(e.message));
   }, []);
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 10_000);
+    const timer = setInterval(() => load(true), 10_000);
     return () => clearInterval(timer);
   }, [load]);
 

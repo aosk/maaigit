@@ -14,6 +14,8 @@ import { passkeyManagement } from '../passkeys.js';
 /** Everything under /api, one file per area of the app. */
 export const api = Router();
 
+// The app calls this while it is being used, so the Face ID lock counts that as activity.
+api.post('/active', (_req, res) => res.status(204).end());
 api.get('/status', (_req, res) => res.json({ ...status(), auth: res.locals.auth ?? 'none' }));
 api.use(today, assistant, inbox, asana, calendar, sync, notify, admin, passkeyManagement);
 // Anything under /api that no route answered.

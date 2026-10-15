@@ -57,7 +57,7 @@ Layering rule: `routes → services (ai, asana, gcal…) → store`. No module i
 
 1. **Default-deny API.** The guard is mounted on `/api` itself with case-sensitive routing; every route needs a valid session except `/api/health`, `/api/unlock`, `/api/logout`.
 2. **Sessions.** Cookie `expiry.HMAC` (30 days, renewed after 15), HttpOnly, Secure, SameSite=Strict. Changing the password invalidates all sessions.
-2b. **Face ID (passkeys).** Optional sign-in with Face ID or a fingerprint (WebAuthn, `server/passkeys.ts`). The phone keeps the private key behind Face ID; MAAI stores only the public key. Sign-in verifies a fresh signature over a one-time, 5-minute challenge for this site's origin with user verification required, checks the signature counter, and then issues the same session cookie as the password. Setting it up needs a password session; at most 5 devices; 10 wrong tries in 10 minutes pause it. The password always keeps working.
+2b. **Face ID (passkeys).** Optional sign-in with Face ID or a fingerprint (WebAuthn, `server/passkeys.ts`). The phone keeps the private key behind Face ID; MAAI stores only the public key. Sign-in verifies a fresh signature over a one-time, 5-minute challenge for this site's origin with user verification required, checks the signature counter, and then issues the same session cookie as the password. Once at least one device is set up, MAAI also locks itself: every request needs a second short-lived signed cookie (`maai_face`, `MAAI_LOCK_MINUTES`, default 5) that only Face ID or the password issues and that real use renews (the app's automatic refreshes, marked `X-Maai-Background`, do not), so an app left open locks too. Setting it up needs a password session; at most 5 devices; 10 wrong tries in 10 minutes pause it. The password always keeps working.
 3. **Brute force.** 5 wrong tries → locked 1 min, doubling each round up to 1 h.
 4. **Approval principle.** Claude can only *propose*. Buttons you tap (Asana complete/status/date) are audited.
 5. **Untrusted text.** Emails, Asana text and calendar notes are wrapped in tags and neutralised before reaching Claude; the system prompt names them as data, not instructions. Links shown to the user must be http(s).
@@ -78,6 +78,7 @@ Layering rule: `routes → services (ai, asana, gcal…) → store`. No module i
 | `GOOGLE_SERVICE_ACCOUNT`, `GOOGLE_CALENDAR_ID` | Write + live read of Google Calendar |
 | `ASANA_TOKEN` | Asana |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` | WhatsApp Business number via Twilio |
+| `MAAI_LOCK_MINUTES` (5) | Once Face ID is set up: minutes unused before MAAI asks for Face ID again |
 | `MAAI_PUBLIC_URL` | Only if Face ID fails behind a custom domain or proxy: the address you open MAAI at |
 | `MAAI_WHATSAPP_ACK` (on) | The automatic "received" note |
 | `MAAI_WHATSAPP_DAYS` (7) | Days received WhatsApp messages are kept |

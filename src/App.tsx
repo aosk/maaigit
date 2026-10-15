@@ -7,7 +7,7 @@ import { Inbox } from './screens/Inbox';
 import { SettingsScreen } from './screens/Settings';
 import { Admin } from './admin/Admin';
 import { Unlock } from './screens/Unlock';
-import { LOCKED_EVENT } from './api';
+import { LOCKED_EVENT, api } from './api';
 import { AlertBanner } from './components/AlertBanner';
 import { worker } from './push';
 import { readRoute, type Route } from './nav';
@@ -19,12 +19,26 @@ import { playChime } from './chime';
 export function App() {
   const { t, settings } = useSettings();
   const [route, setRoute] = useState<Route>(readRoute);
-  const [locked, setLocked] = useState<'pin' | 'password' | null>(null);
+  const [locked, setLocked] = useState<{ kind: 'pin' | 'password'; face: boolean } | null>(null);
   const unread = useMailCount();
 
   // The service worker shows notifications; register it early so they work with the app closed.
   useEffect(() => {
     void worker();
+  }, []);
+
+  // Touching the screen keeps MAAI open: with Face ID set up the server locks it after a few minutes
+  // without this (its own automatic refreshes do not count). Sent at most every 30 seconds.
+  useEffect(() => {
+    let last = Date.now();
+    const touched = () => {
+      if (Date.now() - last < 30_000 || document.hidden) return;
+      last = Date.now();
+      void api.active().catch(() => {});
+    };
+    const events = ['pointerdown', 'keydown', 'touchstart', 'scroll'] as const;
+    for (const name of events) window.addEventListener(name, touched, { passive: true });
+    return () => events.forEach((name) => window.removeEventListener(name, touched));
   }, []);
 
   // A push arriving while MAAI is open also plays MAAI's own chime.
@@ -49,7 +63,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const onLocked = (e: Event) => setLocked((e as CustomEvent).detail === 'password' ? 'password' : 'pin');
+    const onLocked = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { kind?: string; face?: boolean };
+      setLocked({ kind: detail.kind === 'password' ? 'password' : 'pin', face: detail.face === true });
+    };
     window.addEventListener(LOCKED_EVENT, onLocked);
     return () => window.removeEventListener(LOCKED_EVENT, onLocked);
   }, []);
@@ -67,7 +84,7 @@ export function App() {
     document.title = route === 'admin' ? 'MAAI Admin' : `MAAI · ${t[route]}`;
   }, [route, t]);
 
-  if (locked) return <Unlock kind={locked} />;
+  if (locked) return <Unlock kind={locked.kind} idle={locked.face} />;
   if (route === 'admin') return <Admin />;
 
   const tabs: { route: Route; label: string; icon: JSX.Element }[] = [

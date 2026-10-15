@@ -9,6 +9,8 @@ import type { NextFunction, Request, Response } from 'express';
 type AuthKind = 'pin' | 'password';
 
 const COOKIE = 'maai_session';
+/** Proves the person unlocked MAAI recently (by Face ID or the password); only asked for once Face ID is set up. */
+const FACE_COOKIE = 'maai_face';
 const DAY = 24 * 60 * 60;
 /** A session lasts 30 days, and is renewed on use once it has less than 15 days left. */
 const SESSION_DAYS = 30;
@@ -24,7 +26,14 @@ function sameText(a: string, b: string): boolean {
  * the very same route the API is mounted on, so a path can never reach the API without
  * passing it, whatever its capitalisation or shape. Everything not listed here is denied.
  */
-export function createGuard(kind: AuthKind, passcode: string, secret: string, now: () => number = Date.now) {
+interface GuardOptions {
+  /** True when Face ID is set up: then a session also needs a recent unlock (see `lockMinutes`). */
+  lockActive?: () => boolean;
+  /** How long MAAI stays open without being used before it asks for Face ID again. */
+  lockMinutes?: number;
+}
+
+export function createGuard(kind: AuthKind, passcode: string, secret: string, now: () => number = Date.now, options: GuardOptions = {}) {
   const hash = (value: string) => createHash('sha256').update(`${kind}:${value}:${secret}`).digest('hex');
   const wrong = kind === 'pin' ? 'Wrong PIN' : 'Wrong password';
 
@@ -44,6 +53,20 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
     const expires = /^\d{1,12}$/.test(expiresText) ? Number(expiresText) : 0;
     return expires > seconds() && expires <= seconds() + SESSION_DAYS * DAY && sameText(signature, sign(expires)) ? expires : 0;
   };
+
+  // The "recent unlock" cookie works the same way but lasts only a few minutes of not being used.
+  const lockSeconds = Math.max(60, Math.round((options.lockMinutes ?? 5) * 60));
+  const signFace = (expires: number) => createHmac('sha256', secret).update(`face|${kind}|${expires}|${passcodeHash}`).digest('hex');
+  const issueFace = () => {
+    const expires = seconds() + lockSeconds;
+    return `${FACE_COOKIE}=${expires}.${signFace(expires)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${lockSeconds}`;
+  };
+  const checkFace = (value: string): number => {
+    const [expiresText = '', signature = ''] = value.split('.');
+    const expires = /^\d{1,12}$/.test(expiresText) ? Number(expiresText) : 0;
+    return expires > seconds() && expires <= seconds() + lockSeconds && sameText(signature, signFace(expires)) ? expires : 0;
+  };
+  const cookieValue = (req: Request, name: string) => (req.headers.cookie ?? '').match(new RegExp(`(?:^|;\\s*)${name}=([0-9a-f.]+)`))?.[1] ?? '';
 
   // Five wrong tries lock sign-in, and each further round of five locks it twice as long
   // (1 minute, 2, 4 … up to an hour), so a passcode can't be guessed by trying them all.
@@ -70,26 +93,36 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
       }
       failures = 0;
       rounds = 0;
-      res.setHeader('Set-Cookie', issue());
+      res.setHeader('Set-Cookie', [issue(), issueFace()]);
       return res.status(204).end();
     }
 
     if (req.path === '/logout' && req.method === 'POST') {
-      res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`);
+      const gone = (name: string) => `${name}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+      res.setHeader('Set-Cookie', [gone(COOKIE), gone(FACE_COOKIE)]);
       return res.status(204).end();
     }
 
-    const cookie = (req.headers.cookie ?? '').match(new RegExp(`(?:^|;\\s*)${COOKIE}=([0-9a-f.]+)`))?.[1] ?? '';
-    const expires = check(cookie);
-    if (expires) {
-      // Using the app keeps you signed in: renew once half the time is gone.
-      if (expires - seconds() < (SESSION_DAYS / 2) * DAY) res.setHeader('Set-Cookie', issue());
-      res.locals.auth = kind;
-      return next();
+    const expires = check(cookieValue(req, COOKIE));
+    if (!expires) return res.status(401).json({ error: 'locked', kind });
+
+    // Once Face ID is set up, being signed in is not enough: MAAI must also have been unlocked a few
+    // minutes ago. Using the app keeps that going; leaving it for longer asks for Face ID again.
+    if (options.lockActive?.()) {
+      const face = checkFace(cookieValue(req, FACE_COOKIE));
+      if (!face) return res.status(401).json({ error: 'locked', kind, face: true });
+      // Only real use keeps it open: the app's own automatic refreshes (marked as background) do not,
+      // or an app left open on a table would never lock.
+      const background = req.get('x-maai-background') === '1';
+      if (!background && face - seconds() < lockSeconds / 2) res.append('Set-Cookie', issueFace());
     }
-    res.status(401).json({ error: 'locked', kind });
+    // Using the app keeps you signed in: renew once half the time is gone.
+    if (expires - seconds() < (SESSION_DAYS / 2) * DAY) res.append('Set-Cookie', issue());
+    res.locals.auth = kind;
+    res.locals.startFace = () => res.append('Set-Cookie', issueFace());
+    next();
   }
 
-  // Another way in (Face ID) gives out the very same session cookie.
-  return Object.assign(guard, { startSession: (res: Response) => void res.setHeader('Set-Cookie', issue()) });
+  // Another way in (Face ID) gives out the very same session, and the "just unlocked" mark.
+  return Object.assign(guard, { startSession: (res: Response) => void res.setHeader('Set-Cookie', [issue(), issueFace()]) });
 }

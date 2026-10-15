@@ -4,6 +4,8 @@ import { feedRoutes } from './feed.js';
 import { api } from './routes/index.js';
 import { whatsappWebhook } from './whatsapp.js';
 import { passkeyLogin } from './passkeys.js';
+import { config } from './config.js';
+import { state } from './store.js';
 import { bodyErrors, lastResort, noStore, securityHeaders } from './security.js';
 
 /** An Express app set up the way every MAAI server should be. */
@@ -42,7 +44,7 @@ export function createOnlineSite(inner: express.Express, options: { password: st
   // Twilio cannot sign in either; every request to this one proves itself with Twilio's signature.
   site.use(whatsappWebhook);
   site.use(express.json({ limit: '1mb' }));
-  const guard = createGuard('password', options.password, options.secret);
+  const guard = createGuard('password', options.password, options.secret, Date.now, { lockActive: () => state.passkeys.length > 0, lockMinutes: config.lockMinutes });
   // Signing in with Face ID has to be reachable before there is a session; it proves itself with a signature.
   site.use('/api/passkey/login', noStore, passkeyLogin(guard.startSession));
   site.use('/api', guard);

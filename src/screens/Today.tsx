@@ -52,15 +52,15 @@ export function Today() {
   const closeSheet = useCallback(() => setSelected(null), []);
   const unread = useMailCount();
 
-  const load = useCallback(() => {
-    api.today().then(setData).catch((e: Error) => setError(e.message));
+  const load = useCallback((background = false) => {
+    api.today(background === true).then(setData).catch((e: Error) => setError(e.message));
   }, []);
 
   useEffect(() => {
     load();
     const clock = setInterval(() => setNow(new Date()), 30_000);
     // Changes made elsewhere (an event added or deleted on the phone) show up within a minute.
-    const poll = setInterval(() => !document.hidden && load(), 60_000);
+    const poll = setInterval(() => !document.hidden && load(true), 60_000);
     return () => {
       clearInterval(clock);
       clearInterval(poll);

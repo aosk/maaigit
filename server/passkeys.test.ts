@@ -58,7 +58,8 @@ beforeAll(async () => {
   inner.get('*', (_req, res) => res.send('<!doctype html>'));
   site = await listen(createOnlineSite(inner, { password: PASSWORD, secret: 'test-secret' }));
   const res = await raw(site.port, 'POST', '/api/unlock', { body: JSON.stringify({ pin: PASSWORD }) });
-  cookie = String(res.headers['set-cookie']).split(';')[0];
+  // Both cookies, as a browser keeps them: the long session and the "just unlocked" mark.
+  cookie = (res.headers['set-cookie'] as unknown as string[]).map((c) => c.split(';')[0]).join('; ');
 });
 afterAll(() => site.close());
 beforeEach(() => {
@@ -126,12 +127,14 @@ describe('signing in with Face ID', () => {
     expect(options.allowCredentials.map((c) => c.id)).toEqual([device.id]);
     const res = await post('/api/passkey/login', { response: device.login(options) });
     expect(res.status).toBe(204);
+    const jar = (res.headers['set-cookie'] as unknown as string[]).map((c) => c.split(';')[0]).join('; ');
     const set = String(res.headers['set-cookie']);
     expect(set).toMatch(/maai_session=/);
+    expect(set).toMatch(/maai_face=/); // opening with Face ID is an unlock, so the app stays open for the next few minutes
     expect(set).toMatch(/HttpOnly/);
     expect(set).toMatch(/Secure/);
     expect(set).toMatch(/SameSite=Strict/);
-    expect((await raw(site.port, 'GET', '/api/status', { headers: { cookie: set.split(';')[0] } })).status).toBe(200);
+    expect((await raw(site.port, 'GET', '/api/status', { headers: { cookie: jar } })).status).toBe(200);
     expect(state.passkeys[0].counter).toBe(1);
     expect(state.passkeys[0].lastUsedAt).toBeTruthy();
   });

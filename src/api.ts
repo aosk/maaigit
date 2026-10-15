@@ -35,23 +35,24 @@ export interface NewAsanaTask {
 
 export const LOCKED_EVENT = 'maai:locked';
 
-async function request(method: string, url: string, body?: unknown): Promise<Response> {
+/** `background` marks the app's own automatic refreshes, which must not count as someone using it (see the Face ID lock). */
+async function request(method: string, url: string, body?: unknown, background = false): Promise<Response> {
   const res = await fetch(`/api${url}`, {
     method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(background ? { 'X-Maai-Background': '1' } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string; kind?: string };
+    const data = (await res.json().catch(() => ({}))) as { error?: string; kind?: string; face?: boolean };
     // Not signed in yet: show the PIN or password screen instead of an error.
-    if (res.status === 401 && data.error === 'locked') window.dispatchEvent(new CustomEvent(LOCKED_EVENT, { detail: data.kind }));
+    if (res.status === 401 && data.error === 'locked') window.dispatchEvent(new CustomEvent(LOCKED_EVENT, { detail: { kind: data.kind, face: data.face === true } }));
     throw new Error(data.error ?? `Request failed (${res.status})`);
   }
   return res;
 }
 
-async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await request(method, url, body);
+async function call<T>(method: string, url: string, body?: unknown, background = false): Promise<T> {
+  const res = await request(method, url, body, background);
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
@@ -96,7 +97,9 @@ export const api = {
   passkeyRegisterOptions: () => call<PublicKeyCredentialCreationOptionsJSON>('POST', '/passkeys/options', {}),
   passkeyRegister: (response: RegistrationResponseJSON, name: string) => call<{ id: string }>('POST', '/passkeys', { response, name }),
   deletePasskey: (id: string) => call<void>('DELETE', `/passkeys/${encodeURIComponent(id)}`),
-  today: () => call<TodayData>('GET', '/today'),
+  today: (background = false) => call<TodayData>('GET', '/today', undefined, background),
+  /** Tells the server someone is using MAAI, so the Face ID lock does not close it. */
+  active: () => call<void>('POST', '/active', {}),
   briefing: (lang: Lang) => call<Briefing>('GET', `/briefing?lang=${lang}`),
   addEvent: (e: { title: string; start: string; minutes: number }) => call<CalendarEvent>('POST', '/events', e),
   reminderDone: (id: string) => call<Reminder>('POST', `/reminders/${id}/done`, { done: true }),
@@ -131,7 +134,7 @@ export const api = {
   asanaControls: (gid: string) => call<AsanaControl[]>('GET', `/asana/tasks/${gid}/controls`),
   asanaSetStatus: (gid: string, change: { type: AsanaControl['type']; optionGid: string; fieldGid?: string }) => call<void>('POST', `/asana/tasks/${gid}/status`, change),
   approveAsanaNew: (id: string, task: NewAsanaTask) => call<Proposal>('POST', `/proposals/${id}/approve`, task),
-  mailCount: () => call<{ unread: number | null; total?: number }>('GET', '/mail/count'),
+  mailCount: () => call<{ unread: number | null; total?: number }>('GET', '/mail/count', undefined, true),
   mailDigest: (lang: Lang, refresh = false) => call<MailDigest>('GET', `/mail/digest?lang=${lang}${refresh ? '&refresh=1' : ''}`),
   notify: () => call<NotifyStatus>('GET', '/notify'),
   setNotifyPrefs: (p: Partial<NotifyPrefs>) => call<NotifyPrefs>('PATCH', '/notify/prefs', p),
@@ -139,8 +142,8 @@ export const api = {
   unsubscribe: (endpoint: string) => call<void>('POST', '/notify/unsubscribe', { endpoint }),
   testNotify: () => call<void>('POST', '/notify/test'),
   sendBriefing: () => call<void>('POST', '/notify/briefing'),
-  alerts: (since: string) => call<AppAlert[]>('GET', `/alerts?since=${encodeURIComponent(since)}`),
+  alerts: (since: string) => call<AppAlert[]>('GET', `/alerts?since=${encodeURIComponent(since)}`, undefined, true),
 
-  admin: () => call<AdminOverview>('GET', '/admin'),
+  admin: (background = false) => call<AdminOverview>('GET', '/admin', undefined, background),
   setAgent: (id: AgentSetting['id'], enabled: boolean) => call<AgentSetting>('PATCH', `/admin/agents/${id}`, { enabled }),
 };

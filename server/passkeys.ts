@@ -111,6 +111,8 @@ passkeyManagement.post('/passkeys', wrap(async (req, res) => {
     createdAt: new Date().toISOString(),
   });
   audit('Set up Face ID sign-in', 'User', 'approved');
+  // Setting it up was an unlock: do not ask for Face ID again straight away.
+  (res.locals.startFace as (() => void) | undefined)?.();
   res.status(201).json({ id: credential.id });
 }));
 

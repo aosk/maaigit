@@ -33,6 +33,8 @@ export const config = {
   liveSeconds: Math.max(2, num(process.env.MAAI_LIVE_SECONDS, 60)),
   /** Days WhatsApp messages received on the business number are kept. */
   whatsappDays: Math.max(1, Math.min(90, Math.round(num(process.env.MAAI_WHATSAPP_DAYS, 7)))),
+  /** Once Face ID is set up: minutes of not using MAAI before it asks for Face ID again. */
+  lockMinutes: Math.max(1, Math.min(1440, num(process.env.MAAI_LOCK_MINUTES, 5))),
   /** Required online: the password that protects MAAI. */
   password: process.env.MAAI_PASSWORD ?? '',
 };
