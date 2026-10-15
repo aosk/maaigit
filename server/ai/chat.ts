@@ -41,6 +41,17 @@ function forgetFiles(message: MessageParam) {
   message.content = message.content.map((block) => (block.type === 'image' || block.type === 'document' ? { type: 'text' as const, text: '[The file was shown here; its contents are not kept.]' } : block));
 }
 
+/**
+ * Claude's saved reasoning is signed against everything before it, so it stops being valid once an earlier message is
+ * edited (as when a file is replaced by a note). Removing it from the history is allowed and costs nothing here.
+ */
+function dropThinking(messages: MessageParam[], from = 0) {
+  for (let i = from; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.role === 'assistant' && Array.isArray(m.content)) m.content = m.content.filter((b) => b.type !== 'thinking' && b.type !== 'redacted_thinking');
+  }
+}
+
 /** Notes the user's taps on approval cards since the last message, so MAAI knows what really happened. */
 function decisionsSince(conversation: Conversation): string {
   const ids = new Set(conversation.turns.flatMap((t) => t.proposalIds ?? []));
@@ -82,9 +93,22 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
   messages.push({ role: 'user', content: files.length ? [...fileBlocks(files), { type: 'text', text: prompt }] : prompt });
   const created: Proposal[] = [];
   try {
-    const text = await runLoop(lang, messages, created, onEvent);
+    let text: string;
+    try {
+      text = await runLoop(lang, messages, created, onEvent);
+    } catch (error) {
+      // A saved conversation whose reasoning no longer matches its history heals itself: drop the reasoning, ask once more.
+      if (!/signature/i.test((error as Error).message ?? '')) throw error;
+      messages.length = before + 1;
+      created.length = 0;
+      dropThinking(messages);
+      text = await runLoop(lang, messages, created, onEvent);
+    }
     // The files were for this turn only: what is kept is the question and the answer, not the pixels.
-    if (files.length) forgetFiles(messages[before]);
+    if (files.length) {
+      forgetFiles(messages[before]);
+      dropThinking(messages, before + 1);
+    }
     return { text: text || (lang === 'ar' ? 'تم.' : 'Done.'), proposals: created };
   } catch (error) {
     // Roll back so a failed turn never leaves half a tool exchange in the history.

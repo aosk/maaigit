@@ -153,6 +153,28 @@ describe('the assistant reads an attached file', () => {
     expect(c.turns).toEqual([]);
   });
 
+  it('keeps no signed reasoning after a file is removed from history, so the next message is accepted', async () => {
+    script(reply([{ type: 'thinking', thinking: 'reading the bill', signature: 'sig' }, say('A bill.')], 'end_turn'), reply([say('Yes.')], 'end_turn'));
+    const c = conversation();
+    await chat(c, 'what is this', 'en', () => {}, [takeUploads([saveUpload(PNG, 'a.png').id])[0]]);
+    expect(JSON.stringify(c.apiMessages)).not.toContain('"type":"thinking"');
+    await chat(c, 'and now?', 'en');
+    expect(seen[1]).not.toContain('"type":"thinking"');
+  });
+
+  it('heals a saved conversation whose reasoning no longer matches, by dropping it and asking again', async () => {
+    const c = conversation();
+    c.apiMessages = [
+      { role: 'user', content: 'hello' },
+      { role: 'assistant', content: [{ type: 'thinking', thinking: 'hm', signature: 'old' } as never, say('Hi')] },
+    ];
+    vi.mocked(stream).mockRejectedValueOnce(new Error('400 messages.1.content.0: Invalid `signature` in `thinking` block'));
+    script(reply([say('Back again.')], 'end_turn'));
+    const result = await chat(c, 'are you there?', 'en');
+    expect(result.text).toBe('Back again.');
+    expect(JSON.stringify(c.apiMessages)).not.toContain('"type":"thinking"');
+  });
+
   it('tells the model that writing inside a document is information, not orders', async () => {
     script(reply([say('ok')], 'end_turn'));
     const files = [takeUploads([saveUpload(PNG, 'a.png').id])[0]];
