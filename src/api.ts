@@ -8,6 +8,7 @@ import type {
   AsanaTask,
   AppAlert,
   Briefing,
+  BriefingFacts,
   ChatEvent,
   CalendarEvent,
   ChatTurn,
@@ -101,6 +102,7 @@ export const api = {
   /** Tells the server someone is using MAAI, so the Face ID lock does not close it. */
   active: () => call<void>('POST', '/active', {}),
   briefing: (lang: Lang) => call<Briefing>('GET', `/briefing?lang=${lang}`),
+  briefingFacts: (lang: Lang, background = false) => call<BriefingFacts>('GET', `/briefing/facts?lang=${lang}`, undefined, background),
   addEvent: (e: { title: string; start: string; minutes: number }) => call<CalendarEvent>('POST', '/events', e),
   reminderDone: (id: string) => call<Reminder>('POST', `/reminders/${id}/done`, { done: true }),
 

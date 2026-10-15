@@ -197,6 +197,17 @@ export interface Briefing {
   source: 'claude' | 'demo';
 }
 
+/** The numbers behind the briefing card: what is next and what is waiting, counted fresh with no AI call. */
+export interface BriefingFacts {
+  /** The next event that has not started, with when to leave if it has travel time. */
+  next?: { id: string; title: string; start: string; place?: string; leaveAt?: string };
+  events: { left: number; total: number };
+  tasks: { overdue: number; dueToday: number };
+  reminders: { open: number };
+  email: { unread: number; toDecide: number; toReply: number };
+  whatsapp: { waiting: number };
+}
+
 export interface StatusInfo {
   aiConfigured: boolean;
   /** Gmail connected for sending, and from which address. */

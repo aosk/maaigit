@@ -3,6 +3,7 @@ import type { TodayData } from '../../shared/types.js';
 import { nextPrayer, prayersFor } from '../../shared/prayer.js';
 import { eventEnd } from '../../shared/schedule.js';
 import { briefing } from '../ai/briefing.js';
+import { briefingFacts } from '../ai/facts.js';
 import { refreshCalendar } from '../gcal.js';
 import { config } from '../config.js';
 import { allEvents, audit, id, save, state } from '../store.js';
@@ -29,6 +30,9 @@ today.get('/today', wrap(async (_req, res) => {
 }));
 
 today.get('/briefing', wrap(async (req, res) => res.json(await briefing(lang(req.query.lang)))));
+
+// The numbers on the briefing card; no AI, so the app can ask often.
+today.get('/briefing/facts', (req, res) => res.json(briefingFacts(lang(req.query.lang))));
 
 today.post('/events', wrap(async (req, res) => {
   const title = text(req.body.title, 200);

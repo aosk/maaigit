@@ -1,18 +1,18 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import type { Briefing, CalendarEvent, TodayData } from '../../shared/types';
+import type { Briefing, BriefingFacts, CalendarEvent, TodayData } from '../../shared/types';
 import { PRAYER_BUFFER_MINUTES } from '../../shared/prayer';
 import { dayPeriod, eventEnd, leaveTime } from '../../shared/schedule';
 import { api } from '../api';
 import { dayHeading, dayTime, hijri, sameDay, time } from '../format';
 import { useSettings } from '../settings';
 import { speak, stopSpeaking } from '../speech';
-import { Bell, Mic, Send, Speaker, Sun } from '../components/Icons';
+import { Bell, Mic } from '../components/Icons';
+import { BriefingCard } from '../components/BriefingCard';
 import { askAssistant, talkToAssistant } from '../nav';
 import { Logo } from '../components/Logo';
 import { AsanaTasks } from '../components/AsanaTasks';
 import { EventSheet } from '../components/EventSheet';
 import { useOnRefresh } from '../refresh';
-import { useMailCount } from '../useMailCount';
 
 type Row =
   | { kind: 'event'; at: string; end: number; event: CalendarEvent }
@@ -42,6 +42,7 @@ export function Today() {
   const lang = settings.lang;
   const [data, setData] = useState<TodayData | null>(null);
   const [brief, setBrief] = useState<Briefing | null>(null);
+  const [facts, setFacts] = useState<BriefingFacts | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [note, setNote] = useState('');
@@ -50,7 +51,6 @@ export function Today() {
   const [showPast, setShowPast] = useState(false);
   const [selected, setSelected] = useState<CalendarEvent | null>(null);
   const closeSheet = useCallback(() => setSelected(null), []);
-  const unread = useMailCount();
 
   const load = useCallback((background = false) => {
     api.today(background === true).then(setData).catch((e: Error) => setError(e.message));
@@ -67,6 +67,16 @@ export function Today() {
     };
   }, [load]);
 
+  // The counts and the next event on the briefing card: free to ask, so they follow the day closely.
+  const loadFacts = useCallback((background = false) => {
+    api.briefingFacts(lang, background === true).then(setFacts).catch(() => {});
+  }, [lang]);
+  useEffect(() => {
+    loadFacts();
+    const poll = setInterval(() => !document.hidden && loadFacts(true), 60_000);
+    return () => clearInterval(poll);
+  }, [loadFacts]);
+
   // Morning, noon or night: a new briefing is written when the time of day changes.
   const period = dayPeriod(now);
   const loadBrief = useCallback(() => {
@@ -79,6 +89,7 @@ export function Today() {
   useOnRefresh(() => {
     load();
     loadBrief();
+    loadFacts();
   });
 
   useEffect(() => () => stopSpeaking(), []);
@@ -146,19 +157,22 @@ export function Today() {
 
       {error && <div className="error" role="alert">{error}</div>}
 
-      <section className="card" aria-label={t.briefingTitle[brief?.period ?? period]}>
-        <div className="card-label"><Sun size={20} />{t.briefingTitle[brief?.period ?? period]}</div>
-        {brief ? <p aria-live="polite">{brief.text}</p> : <div className="skeleton" aria-label={t.loading}><span /><span /></div>}
-        <div className="row">
-          <button className="btn primary grow" onClick={toggleListen} disabled={!brief}>
-            <Speaker size={18} />{speaking ? t.stop : t.listen}
-          </button>
-          <button className="btn secondary grow" onClick={() => askAssistant(t.planMyDayPrompt)}>{t.planMyDay}</button>
-        </div>
-      </section>
+      <BriefingCard
+        period={period}
+        brief={brief}
+        facts={facts}
+        now={now}
+        speaking={speaking}
+        onListen={toggleListen}
+        onPlan={() => askAssistant(t.planMyDayPrompt)}
+        onOpenEvent={(id) => {
+          const event = data?.events.find((e) => e.id === id);
+          if (event) setSelected(event);
+        }}
+      />
 
-      <div className="between">
-        <h2 className="h2">{t.schedule}</h2>
+      <div className="between" id="today-schedule">
+        <h2 className="h2 sec sec-event">{t.schedule}</h2>
         {next && (
           <div className="pill">{t.inPrayer(t.prayers[next.name], t.hoursMinutes(Math.floor(minsToPrayer / 60), minsToPrayer % 60))}</div>
         )}
@@ -170,17 +184,6 @@ export function Today() {
             <span key={e.id} className="pill">{t.allDay}: {e.title}</span>
           ))}
         </div>
-      )}
-
-      {unread !== null && unread > 0 && (
-        <a className="card soft mail-teaser" href="#/inbox">
-          <span className="alert-icon"><Send size={18} /></span>
-          <span style={{ flex: 1 }}>
-            <strong>{t.unreadEmails(unread)}</strong>
-            <span className="sub" style={{ display: 'block' }}>{t.unreadEmailsHint}</span>
-          </span>
-          <span aria-hidden="true" className="chev">›</span>
-        </a>
       )}
 
       <section className="card flush" aria-label={t.schedule}>
@@ -215,9 +218,9 @@ export function Today() {
         </section>
       )}
 
-      <AsanaTasks />
+      <div id="today-tasks"><AsanaTasks /></div>
 
-      <h2 className="h2 extra">{t.reminders}</h2>
+      <h2 className="h2 extra sec sec-reminder" id="today-reminders">{t.reminders}</h2>
       <section className="card flush extra" aria-label={t.reminders}>
         {openReminders.length === 0 && <div className="check"><span className="sub">{t.noReminders}</span></div>}
         {openReminders.map((r) => (
@@ -233,7 +236,7 @@ export function Today() {
 
       {upcoming.length > 0 && (
         <>
-          <h2 className="h2 extra">{t.upcoming}</h2>
+          <h2 className="h2 extra sec sec-event">{t.upcoming}</h2>
           <section className="card flush extra">
             {upcoming.map((e) => (
               <button key={e.id} type="button" className="slot slot-btn" onClick={() => setSelected(e)} aria-haspopup="dialog">

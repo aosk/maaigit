@@ -72,7 +72,7 @@ export function AsanaTasks() {
   return (
     <>
       <div className="between extra">
-        <h2 className="h2">{t.asanaTasks}</h2>
+        <h2 className="h2 sec sec-task">{t.asanaTasks}</h2>
         <div className="row" style={{ gap: 8 }}>
           {data.overdue > 0 && <div className="pill warn">{t.asanaOverdue(data.overdue)}</div>}
           {data.configured && !data.error && (

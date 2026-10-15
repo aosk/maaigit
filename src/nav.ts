@@ -41,3 +41,13 @@ export function takeArrival(): { prompt?: string; listen: boolean } {
   sessionStorage.removeItem(LISTEN_KEY);
   return { prompt, listen };
 }
+
+/** Opens the Inbox on its Email or WhatsApp tab. */
+export function openInbox(view: 'email' | 'whatsapp') {
+  try {
+    sessionStorage.setItem('maai.inboxView', view);
+  } catch {
+    // the tab then opens on Email
+  }
+  go('inbox');
+}
