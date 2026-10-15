@@ -6,6 +6,7 @@ import { calendarStatus } from './gcal.js';
 import { asanaStatus } from './asana.js';
 import { googleWriteStatus } from './gwrite.js';
 import { whatsappStatus } from './whatsapp.js';
+import { newsStatus } from './news/index.js';
 import { config } from './config.js';
 
 /** What is connected, for Settings → Connections and the admin portal. */
@@ -16,6 +17,7 @@ export function status(): StatusInfo {
     calendar: { ...calendarStatus(), write: googleWriteStatus() },
     asana: asanaStatus(),
     whatsapp: whatsappStatus(),
+    news: newsStatus(),
     model: MODEL,
     location: { latitude: config.latitude, longitude: config.longitude, timezone: config.timezone },
   };

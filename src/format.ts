@@ -17,3 +17,13 @@ export const hijri = (iso: string | Date, lang: Lang) =>
 
 
 export const sameDay = (a: string | Date, b: string | Date) => new Date(a).toDateString() === new Date(b).toDateString();
+
+/** "2 hours ago" / "قبل ساعتين": how long ago something was. */
+export function ago(iso: string | Date, lang: Lang, now = Date.now()): string {
+  const minutes = Math.round((new Date(iso).getTime() - now) / 60_000);
+  const rtf = new Intl.RelativeTimeFormat(lang === 'ar' ? 'ar-SA' : 'en-GB', { numeric: 'auto' });
+  const abs = Math.abs(minutes);
+  if (abs < 60) return rtf.format(minutes, 'minute');
+  if (abs < 60 * 24) return rtf.format(Math.round(minutes / 60), 'hour');
+  return rtf.format(Math.round(minutes / 1440), 'day');
+}

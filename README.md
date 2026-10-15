@@ -192,6 +192,14 @@ Online, open **Settings → Face ID → Set up Face ID** (on the iPhone, from th
 Face ID. From then on the sign-in screen has a **Sign in with Face ID** button. MAAI keeps only a public key, never your face
 or fingerprint; the password still works. Remove a device any time in the same place.
 
+### News
+
+The **News** tab has two sections: **AI & Tech** and **Saudi Arabia**. MAAI reads only a fixed list of trusted sources (listed
+at the bottom of the tab, and in `server/news/sources.ts`), every 6 hours (`MAAI_NEWS_HOURS`), and shows the eight most
+important stories in each section, with a one-sentence summary in your language and "also reported by" when several sources
+carried the story. Tap a story to read it on the source's own site. **Refresh** reads the sources again now. If a source stops
+working, the tab shows which one. Set `MAAI_NEWS=off` to turn the section off.
+
 ### Reading voice
 
 MAAI reads the briefing and replies with the best voice installed on the device and says each sentence on its own, with

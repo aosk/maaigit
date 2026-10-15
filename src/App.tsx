@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSettings } from './settings';
-import { Calendar, Chat, Gear, Inbox as InboxIcon } from './components/Icons';
+import { Calendar, Chat, Gear, Inbox as InboxIcon, Newspaper } from './components/Icons';
 import { Today } from './screens/Today';
 import { Assistant } from './screens/Assistant';
 import { Inbox } from './screens/Inbox';
+import { News } from './screens/News';
 import { SettingsScreen } from './screens/Settings';
 import { Admin } from './admin/Admin';
 import { Unlock } from './screens/Unlock';
@@ -91,6 +92,7 @@ export function App() {
     { route: 'today', label: t.today, icon: <Calendar size={26} /> },
     { route: 'assistant', label: t.assistant, icon: <Chat size={26} /> },
     { route: 'inbox', label: t.inbox, icon: <InboxIcon size={26} /> },
+    { route: 'news', label: t.news, icon: <Newspaper size={26} /> },
     { route: 'settings', label: t.settings, icon: <Gear size={26} /> },
   ];
 
@@ -102,6 +104,7 @@ export function App() {
         {route === 'today' && <Today />}
         {route === 'assistant' && <Assistant />}
         {route === 'inbox' && <Inbox />}
+        {route === 'news' && <News />}
         {route === 'settings' && <SettingsScreen />}
       </main>
       <nav className="tabs" aria-label="Tabs">

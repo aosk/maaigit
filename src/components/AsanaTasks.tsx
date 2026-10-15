@@ -7,6 +7,8 @@ import { useOnRefresh } from '../refresh';
 import { Plus } from './Icons';
 import { AsanaNewFields } from './AsanaNewFields';
 
+/** How many tasks show before "Show more". */
+const SHOWN = 8;
 const EMPTY: NewAsanaTask = { name: '', notes: '', dueOn: '', projectGid: '' };
 const todayDate = () => new Date().toLocaleDateString('en-CA');
 
@@ -17,6 +19,7 @@ export function AsanaTasks() {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<NewAsanaTask>(EMPTY);
   const [projects, setProjects] = useState<AsanaProject[]>([]);
+  const [showAll, setShowAll] = useState(false);
   const [finished, setFinished] = useState<AsanaTask | null>(null);
   const [created, setCreated] = useState<AsanaTask | null>(null);
   const { busy, error, run } = useAction();
@@ -112,9 +115,14 @@ export function AsanaTasks() {
       ) : (
         data.tasks.length > 0 && (
           <section className="card flush extra" aria-label={t.asanaTasks}>
-            {data.tasks.map((task) => (
+            {(showAll ? data.tasks : data.tasks.slice(0, SHOWN)).map((task) => (
               <TaskRow key={task.gid} task={task} disabled={busy} onComplete={() => complete(task)} onChanged={load} />
             ))}
+            {data.tasks.length > SHOWN && (
+              <button className="slot earlier" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>
+                <span className="sub">{showAll ? t.asanaShowLess : t.asanaShowMore(data.tasks.length - SHOWN)}</span>
+              </button>
+            )}
           </section>
         )
       )}

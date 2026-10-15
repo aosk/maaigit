@@ -29,6 +29,8 @@ export const config = {
   timezone,
   /** How often everything (calendars, Asana, mail) is refreshed in the background. */
   syncHours: Math.max(0.25, num(process.env.MAAI_SYNC_HOURS, 3)),
+  /** Hours between automatic updates of the news section. */
+  newsHours: Math.max(1, Math.min(48, num(process.env.MAAI_NEWS_HOURS, 6))),
   /** How often your Google calendar is read live (seconds). */
   liveSeconds: Math.max(2, num(process.env.MAAI_LIVE_SECONDS, 60)),
   /** Days WhatsApp messages received on the business number are kept. */

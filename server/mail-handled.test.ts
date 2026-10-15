@@ -37,7 +37,11 @@ const card = (p: object): Proposal => {
   return proposal;
 };
 const approve = (p: Proposal, body: object = {}) => raw(server.port, 'POST', `/api/proposals/${p.id}/approve`, { body: JSON.stringify(body) });
-const sunday = () => new Date(Date.now() + 3 * 86_400_000).toISOString();
+/** 9:00 in Riyadh, three days from now: never inside a prayer time, whatever the hour the test runs at. */
+const sunday = () => {
+  const d = new Date(Date.now() + 3 * 86_400_000);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 6, 0)).toISOString();
+};
 
 describe('an email stops asking for a decision once it was dealt with', () => {
   it('is handled when the reply the assistant wrote for it is sent', async () => {

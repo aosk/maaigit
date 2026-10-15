@@ -13,11 +13,11 @@ function taskGid(value: string): string {
 }
 const nameOf = (gid: string) => cachedTasks().find((t) => t.gid === gid)?.name ?? gid;
 
-/** The open tasks that matter now (overdue first), for Today. */
+/** The open tasks (overdue first, then by date), for Today. The app shows the first few and lets you expand the rest. */
 asana.get('/asana', wrap(async (_req, res) => {
   if (!asanaConfigured) return res.json({ configured: false, open: 0, overdue: 0, dueToday: 0, tasks: [] } satisfies AsanaOverview);
   const tasks = await openTasks().catch(() => []);
-  const overview: AsanaOverview = { ...summarize(tasks), tasks: tasks.slice(0, 8) };
+  const overview: AsanaOverview = { ...summarize(tasks), tasks: tasks.slice(0, 80) };
   res.json(overview);
 }));
 

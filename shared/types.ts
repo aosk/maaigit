@@ -208,6 +208,44 @@ export interface BriefingFacts {
   whatsapp: { waiting: number };
 }
 
+export type NewsSection = 'tech' | 'saudi';
+
+/** One story in the news section: a headline from a trusted source, with a short summary written by MAAI. */
+export interface NewsItem {
+  id: string;
+  title: string;
+  /** One sentence in the app's language (empty if MAAI could not write one). */
+  summary: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+  /** Other trusted sources that reported the same story. */
+  alsoBy: string[];
+}
+
+/** A headline as read from a feed, before MAAI ranks it. */
+export interface NewsRaw {
+  id: string;
+  section: NewsSection;
+  source: string;
+  title: string;
+  /** A short plain-text excerpt from the feed. */
+  snippet: string;
+  url: string;
+  publishedAt: string;
+}
+
+export interface NewsDigest {
+  /** When the sources were last read. */
+  fetchedAt?: string;
+  source: 'claude' | 'ranked';
+  sections: Record<NewsSection, NewsItem[]>;
+  /** Each trusted source and whether it could be read last time, so a broken one is easy to see. */
+  sources: { name: string; section: NewsSection; ok: boolean; items: number; error?: string }[];
+  /** Hours between automatic updates. */
+  everyHours: number;
+}
+
 export interface StatusInfo {
   aiConfigured: boolean;
   /** Gmail connected for sending, and from which address. */
@@ -216,6 +254,8 @@ export interface StatusInfo {
   calendar?: CalendarStatus;
   /** Asana, read through a personal access token. */
   asana?: AsanaStatus;
+  /** The news section: when it was last updated, and how many trusted sources are working. */
+  news?: { updatedAt?: string; sourcesOk: number; sources: number };
   /** WhatsApp Business number, read and answered through Twilio. */
   whatsapp?: WhatsAppStatus;
   /** How this device signed in: not at all on the computer itself, a PIN at home, a password online. */
@@ -225,7 +265,7 @@ export interface StatusInfo {
 }
 
 /** What a Claude request was for, so token use can be split by feature. */
-export type UsagePurpose = 'chat' | 'briefing' | 'email-digest' | 'email-draft' | 'whatsapp';
+export type UsagePurpose = 'chat' | 'briefing' | 'email-digest' | 'email-draft' | 'whatsapp' | 'news';
 
 /** One day's Claude use for one feature. `input` excludes tokens read from the cache, which are in `cached`. */
 export interface UsageRow {
@@ -385,6 +425,8 @@ export interface AsanaTask {
   notes?: string;
   url: string;
   project?: string;
+  /** When it was created in Asana. */
+  createdAt?: string;
 }
 
 export interface AsanaProject {

@@ -16,7 +16,7 @@ const CACHE_MS = 5 * 60_000;
 /** An Asana problem in plain words. */
 export class AsanaError extends Error {}
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function callFull<T>(method: string, path: string, body?: unknown): Promise<{ data: T; next_page?: { offset?: string } | null }> {
   if (!TOKEN) throw new AsanaError('Asana is not connected. Add ASANA_TOKEN on Render → Environment.');
   const res = await fetch(`${API}${path}`, {
     method,
@@ -32,7 +32,23 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     const message = ((await res.json().catch(() => ({}))) as { errors?: { message?: string }[] }).errors?.[0]?.message;
     throw new AsanaError(`Asana said: ${message ?? res.status}`);
   }
-  return ((await res.json()) as { data: T }).data;
+  return (await res.json()) as { data: T; next_page?: { offset?: string } | null };
+}
+
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return (await callFull<T>(method, path, body)).data;
+}
+
+/** Every page of a list (Asana sends at most 100 at a time), up to `max` items. */
+async function callAll<T>(path: string, max = 500): Promise<T[]> {
+  const out: T[] = [];
+  let offset = '';
+  do {
+    const page = await callFull<T[]>('GET', `${path}${offset ? `&offset=${encodeURIComponent(offset)}` : ''}`);
+    out.push(...page.data);
+    offset = page.next_page?.offset ?? '';
+  } while (offset && out.length < max);
+  return out.slice(0, max);
 }
 
 interface RawTask {
@@ -41,12 +57,13 @@ interface RawTask {
   due_on: string | null;
   /** Set instead of due_on when the task has a due time. */
   due_at?: string | null;
+  created_at?: string;
   notes?: string;
   permalink_url: string;
   projects?: { name: string }[];
 }
 
-const FIELDS = 'name,due_on,due_at,notes,permalink_url,projects.name';
+const FIELDS = 'name,due_on,due_at,created_at,notes,permalink_url,projects.name';
 
 /** Only an https address is kept as a link (never "javascript:" or the like). */
 const webLink = (url: string | undefined) => (url && /^https:\/\/[\w.-]+\//.test(url) ? url : '');
@@ -58,7 +75,13 @@ const toTask = (t: RawTask): AsanaTask => ({
   notes: t.notes?.slice(0, 1500) || undefined,
   url: webLink(t.permalink_url),
   project: t.projects?.[0]?.name,
+  createdAt: t.created_at,
 });
+
+/** Dated tasks soonest first, then the ones without a date, newest first (so a task just added is easy to find). */
+export function sortTasks(tasks: AsanaTask[]): AsanaTask[] {
+  return [...tasks].sort((a, b) => (a.dueOn ?? '9999').localeCompare(b.dueOn ?? '9999') || (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+}
 
 let cache: { at: number; tasks: AsanaTask[] } | null = null;
 let lastError: string | undefined;
@@ -75,9 +98,9 @@ export async function openTasks(force = false): Promise<AsanaTask[]> {
   try {
     const me = await call<{ workspaces: { gid: string }[] }>('GET', '/users/me?opt_fields=workspaces');
     const lists = await Promise.all(
-      me.workspaces.map((w) => call<RawTask[]>('GET', `/tasks?assignee=me&workspace=${w.gid}&completed_since=now&limit=100&opt_fields=${FIELDS}`)),
+      me.workspaces.map((w) => callAll<RawTask>(`/tasks?assignee=me&workspace=${w.gid}&completed_since=now&limit=100&opt_fields=${FIELDS}`)),
     );
-    const tasks = lists.flat().map(toTask).sort((a, b) => (a.dueOn ?? '9999').localeCompare(b.dueOn ?? '9999'));
+    const tasks = sortTasks(lists.flat().map(toTask));
     cache = { at: Date.now(), tasks };
     lastError = undefined;
     return tasks;

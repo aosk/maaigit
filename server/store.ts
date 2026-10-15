@@ -38,6 +38,8 @@ interface State {
   agents: AgentSetting[];
   drafts: number;
   usage: { inputTokens: number; outputTokens: number; requests: number };
+  /** The latest headlines read from the trusted news sources (public titles and links only). */
+  news: { fetchedAt?: string; items: import('../shared/types.js').NewsRaw[]; sources: import('../shared/types.js').NewsDigest['sources'] };
   /** Face ID / fingerprint keys that can sign in without the password (the public half only). */
   passkeys: { id: string; publicKey: string; counter: number; transports?: string[]; name: string; createdAt: string; lastUsedAt?: string }[];
   /** Inbox emails the user dealt with through MAAI (a reply sent or a meeting booked), by email number. */
@@ -118,6 +120,7 @@ function seed(): State {
     aiCache: {},
     handledMail: {},
     passkeys: [],
+    news: { items: [], sources: [] },
     subscriptions: [],
     notifyPrefs: { ...DEFAULT_PREFS },
     sentAlerts: [],

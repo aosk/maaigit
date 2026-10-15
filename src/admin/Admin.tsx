@@ -171,6 +171,12 @@ export function Admin() {
                 offText: data?.status.asana?.error ? 'Sync failed' : 'Not connected',
               },
               {
+                name: 'News (trusted sources)',
+                ok: Boolean(data?.status.news?.sourcesOk),
+                okText: `${data?.status.news?.sourcesOk ?? 0} of ${data?.status.news?.sources ?? 0} sources`,
+                offText: data?.status.news?.updatedAt ? 'No source could be read' : 'Not read yet',
+              },
+              {
                 name: 'Google Calendar (read-only)',
                 ok: data?.status.calendar?.configured && !data.status.calendar.error,
                 okText: `${data?.status.calendar?.events ?? 0} events`,
