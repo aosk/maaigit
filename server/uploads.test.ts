@@ -166,7 +166,7 @@ describe('the assistant reads an attached file', () => {
     const c = conversation();
     c.apiMessages = [
       { role: 'user', content: 'hello' },
-      { role: 'assistant', content: [{ type: 'thinking', thinking: 'hm', signature: 'old' } as never, say('Hi')] },
+      { role: 'assistant', content: [{ type: 'thinking', thinking: 'hm', signature: 'old' } as never, say('Hi') as never] },
     ];
     vi.mocked(stream).mockRejectedValueOnce(new Error('400 messages.1.content.0: Invalid `signature` in `thinking` block'));
     script(reply([say('Back again.')], 'end_turn'));
