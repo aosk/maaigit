@@ -1,4 +1,4 @@
-import type { PrayerName, Proposal } from '../../shared/types.js';
+import type { PrayerName, ProfileCategory, Proposal } from '../../shared/types.js';
 import { clashesWithPrayer, prayersFor } from '../../shared/prayer.js';
 import { agentEnabled, id, state } from '../store.js';
 import { config } from '../config.js';
@@ -8,6 +8,7 @@ import { AsanaError, asanaConfigured, cachedTasks, getTask, projects, validateNe
 import { canAnswer, lastFrom, whatsappConfigured } from '../whatsapp.js';
 import { emailForClaude, dayTime } from './context.js';
 import { neutralize } from './untrusted.js';
+import { category, cleanFact } from '../profile.js';
 import type { Tool, ToolResult, ToolUse } from './claude.js';
 
 /**
@@ -320,7 +321,34 @@ const propose_reminder: ToolSpec<{ title: string; when: string; at: string; afte
   detail: lastTitle,
 };
 
-const SPECS: Record<string, ToolSpec<any>> = { read_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder };
+const propose_remember: ToolSpec<{ fact: string; category: ProfileCategory }> = {
+  definition: {
+    description:
+      'Show the user an approval card to remember one lasting fact about them (a preference, a person in their life, a routine, how they work). Use it when the user says "remember…" or clearly states something lasting about themselves. Never for one-off requests, private details about other people, or anything secret. Nothing is kept until the user approves.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fact: { type: 'string', description: 'One short sentence in the third person or neutral, in the language the user used, e.g. "Prefers meetings in the morning" or "Sarah is my manager".' },
+        category: { type: 'string', enum: ['preference', 'person', 'routine', 'work', 'other'] },
+      },
+      required: ['fact', 'category'],
+      additionalProperties: false,
+    },
+  },
+  run(input, created) {
+    let fact: string;
+    try {
+      fact = cleanFact(input.fact); // refuses secrets, ID numbers, health details and long text
+    } catch (error) {
+      throw new ToolError((error as Error).message);
+    }
+    created.push({ id: id(), kind: 'remember', status: 'pending', title: fact, category: category(input.category) });
+    return 'Approval card shown. Not kept yet; waiting for the user.';
+  },
+  detail: lastTitle,
+};
+
+const SPECS: Record<string, ToolSpec<any>> = { read_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder, propose_remember };
 
 export const tools: Tool[] = Object.entries(SPECS).map(([name, spec]) => ({ name, strict: true, ...spec.definition }) as Tool);
 

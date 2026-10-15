@@ -1,7 +1,7 @@
 /** Moving between screens. Hash routes (#/assistant) so links work without any server setup. */
 
-export type Route = 'today' | 'assistant' | 'inbox' | 'news' | 'settings' | 'admin';
-const ROUTES: Route[] = ['today', 'assistant', 'inbox', 'news', 'settings', 'admin'];
+export type Route = 'today' | 'assistant' | 'inbox' | 'news' | 'settings' | 'profile' | 'admin';
+const ROUTES: Route[] = ['today', 'assistant', 'inbox', 'news', 'settings', 'profile', 'admin'];
 
 /** Sections of the admin portal; their links (#/admin/agents, or plain #agents) open the portal there. */
 const ADMIN_SECTIONS = ['agents', 'usage', 'cloud', 'integrations', 'audit'] as const;

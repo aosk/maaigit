@@ -89,4 +89,4 @@ export async function refreshContext(): Promise<void> {
 }
 
 /** The context block that starts every user message to Claude. */
-export const withContext = (text: string) => `<context>\n${contextNote()}\n</context>\n\n${text}`;
+export const withContext = (text: string, about = '') => `<context>\n${contextNote()}${about ? `\n\n${about}` : ''}\n</context>\n\n${text}`;

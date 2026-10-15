@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Proposal, StreamEvent } from '../../shared/types.js';
 import { chat } from '../ai/chat.js';
+import { addFact } from '../profile.js';
 import { releaseUploads, takeUploads } from '../uploads.js';
 import { sendMail } from '../mail.js';
 import { createTask, updateTask, validateNewTask } from '../asana.js';
@@ -111,6 +112,12 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
       const created = await createTask(task);
       Object.assign(p, { title: task.name, notes: task.notes, dueOn: task.dueOn, projectGid: task.projectGid, taskUrl: created.url });
       return `Created Asana task: ${task.name}`;
+    }
+    case 'remember': {
+      // The card is editable: keep exactly what the user approved.
+      const fact = addFact({ text: body.text ?? p.title, category: body.category ?? p.category, source: 'assistant' });
+      Object.assign(p, { title: fact.text, category: fact.category });
+      return `Remembered: ${fact.text}`;
     }
     case 'reminder':
       state.reminders.push({ id: id(), title: p.title, when: p.when, at: p.at, prayer: p.prayer, offsetMinutes: p.offsetMinutes, repeat: p.repeat, done: false });

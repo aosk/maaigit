@@ -9,6 +9,7 @@ import { EmailCard } from './EmailCard';
 import { AsanaCard } from './AsanaCard';
 import { AsanaNewCard } from './AsanaNewCard';
 import { WhatsAppCard } from './WhatsAppCard';
+import { RememberCard } from './RememberCard';
 
 /** An approval card from the assistant: nothing happens until the user approves it. */
 export function ProposalCard({ proposal, gmail, onChange }: { proposal: Proposal; gmail: boolean; onChange: (p: Proposal) => void }) {
@@ -16,10 +17,11 @@ export function ProposalCard({ proposal, gmail, onChange }: { proposal: Proposal
   if (proposal.kind === 'whatsapp') return <WhatsAppCard proposal={proposal} onChange={onChange} />;
   if (proposal.kind === 'asana') return <AsanaCard proposal={proposal} onChange={onChange} />;
   if (proposal.kind === 'asana_new') return <AsanaNewCard proposal={proposal} onChange={onChange} />;
+  if (proposal.kind === 'remember') return <RememberCard proposal={proposal} onChange={onChange} />;
   return <PlanCard proposal={proposal} onChange={onChange} />;
 }
 
-function PlanCard({ proposal, onChange }: { proposal: Exclude<Proposal, { kind: 'email' | 'whatsapp' | 'asana' | 'asana_new' }>; onChange: (p: Proposal) => void }) {
+function PlanCard({ proposal, onChange }: { proposal: Exclude<Proposal, { kind: 'email' | 'whatsapp' | 'asana' | 'asana_new' | 'remember' }>; onChange: (p: Proposal) => void }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   const [picked, setPicked] = useState(proposal.kind === 'meeting' ? proposal.chosen ?? proposal.options[0]?.start : undefined);

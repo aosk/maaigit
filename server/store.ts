@@ -16,6 +16,7 @@ import type {
   InboxMessage,
   Lang,
   NotifyPrefs,
+  ProfileFact,
   Proposal,
   Reminder,
 } from '../shared/types.js';
@@ -59,6 +60,8 @@ interface State {
   alerts: AppAlert[];
   /** When each WhatsApp number was last sent the automatic "received" note. */
   whatsappAcks: Record<string, string>;
+  /** What MAAI knows about the user: short facts the user wrote or approved. */
+  profile: { enabled: boolean; facts: ProfileFact[] };
 }
 
 export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10, briefing: false, briefingTime: '07:00' };
@@ -129,6 +132,7 @@ function seed(): State {
     sentAlerts: [],
     alerts: [],
     whatsappAcks: {},
+    profile: { enabled: true, facts: [] },
   };
 }
 
@@ -159,6 +163,7 @@ function load(): State {
   for (const e of saved.events) if (SAMPLE_EVENTS.has(`${e.title}|${e.place}`)) e.demo = true;
   // Settings added after the file was saved get their defaults.
   saved.notifyPrefs = { ...DEFAULT_PREFS, ...saved.notifyPrefs };
+  saved.profile = { enabled: saved.profile?.enabled !== false, facts: saved.profile?.facts ?? [] };
   return saved;
 }
 

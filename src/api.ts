@@ -1,7 +1,10 @@
-import type { UploadInfo } from '../shared/types';
 import type { AuthenticationResponseJSON, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
 import type {
   AdminOverview,
+  ProfileCategory,
+  ProfileFact,
+  ProfileInfo,
+  UploadInfo,
   AgentSetting,
   AsanaControl,
   AsanaOverview,
@@ -122,6 +125,13 @@ export const api = {
     return (await res.json()) as UploadInfo;
   },
   send: async (text: string, lang: Lang, onEvent: (e: ChatEvent) => void, attachments: string[] = []) => readStream(await request('POST', '/chat/stream', { text, lang, attachments }), onEvent),
+  profile: () => call<ProfileInfo>('GET', '/profile'),
+  addFact: (text: string, category: ProfileCategory) => call<ProfileFact>('POST', '/profile/facts', { text, category }),
+  updateFact: (id: string, change: { text?: string; category?: ProfileCategory; pinned?: boolean }) => call<ProfileFact>('PATCH', `/profile/facts/${id}`, change),
+  deleteFact: (id: string) => call<void>('DELETE', `/profile/facts/${id}`),
+  useProfile: (enabled: boolean) => call<ProfileInfo>('PUT', '/profile/enabled', { enabled }),
+  forgetProfile: () => call<void>('DELETE', '/profile'),
+  approveRemember: (id: string, fact: { text: string; category: ProfileCategory }) => call<Proposal>('POST', `/proposals/${id}/approve`, fact),
   resetChat: () => call<void>('POST', '/chat/reset'),
   approve: (id: string, start?: string) => call<Proposal>('POST', `/proposals/${id}/approve`, { start }),
   approveEmail: (id: string, mail: { to: string; subject: string; body: string }) => call<Proposal>('POST', `/proposals/${id}/approve`, mail),

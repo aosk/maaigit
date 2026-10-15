@@ -8,12 +8,17 @@ import { CalendarFeed } from '../components/CalendarFeed';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { FaceId } from '../components/FaceId';
 import { VoiceSettings } from '../components/VoiceSettings';
+import { Chevron } from '../components/Icons';
 
 export function SettingsScreen() {
   const { t, settings, update, toggle } = useSettings();
   const [status, setStatus] = useState<StatusInfo | null>(null);
+  const [known, setKnown] = useState<number | null>(null);
 
-  const loadStatus = useCallback(() => api.status().then(setStatus).catch(() => {}), []);
+  const loadStatus = useCallback(() => {
+    api.profile().then((p) => setKnown(p.facts.length)).catch(() => {});
+    return api.status().then(setStatus).catch(() => {});
+  }, []);
   useOnRefresh(() => void loadStatus());
   useEffect(() => {
     void loadStatus();
@@ -48,6 +53,14 @@ export function SettingsScreen() {
           </div>
         </div>
       </section>
+
+      <a className="card link-row" href="#/profile">
+        <span>
+          <strong>{t.profileTitle}</strong>
+          <span className="sub" style={{ display: 'block' }}>{known === null ? t.profileRowHint : `${t.profileRow(known)} · ${t.profileRowHint}`}</span>
+        </span>
+        <Chevron size={20} />
+      </a>
 
       <div className="section-label">{t.connections}</div>
       <section className="card" aria-label={t.connections}>

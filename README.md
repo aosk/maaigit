@@ -208,6 +208,10 @@ The admin portal shows what **Anthropic itself** reports for the key MAAI uses:
 - **Tokens and cost, last 30 days:** needs an **Admin API key** (Claude Console → Settings → Admin keys; organization accounts only, not individual ones). Add it on Render as `ANTHROPIC_ADMIN_KEY`. MAAI finds which key in your organization is its own by how it starts and ends, and shows that key's tokens per day next to what MAAI itself counted. Anthropic reports **cost** only for the whole organization, so that number is the organization's. An Admin key can manage the organization: add one only if you are comfortable, and delete it in the Console to cut MAAI off.
 - Your **remaining prepaid credit** is not available through any API. See it in the Claude Console under Usage and Cost.
 
+### What MAAI knows about me
+
+**Settings → What MAAI knows about me** lists the short facts MAAI uses to fit its answers to you ("Sarah is my manager", "I prefer meetings in the morning", "call me Abu Faisal"). Add one yourself, or tell the assistant "remember that…" and approve the card it shows: nothing is saved without your tap. You can edit or delete any fact, mark one "always use", pause the whole profile, download a copy, or forget everything. Passwords, ID, card and account numbers and health details are never kept. Only the few facts that match your question are sent to Claude with it. The facts are saved on your own Render disk, with your reminders.
+
 ### Photos and documents
 
 Tap the **paperclip** in the assistant, pick a photo (a bill, a letter, a screenshot) or a PDF, and send. MAAI reads it, including Arabic and English text, gives you a short brief, and prepares a **reminder** (for a date or deadline) or an **Asana task** (for work to do) as a card you approve. Up to 4 files per message, photos up to 5 MB, PDFs up to 10 MB. Files are held in the server's memory for at most 30 minutes and are never saved; only the file name stays in the chat. Photos and PDFs use more of your Claude allowance than plain text.

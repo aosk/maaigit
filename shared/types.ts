@@ -146,7 +146,40 @@ export type Proposal =
       /** The project to put it in, or empty for just the user's own tasks. */
       projectGid: string;
       taskUrl?: string;
+    }
+  | {
+      id: string;
+      kind: 'remember';
+      status: ProposalStatus;
+      /** The fact to keep about the user, in one short sentence (editable on the card). */
+      title: string;
+      category: ProfileCategory;
     };
+
+/** What a fact in the user's profile is about. */
+export type ProfileCategory = 'preference' | 'person' | 'routine' | 'work' | 'other';
+
+/** One thing MAAI knows about the user. Every fact is visible, editable and deletable in Settings. */
+export interface ProfileFact {
+  id: string;
+  text: string;
+  category: ProfileCategory;
+  /** Typed by the user, or proposed by MAAI and approved. */
+  source: 'user' | 'assistant';
+  createdAt: string;
+  updatedAt: string;
+  /** Always given to MAAI, whatever the question. */
+  pinned?: boolean;
+  /** How many answers it has helped with. */
+  uses: number;
+  lastUsedAt?: string;
+}
+
+export interface ProfileInfo {
+  enabled: boolean;
+  facts: ProfileFact[];
+  limits: { maxFacts: number; maxLength: number };
+}
 
 type ProposalStatus = 'pending' | 'approved' | 'cancelled';
 

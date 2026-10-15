@@ -7,6 +7,7 @@ import { Inbox } from './screens/Inbox';
 import { News } from './screens/News';
 import { SettingsScreen } from './screens/Settings';
 import { Admin } from './admin/Admin';
+import { ProfileScreen } from './screens/Profile';
 import { Unlock } from './screens/Unlock';
 import { LOCKED_EVENT, api } from './api';
 import { AlertBanner } from './components/AlertBanner';
@@ -106,10 +107,11 @@ export function App() {
         {route === 'inbox' && <Inbox />}
         {route === 'news' && <News />}
         {route === 'settings' && <SettingsScreen />}
+        {route === 'profile' && <ProfileScreen />}
       </main>
       <nav className="tabs" aria-label="Tabs">
         {tabs.map((tab) => (
-          <a key={tab.route} className="tab" href={`#/${tab.route}`} aria-current={route === tab.route ? 'page' : undefined}>
+          <a key={tab.route} className="tab" href={`#/${tab.route}`} aria-current={(route === 'profile' ? 'settings' : route) === tab.route ? 'page' : undefined}>
             {tab.icon}
             {tab.label}
             {tab.route === 'inbox' && unread ? <span className="tab-badge" aria-label={t.unreadEmails(unread)}>{unread > 99 ? '99+' : unread}</span> : null}

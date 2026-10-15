@@ -436,3 +436,15 @@ a { color: var(--tint-text); }
 .seg .count { font-size: 0.8em; height: 22px; min-width: 22px; margin-inline-start: 6px; }
 
 .h2.sec { white-space: nowrap; }
+
+/* ---------- Profile ---------- */
+.card.link-row { flex-direction: row; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: inherit; text-decoration: none; }
+.link-row .chev { stroke: var(--text2); }
+html[dir='rtl'] .link-row svg { transform: scaleX(-1); }
+.back-link { align-self: flex-start; text-decoration: none; padding-inline-start: 0; }
+.fact { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; border-bottom: 1px solid var(--sep); }
+.fact:last-child { border-bottom: none; }
+.fact-text { line-height: 1.4; }
+.fact-actions { gap: 4px; align-items: center; }
+.fact-actions .btn { min-height: 44px; padding: 0 12px; }
+.fact-actions .btn[aria-checked='true'] { background: var(--tint-soft); }
