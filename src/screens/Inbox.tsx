@@ -62,8 +62,12 @@ function Reply({ message, gmail, whatsapp, onBack, onChanged }: { message: Inbox
     });
 
   async function sent() {
-    await api.replied(message.id);
-    onChanged();
+    try {
+      await api.replied(message.id);
+      onChanged();
+    } catch {
+      // Marking it as answered is a convenience: the message itself was handled elsewhere.
+    }
   }
 
   async function copy() {
@@ -140,7 +144,7 @@ function Reply({ message, gmail, whatsapp, onBack, onChanged }: { message: Inbox
             <div className="sub" role="note">{t.whatsappWindowClosed}</div>
           )
         )}
-        <a className={`btn ${message.via === 'twilio' && canSend ? 'secondary' : 'primary'} big`} href={waLink} target="_blank" rel="noreferrer" onClick={sent} aria-disabled={busy || !draft} style={{ textDecoration: 'none' }}>
+        <a className={`btn ${message.via === 'twilio' && canSend ? 'secondary' : 'primary'} big`} href={waLink} target="_blank" rel="noreferrer" onClick={(e) => (busy || !draft ? e.preventDefault() : void sent())} aria-disabled={busy || !draft} style={{ textDecoration: 'none' }}>
           <Send size={20} />{t.openWhatsApp}
         </a>
         <div className="row">
@@ -178,10 +182,21 @@ export function Inbox() {
   useEffect(loadCounts, [loadCounts, replying]);
   useOnRefresh(loadCounts);
   // Email first; the choice is remembered for this visit.
-  const [view, setView] = useState<View>(() => (sessionStorage.getItem(VIEW_KEY) as View | null) ?? 'email');
+  // Some browsers refuse storage (private mode, blocked site data): the choice is then just not remembered.
+  const [view, setView] = useState<View>(() => {
+    try {
+      return (sessionStorage.getItem(VIEW_KEY) as View | null) ?? 'email';
+    } catch {
+      return 'email';
+    }
+  });
   const pickView = (v: View) => {
     setView(v);
-    sessionStorage.setItem(VIEW_KEY, v);
+    try {
+      sessionStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* not remembered */
+    }
   };
   useEffect(() => {
     api.status().then(setStatus).catch(() => {});

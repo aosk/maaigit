@@ -4,7 +4,7 @@ import { allEvents, audit, state } from '../store.js';
 import { status } from '../status.js';
 import { recentUsage } from '../usage.js';
 import { cloudUsage } from '../anthropic-usage.js';
-import { find, wrap } from './http.js';
+import { HttpError, find, wrap } from './http.js';
 
 export const admin = Router();
 
@@ -36,7 +36,8 @@ admin.get('/admin/cloud', wrap(async (req, res) => res.json(await cloudUsage({ f
 
 admin.patch('/admin/agents/:id', (req, res) => {
   const agent = find(state.agents, req.params.id);
-  agent.enabled = Boolean(req.body.enabled);
+  if (typeof req.body?.enabled !== 'boolean') throw new HttpError(400, 'Say whether to turn it on or off.');
+  agent.enabled = req.body.enabled;
   audit(`${agent.name} agent turned ${agent.enabled ? 'on' : 'off'}`, 'Admin', 'done');
   res.json(agent);
 });

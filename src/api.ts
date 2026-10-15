@@ -43,9 +43,10 @@ export interface NewAsanaTask {
 export const LOCKED_EVENT = 'maai:locked';
 
 /** `background` marks the app's own automatic refreshes, which must not count as someone using it (see the Face ID lock). */
-async function request(method: string, url: string, body?: unknown, background = false): Promise<Response> {
+async function request(method: string, url: string, body?: unknown, background = false, signal?: AbortSignal): Promise<Response> {
   const res = await fetch(`/api${url}`, {
     method,
+    signal,
     headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(background ? { 'X-Maai-Background': '1' } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -63,27 +64,51 @@ async function call<T>(method: string, url: string, body?: unknown, background =
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
+/** How long a reply may go without a single byte (the server sends a keep-alive every 15 s) before it is given up on. */
+const IDLE_MS = 60_000;
+
 /** Reads server-sent events ("data: {...}" blocks) and resolves with the final reply. */
-async function readStream(res: Response, onEvent: (e: ChatEvent) => void): Promise<{ reply: string; proposals: Proposal[] }> {
+async function readStream(res: Response, onEvent: (e: ChatEvent) => void, idleMs = IDLE_MS): Promise<{ reply: string; proposals: Proposal[] }> {
   if (!res.body) throw new Error('This browser cannot read live replies.');
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  // A phone that went to sleep or lost signal leaves the socket half open: without this the screen would wait for ever.
+  let stalled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      stalled = true;
+      void reader.cancel().catch(() => {});
+    }, idleMs);
+  };
   let buffer = '';
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += value;
-    let cut;
-    while ((cut = buffer.indexOf('\n\n')) >= 0) {
-      const line = buffer.slice(0, cut).split('\n').find((l) => l.startsWith('data: '));
-      buffer = buffer.slice(cut + 2);
-      if (!line) continue;
-      const event = JSON.parse(line.slice(6)) as StreamEvent;
-      if (event.type === 'done') return { reply: event.reply, proposals: event.proposals };
-      if (event.type === 'error') throw new Error(event.error);
-      onEvent(event);
+  try {
+    arm();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      arm();
+      buffer += value;
+      let cut;
+      while ((cut = buffer.indexOf('\n\n')) >= 0) {
+        const line = buffer.slice(0, cut).split('\n').find((l) => l.startsWith('data: '));
+        buffer = buffer.slice(cut + 2);
+        if (!line) continue;
+        const event = JSON.parse(line.slice(6)) as StreamEvent;
+        if (event.type === 'done') return { reply: event.reply, proposals: event.proposals };
+        if (event.type === 'error') throw new Error(event.error);
+        onEvent(event);
+      }
     }
+  } finally {
+    clearTimeout(timer);
+    void reader.cancel().catch(() => {});
   }
-  throw new Error('The connection closed before MAAI finished. Try again.');
+  throw new Error(
+    stalled
+      ? 'The connection stopped responding. Check your signal, then open the assistant again: the answer may already be there.'
+      : 'The connection closed before MAAI finished. Try again.',
+  );
 }
 
 export interface Passkey {
@@ -113,7 +138,6 @@ export const api = {
   reminderDone: (id: string) => call<Reminder>('POST', `/reminders/${id}/done`, { done: true }),
 
   chat: () => call<{ turns: ChatTurn[]; proposals: Proposal[] }>('GET', '/chat'),
-  /** Streams MAAI's progress (thinking, steps, reply text) and resolves with the final reply. */
   /** Uploads a photo or PDF for the assistant; answers with the id to attach to the next message. */
   upload: async (file: Blob, name: string): Promise<UploadInfo> => {
     const res = await fetch('/api/uploads', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(name) }, body: file });
@@ -124,7 +148,9 @@ export const api = {
     }
     return (await res.json()) as UploadInfo;
   },
-  send: async (text: string, lang: Lang, onEvent: (e: ChatEvent) => void, attachments: string[] = []) => readStream(await request('POST', '/chat/stream', { text, lang, attachments }), onEvent),
+  /** Streams MAAI's progress (thinking, steps, reply text) and resolves with the final reply. `signal` abandons it (the screen was left). */
+  send: async (text: string, lang: Lang, onEvent: (e: ChatEvent) => void, attachments: string[] = [], signal?: AbortSignal) =>
+    readStream(await request('POST', '/chat/stream', { text, lang, attachments }, false, signal), onEvent),
   profile: () => call<ProfileInfo>('GET', '/profile'),
   addFact: (text: string, category: ProfileCategory) => call<ProfileFact>('POST', '/profile/facts', { text, category }),
   updateFact: (id: string, change: { text?: string; category?: ProfileCategory; pinned?: boolean }) => call<ProfileFact>('PATCH', `/profile/facts/${id}`, change),

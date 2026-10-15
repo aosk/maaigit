@@ -4,6 +4,22 @@ import { compare, eventFromApi, type ApiEvent } from './livecal';
 
 const api = (e: Partial<ApiEvent> = {}): ApiEvent => ({ id: 'abc123', summary: 'Design review', start: { dateTime: '2026-10-14T10:00:00+03:00' }, end: { dateTime: '2026-10-14T11:00:00+03:00' }, ...e });
 
+describe('events outside the dates Google is asked for', () => {
+  const window = { timeMin: '2026-10-10T00:00:00.000Z', timeMax: '2026-11-10T00:00:00.000Z' };
+  const old = { id: 'e1', title: 'Old', start: '2026-08-01T07:00:00.000Z', minutes: 30, googleId: 'g1' } as never;
+  const far = { id: 'e2', title: 'Far', start: '2026-12-01T07:00:00.000Z', minutes: 30, googleId: 'g2' } as never;
+  const inside = { id: 'e3', title: 'In', start: '2026-10-20T07:00:00.000Z', minutes: 30, googleId: 'g3' } as never;
+
+  it('does not count them as deleted: nothing asks Google about them every minute', () => {
+    expect(compare([old, far], [], window).missing).toEqual([]);
+  });
+
+  it('still notices one inside the dates that has disappeared', () => {
+    expect(compare([inside], [], window).missing).toEqual([inside]);
+    expect(compare([inside], []).missing).toEqual([inside]);
+  });
+});
+
 describe('events from the Google API', () => {
   it('turns a timed event into a MAAI event with its details and join link', () => {
     const e = eventFromApi(api({ location: 'Room 4', description: 'Agenda<br>1. Mockups', hangoutLink: 'https://meet.google.com/abc-defg-hij' }))!;

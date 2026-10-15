@@ -103,8 +103,9 @@ Layering rule: `routes → services (ai, asana, gcal…) → store`. No module i
 
 | Command | What it does |
 |---|---|
-| `npm run check` | Types + all tests + dead-code scan + dependency audit (run before every push) |
-| `npm test` | 209 tests: unit, API, security, fuzz, injection, assistant approval flow |
+| `npm run check` | Types + lint + all tests + dead-code scan + dependency audit (run before every push; the same runs in GitHub Actions) |
+| `npm run lint` | ESLint with type-aware rules (forgotten `await`, unhandled promises, unsafe `any`) and React hook rules; 0 errors required, a few React-Compiler warnings are known |
+| `npm test` | 430+ tests: unit, API, security, fuzz, injection, assistant approval flow, double-tap and concurrency, storage failures |
 | `npm run test:security` | Only the security suites |
 | `npm run coverage` | Coverage report (now ≈57% statements; server/routes 84%, auth/store/sync ≈100%) |
 | `npm run unused` | knip: unused files/exports/dependencies |
@@ -120,6 +121,8 @@ Security suites: every API route is called without a session in 16 URL disguises
 - **Calendar not matching:** Settings shows the live-read health; check the calendar is shared with the service account.
 
 ## 7. Known limits & improvement backlog
+
+**From the latest expert review (open):** the passkey `login/options` route has no per-IP rate limit and one global failure counter; upstream failures (Gmail, Twilio, Asana) answer 400 rather than 502; reading one email can overwrite the shared 14-day inbox cache; `fetch` calls to Google have no timeout; WhatsApp digest results are cached even when empty; the 14 React-Compiler lint warnings (refs-in-render, set-state-in-effect); pasted-message delete has no undo; out-of-order responses on rapid language switches; the edit sheet has no focus trap; admin screens are English only.
 
 1. Single user, single global state (`state` in `store.ts`) — multi-user needs a repository layer and a database.
 2. Lockout is global (an attacker could lock you out for minutes); make it per-IP and add a passkey/2FA login. Enforce a 12+ character password.

@@ -38,8 +38,19 @@ export function Assistant() {
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<Pending[]>([]);
+  // What the long-lived callbacks (dictation, a streamed reply, an upload) must see now, not as it was when they started.
+  const alive = useRef(true);
+  const busyRef = useRef(false);
+  const pendingRef = useRef<Pending[]>([]);
+  const turnsRef = useRef<ChatTurn[]>([]);
+  const abortRef = useRef<AbortController>();
+  const previews = useRef(new Set<string>());
+  busyRef.current = busy;
+  pendingRef.current = pending;
+  turnsRef.current = turns;
 
   useEffect(() => {
+    alive.current = true;
     api.status().then(setStatus).catch(() => {});
     api
       .chat()
@@ -52,8 +63,12 @@ export function Assistant() {
       })
       .catch((e: Error) => setError(e.message));
     return () => {
+      alive.current = false;
+      abortRef.current?.abort();
       stopRef.current?.();
       stopSpeaking();
+      for (const url of previews.current) URL.revokeObjectURL(url);
+      previews.current.clear();
     };
   }, []);
 
@@ -68,57 +83,82 @@ export function Assistant() {
       const key = ++pendingKey;
       try {
         const ready = await prepare(file);
+        if (!alive.current) return;
         const preview = ready.kind === 'image' ? URL.createObjectURL(ready.blob) : undefined;
+        if (preview) previews.current.add(preview);
         setPending((ps) => [...ps, { key, name: ready.name, kind: ready.kind, preview, status: 'uploading' }]);
         try {
           const info = await api.upload(ready.blob, ready.name);
-          setPending((ps) => ps.map((p) => (p.key === key ? { ...p, status: 'ready', id: info.id } : p)));
+          if (alive.current) setPending((ps) => ps.map((p) => (p.key === key ? { ...p, status: 'ready', id: info.id } : p)));
         } catch (e) {
+          if (preview) forgetPreview(preview);
+          if (!alive.current) return;
           setPending((ps) => ps.filter((p) => p.key !== key));
-          if (preview) URL.revokeObjectURL(preview);
           setError(t.attachFailed((e as Error).message));
         }
       } catch (e) {
         const err = e as Error;
+        if (!alive.current) return;
         setError(err instanceof AttachError ? (err.reason === 'too-big' ? t.attachTooBig : t.attachNotSupported) : t.attachFailed(err.message));
       }
     }
     if (fileRef.current) fileRef.current.value = '';
   }
 
+  function forgetPreview(url: string) {
+    URL.revokeObjectURL(url);
+    previews.current.delete(url);
+  }
+
   function removePending(key: number) {
-    setPending((ps) => {
-      const gone = ps.find((p) => p.key === key);
-      if (gone?.preview) URL.revokeObjectURL(gone.preview);
-      return ps.filter((p) => p.key !== key);
-    });
+    const gone = pendingRef.current.find((p) => p.key === key);
+    if (gone?.preview) forgetPreview(gone.preview);
+    setPending((ps) => ps.filter((p) => p.key !== key));
   }
 
   async function send(text: string) {
-    if (busy) return;
-    if (pending.some((p) => p.status === 'uploading')) return setError(t.attachWaiting);
-    const files = pending.filter((p) => p.id);
+    if (busyRef.current || !alive.current) return;
+    const waiting = pendingRef.current;
+    if (waiting.some((p) => p.status === 'uploading')) return setError(t.attachWaiting);
+    const files = waiting.filter((p) => p.id);
     const message = text.trim() || (files.length ? t.attachDefaultPrompt : '');
     if (!message) return;
+    busyRef.current = true;
     setInput('');
     setError('');
     setBusy(true);
     const shown = text.trim() || (files.length ? '' : message);
+    const base = turnsRef.current.length;
     setTurns((ts) => [...ts, { role: 'user', text: shown, attachments: files.length ? files.map((f) => ({ name: f.name, kind: f.kind })) : undefined }]);
     setPending([]);
     setProgress(emptyProgress());
+    const abort = new AbortController();
+    abortRef.current = abort;
     try {
-      const res = await api.send(message, lang, (e) => setProgress((p) => addEvent(p, e)), files.map((f) => f.id!));
+      const res = await api.send(message, lang, (e) => alive.current && setProgress((p) => addEvent(p, e)), files.map((f) => f.id!), abort.signal);
+      for (const f of files) if (f.preview) forgetPreview(f.preview);
+      if (!alive.current) return;
       setProposals((ps) => ({ ...ps, ...Object.fromEntries(res.proposals.map((p) => [p.id, p])) }));
       setTurns((ts) => [...ts, { role: 'assistant', text: res.reply, proposalIds: res.proposals.map((p) => p.id) }]);
       if (settings.toggles.speakReplies) speak(res.reply, lang, settings.toggles.slow);
     } catch (e) {
-      setTurns((ts) => ts.slice(0, -1));
-      setInput(text.trim());
-      setPending(files);
-      setError((e as Error).message || t.errorGeneric);
+      if (!alive.current) return;
+      // The connection may have dropped after MAAI finished: ask the server before telling the user it failed.
+      const saved = await api.chat().catch(() => null);
+      if (!alive.current) return;
+      if (saved && saved.turns.length >= base + 2) {
+        setTurns(saved.turns);
+        setProposals(Object.fromEntries(saved.proposals.map((p) => [p.id, p])));
+        for (const f of files) if (f.preview) forgetPreview(f.preview);
+      } else {
+        setTurns((ts) => ts.slice(0, -1));
+        setInput(text.trim());
+        setPending(files);
+        setError((e as Error).message || t.errorGeneric);
+      }
     } finally {
-      setBusy(false);
+      busyRef.current = false;
+      if (alive.current) setBusy(false);
     }
   }
 
@@ -139,6 +179,7 @@ export function Assistant() {
         setInput(text);
       },
       (problem) => {
+        if (!alive.current) return; // the screen was left while listening: nothing is sent
         setLive(false);
         if (heard) void send(heard);
         else if (problem) typeInstead(problem);
@@ -154,9 +195,14 @@ export function Assistant() {
   }
 
   async function newChat() {
-    await api.resetChat();
-    setTurns([]);
-    setProposals({});
+    try {
+      await api.resetChat();
+      setTurns([]);
+      setProposals({});
+      setError('');
+    } catch (e) {
+      setError((e as Error).message || t.errorGeneric);
+    }
   }
 
   function onSubmit(e: FormEvent) {

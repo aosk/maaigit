@@ -54,6 +54,8 @@ export async function fetchInbox(opts: { days?: number; max?: number; refresh?: 
   }
 
   const client = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user, pass }, logger: false });
+  // A dropped connection is reported as an error event; with no listener Node would stop the whole server.
+  client.on('error', (error: Error) => console.error('Gmail inbox connection error:', error.message));
   try {
     await client.connect();
   } catch (error) {

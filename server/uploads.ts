@@ -37,7 +37,8 @@ export function sniff(data: Buffer): { kind: 'image' | 'pdf'; mime: Upload['mime
 /** A name safe to show and to hand to Claude: no paths, control characters or tag-like text. */
 export function cleanName(raw: string): string {
   const base = raw.split(/[\\/]/).pop() ?? '';
-  const cleaned = base.replace(/[\u0000-\u001f\u007f​-‏‪-‮<>"'`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  // eslint-disable-next-line no-control-regex -- the control characters are the point
+  const cleaned = base.replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e<>"'`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
   return cleaned || 'file';
 }
 

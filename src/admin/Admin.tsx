@@ -67,12 +67,16 @@ export function Admin() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(() => load(true), 10_000);
+    const timer = setInterval(() => document.hidden || load(true), 10_000);
     return () => clearInterval(timer);
   }, [load]);
 
   async function flip(agent: AgentSetting) {
-    await api.setAgent(agent.id, !agent.enabled);
+    try {
+      await api.setAgent(agent.id, !agent.enabled);
+    } catch {
+      // The list reloaded below shows what the server really has.
+    }
     load();
   }
 

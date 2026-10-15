@@ -448,3 +448,7 @@ html[dir='rtl'] .link-row svg { transform: scaleX(-1); }
 .fact-actions { gap: 4px; align-items: center; }
 .fact-actions .btn { min-height: 44px; padding: 0 12px; }
 .fact-actions .btn[aria-checked='true'] { background: var(--tint-soft); }
+
+/* Small round controls keep their look but get a 44 px touch area (Apple's minimum for a finger). */
+.check button, .task-row .circle, .file-x { position: relative; }
+.check button::after, .task-row .circle::after, .file-x::after { content: ''; position: absolute; inset: -8px; }

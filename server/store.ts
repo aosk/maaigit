@@ -15,6 +15,8 @@ import type {
   ChatTurn,
   InboxMessage,
   Lang,
+  NewsDigest,
+  NewsRaw,
   NotifyPrefs,
   ProfileFact,
   Proposal,
@@ -23,10 +25,12 @@ import type {
 
 export interface Conversation {
   id: string;
-  /** Exactly what was sent to and received from Claude, appended to and never edited. */
+  /** What was sent to and received from Claude. Old snapshots are shrunk and the oldest exchanges dropped (see ai/chat.ts). */
   apiMessages: Anthropic.Beta.Messages.BetaMessageParam[];
   /** What the app shows. */
   turns: ChatTurn[];
+  /** Approval cards whose outcome Claude has already been told, so each is announced once. */
+  announced?: string[];
 }
 
 interface State {
@@ -40,7 +44,7 @@ interface State {
   drafts: number;
   usage: { inputTokens: number; outputTokens: number; requests: number };
   /** The latest headlines read from the trusted news sources (public titles and links only). */
-  news: { fetchedAt?: string; items: import('../shared/types.js').NewsRaw[]; sources: import('../shared/types.js').NewsDigest['sources'] };
+  news: { fetchedAt?: string; items: NewsRaw[]; sources: NewsDigest['sources'] };
   /** Face ID / fingerprint keys that can sign in without the password (the public half only). */
   passkeys: { id: string; publicKey: string; counter: number; transports?: string[]; name: string; createdAt: string; lastUsedAt?: string }[];
   /** The highest day-load score reached on each day (kept 30 days), for the trend. */
@@ -144,11 +148,15 @@ function readSaved(): Partial<State> | null {
   let text: string;
   try {
     text = fs.readFileSync(DATA_FILE, 'utf8');
-  } catch {
-    return null; // nothing saved yet
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; // nothing saved yet
+    // Any other failure (permissions, a failing disk) must not look like a first run: the next save would overwrite the real data.
+    throw new Error(`The saved data at ${DATA_FILE} could not be opened (${(error as Error).message}). MAAI is stopping rather than replace it.`, { cause: error });
   }
   try {
-    return JSON.parse(text) as Partial<State>;
+    const parsed: unknown = JSON.parse(text);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
+    return parsed;
   } catch (error) {
     // Starting fresh would overwrite the damaged file on the next save, so keep a copy first.
     const kept = `${DATA_FILE}.damaged-${Date.now()}`;
@@ -159,7 +167,7 @@ function readSaved(): Partial<State> | null {
 }
 
 function load(): State {
-  const saved = { ...seed(), ...readSaved() } as State;
+  const saved = { ...seed(), ...readSaved() };
   for (const e of saved.events) if (SAMPLE_EVENTS.has(`${e.title}|${e.place}`)) e.demo = true;
   // Settings added after the file was saved get their defaults.
   saved.notifyPrefs = { ...DEFAULT_PREFS, ...saved.notifyPrefs };
@@ -176,12 +184,34 @@ export function save() {
   saveTimer = setTimeout(flushSave, 500);
 }
 
-/** Writes any change not yet written, now (used when the server is told to stop). */
+/** The most finished approval cards kept (waiting ones are always kept), and the most chat turns shown. */
+const KEEP_PROPOSALS = 200;
+const KEEP_TURNS = 300;
+
+/** Keeps the saved file from growing for ever: old finished cards and old chat turns are let go. */
+function tidy() {
+  const finished = state.proposals.filter((p) => p.status !== 'pending');
+  if (finished.length > KEEP_PROPOSALS) {
+    const drop = new Set(finished.slice(0, finished.length - KEEP_PROPOSALS));
+    state.proposals = state.proposals.filter((p) => !drop.has(p));
+  }
+  for (const c of state.conversations) if (c.turns.length > KEEP_TURNS) c.turns = c.turns.slice(-KEEP_TURNS);
+}
+
+/** Writes any change not yet written, now (used when the server is told to stop). A failed write is tried again, not fatal. */
 export function flushSave() {
   if (!saveTimer) return;
   clearTimeout(saveTimer);
   saveTimer = undefined;
-  writePrivate(DATA_FILE, JSON.stringify(state, null, 2));
+  try {
+    tidy();
+    writePrivate(DATA_FILE, JSON.stringify(state, null, 2));
+  } catch (error) {
+    // A full disk or a brief I/O error must not take the server down or lose what is in memory: log it and try again soon.
+    console.error(`MAAI could not save its data (${(error as Error).message}). Trying again in 30 seconds.`);
+    saveTimer = setTimeout(flushSave, 30_000);
+    saveTimer.unref();
+  }
 }
 
 export function audit(event: string, who: string, outcome: AuditEntry['outcome']) {

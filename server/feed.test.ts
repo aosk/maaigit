@@ -17,6 +17,12 @@ describe('MAAI calendar feed', () => {
     expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
   });
 
+  it('writes semicolons, commas and every kind of line break safely, so a title cannot add lines to the feed', () => {
+    const ics = icsFeed([event({ title: 'A;B,C\rD\r\nE\nF' })], now);
+    expect(ics).toContain('SUMMARY:A\\;B\\,C\\nD\\nE\\nF');
+    expect(ics.split('\r\n').filter((l) => ['D', 'E', 'F'].includes(l))).toEqual([]);
+  });
+
   it('is read back the same by the calendar reader (a round trip)', () => {
     const back = eventsFromIcs(icsFeed([event({ title: 'اجتماع مع سارة; مهم' })], now), now);
     expect(back).toHaveLength(1);

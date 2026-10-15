@@ -19,11 +19,11 @@ export function NotificationSettings() {
 
   useEffect(() => {
     api.notify().then(setStatus).catch(() => {});
-    currentSubscription().then((s) => setOn(Boolean(s)));
+    void currentSubscription().then((s) => setOn(Boolean(s)));
     if (isIos && !isStandalone) setProblem('home');
     else if (!pushSupported) setProblem('unsupported');
     else if (Notification.permission === 'denied') setProblem('denied');
-    else worker().then((reg) => !reg && window.location.protocol === 'https:' && setProblem('cert'));
+    else void worker().then((reg) => !reg && window.location.protocol === 'https:' && setProblem('cert'));
   }, []);
 
   const turnOn = () =>
@@ -57,13 +57,14 @@ export function NotificationSettings() {
     run(async () => {
       if (!status) return;
       const prefs = await api.setNotifyPrefs({ [key]: !status.prefs[key] });
-      setStatus({ ...status, prefs });
+      setStatus((s) => s && { ...s, prefs });
     });
 
   const setBriefingTime = (briefingTime: string) =>
     run(async () => {
       if (!status || !briefingTime) return;
-      setStatus({ ...status, prefs: await api.setNotifyPrefs({ briefingTime }) });
+      const prefs = await api.setNotifyPrefs({ briefingTime });
+      setStatus((s) => s && { ...s, prefs });
     });
 
   const sendBriefing = () =>

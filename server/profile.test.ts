@@ -62,7 +62,7 @@ describe('what MAAI will and will not keep', () => {
   it('refuses empty text and anything longer than one short sentence', () => {
     expect(() => cleanFact('   ')).toThrow();
     expect(() => cleanFact('x'.repeat(201))).toThrow(/short/);
-    expect(() => cleanFact({} as never)).toThrow();
+    expect(() => cleanFact({})).toThrow();
   });
 
   it('keeps one copy of a fact said twice, and stops at the limit', () => {

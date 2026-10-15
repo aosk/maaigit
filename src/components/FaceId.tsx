@@ -30,7 +30,7 @@ export function FaceId() {
         await api.passkeyRegister(response, /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : t.thisDevice);
         load();
       } catch (err) {
-        if ((err as Error).name === 'NotAllowedError') throw new Error(t.faceIdCancelled);
+        if ((err as Error).name === 'NotAllowedError') throw new Error(t.faceIdCancelled, { cause: err });
         throw err;
       }
     });

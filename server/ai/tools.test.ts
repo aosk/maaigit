@@ -5,7 +5,7 @@ import { config } from '../config';
 import { runTool, tools } from './tools';
 import type { ToolUse } from './claude';
 
-const call = (name: string, input: unknown): ToolUse => ({ type: 'tool_use', id: 't1', name, input }) as ToolUse;
+const call = (name: string, input: unknown): ToolUse => ({ type: 'tool_use', id: 't1', name, input });
 
 describe('assistant tools', () => {
   it('lists every tool as strict', () => {

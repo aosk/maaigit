@@ -318,7 +318,7 @@ describe('summary and ranking', () => {
 describe('the assistant and WhatsApp', () => {
   const put = (id: string, phone: string, extra: Record<string, unknown> = {}) =>
     state.inbox.push({ id, from: 'Ahmed', phone, channel: 'whatsapp', text: 'Are we on for 4pm?', receivedAt: new Date().toISOString(), replied: false, via: 'twilio', ...extra } as never);
-  const call = (name: string, input: Record<string, unknown>, created: never[] = []) => runTool({ type: 'tool_use', id: 't1', name, input } as never, created as never);
+  const call = (name: string, input: Record<string, unknown>, created: never[] = []) => runTool({ type: 'tool_use', id: 't1', name, input } as never, created);
   const approve = (id: string, body: unknown) => raw(site.port, 'POST', `/api/proposals/${id}/approve`, { body: JSON.stringify(body), headers: { cookie } });
   const twilio = () => vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 201 }));
 

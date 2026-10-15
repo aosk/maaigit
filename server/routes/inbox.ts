@@ -28,6 +28,8 @@ inbox.post('/inbox', (req, res) => {
   if (email && !isEmail(email)) throw new HttpError(400, `"${email}" is not a valid email address`);
   const message = { id: id(), from, phone, email: email || undefined, channel: email && !phone ? ('email' as const) : ('whatsapp' as const), text: body, receivedAt: new Date().toISOString(), replied: false };
   state.inbox.push(message);
+  // Pasted messages are kept like the WhatsApp ones: the newest 500.
+  if (state.inbox.length > 500) state.inbox.splice(0, state.inbox.length - 500);
   save();
   res.status(201).json(message);
 });
@@ -40,6 +42,7 @@ inbox.post('/inbox/:id/draft', wrap(async (req, res) => {
 
 inbox.post('/inbox/:id/email', wrap(async (req, res) => {
   const message = find(state.inbox, req.params.id);
+  if (!agentEnabled('messaging')) throw new HttpError(403, 'Messaging is switched off by the admin.');
   const to = text(req.body.to, 320) || message.email || '';
   const body = text(req.body.body, 20_000);
   if (!body) throw new HttpError(400, 'The reply is empty');

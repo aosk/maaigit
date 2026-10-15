@@ -23,7 +23,7 @@ const KEYS_FILE = path.join(config.dataDir, 'push.json');
 
 function vapidKeys(): { publicKey: string; privateKey: string } {
   try {
-    return JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
+    return JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8')) as { publicKey: string; privateKey: string };
   } catch {
     const keys = webpush.generateVAPIDKeys();
     writePrivate(KEYS_FILE, JSON.stringify(keys, null, 2));
@@ -92,13 +92,31 @@ function briefingDue(key: string, at: Date, write: BriefingWriter): Due {
 
 // ---------- What is due ----------
 
+/** The first moment a prayer reminder fires: today if it is still ahead, otherwise tomorrow. Saved as `at` so it can't repeat unasked. */
+export function firstPrayerTime(prayer: NonNullable<Reminder['prayer']>, offsetMinutes: number, now: Date, latitude: number, longitude: number): Date {
+  for (let ahead = 0; ahead < 2; ahead++) {
+    const day = new Date(now);
+    day.setDate(day.getDate() + ahead);
+    const found = prayersFor(day, latitude, longitude).find((p) => p.name === prayer);
+    const time = found ? new Date(found.time.getTime() + offsetMinutes * 60_000) : undefined;
+    if (time && time.getTime() > now.getTime()) return time;
+  }
+  return now;
+}
+
 /** When a reminder fires on the given day, or null if it doesn't. */
 export function reminderTime(r: Reminder, day: Date, latitude: number, longitude: number): Date | null {
   if (r.done) return null;
   if (r.prayer) {
     const prayer = prayersFor(day, latitude, longitude).find((p) => p.name === r.prayer);
     if (!prayer) return null;
-    if (r.repeat === 'once' && r.at && new Date(r.at).toDateString() !== day.toDateString()) return null;
+    if (r.at) {
+      // The first day it applies to: once = that day only, weekly = that weekday, daily = that day onwards.
+      const start = new Date(r.at);
+      if (r.repeat === 'once' && start.toDateString() !== day.toDateString()) return null;
+      if (r.repeat === 'weekly' && start.getDay() !== day.getDay()) return null;
+      if (day < new Date(start.toDateString())) return null;
+    }
     return new Date(prayer.time.getTime() + (r.offsetMinutes ?? 0) * 60_000);
   }
   if (!r.at) return null;

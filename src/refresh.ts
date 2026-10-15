@@ -22,5 +22,6 @@ export function useOnRefresh(reload: () => void) {
 export async function refreshAll(): Promise<string[]> {
   const result = await api.sync().catch(() => null);
   window.dispatchEvent(new Event(REFRESH_EVENT));
-  return result?.problems ?? [];
+  // A sync that could not even be asked for is a problem, not "up to date".
+  return result ? result.problems : ['offline'];
 }

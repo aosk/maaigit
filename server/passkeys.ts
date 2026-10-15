@@ -156,7 +156,7 @@ export function passkeyLogin(startSession: (res: Response) => void): Router {
         expectedChallenge: takeChallenge('login'),
         expectedOrigin: origin(req),
         expectedRPID: rpID(req),
-        credential: { id: key.id, publicKey: bytes(key.publicKey), counter: key.counter, transports: key.transports as never },
+        credential: { id: key.id, publicKey: bytes(key.publicKey), counter: key.counter, transports: key.transports },
         requireUserVerification: true,
       });
     } catch {

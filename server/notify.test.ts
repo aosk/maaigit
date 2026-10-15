@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CalendarEvent, NotifyPrefs, Reminder } from '../shared/types';
 import { prayersFor } from '../shared/prayer';
-import { dueAlerts, reminderTime } from './notify';
+import { dueAlerts, firstPrayerTime, reminderTime } from './notify';
 
 const LAT = 24.7136;
 const LNG = 46.6753;
@@ -110,5 +110,34 @@ describe('due alerts', () => {
     it('ignores a time that is not HH:MM and uses 07:00', () => {
       expect(briefings(at(7, 1), { ...on, briefingTime: 'later' })).toHaveLength(1);
     });
+  });
+});
+
+describe('prayer reminders that are not repeated every day', () => {
+  const day = at(12, 0);
+  const next = new Date('2026-10-13T00:00:00');
+  const week = new Date('2026-10-19T00:00:00');
+
+  it('fires a one-off prayer reminder only on the day it was set for', () => {
+    const r = reminder({ prayer: 'maghrib', offsetMinutes: 15, at: day.toISOString() });
+    expect(reminderTime(r, day, LAT, LNG)).not.toBeNull();
+    expect(reminderTime(r, next, LAT, LNG)).toBeNull();
+  });
+
+  it('fires a weekly prayer reminder only on its weekday, and a daily one from its first day on', () => {
+    const weekly = reminder({ prayer: 'fajr', repeat: 'weekly', at: day.toISOString() });
+    expect(reminderTime(weekly, next, LAT, LNG)).toBeNull();
+    expect(reminderTime(weekly, week, LAT, LNG)).not.toBeNull();
+    const daily = reminder({ prayer: 'fajr', repeat: 'daily', at: next.toISOString() });
+    expect(reminderTime(daily, day, LAT, LNG)).toBeNull();
+    expect(reminderTime(daily, week, LAT, LNG)).not.toBeNull();
+  });
+
+  it('works out the first time: today if it is still ahead, otherwise tomorrow', () => {
+    const morning = at(6, 0);
+    const first = firstPrayerTime('maghrib', 15, morning, LAT, LNG);
+    expect(first.toDateString()).toBe(morning.toDateString());
+    const night = at(23, 0);
+    expect(firstPrayerTime('maghrib', 15, night, LAT, LNG).toDateString()).toBe(new Date(night.getTime() + 86_400_000).toDateString());
   });
 });

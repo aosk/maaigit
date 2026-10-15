@@ -14,8 +14,9 @@ export function AlertBanner() {
   const since = useRef(new Date().toISOString());
 
   useEffect(() => {
-    const poll = () =>
-      api
+    const poll = () => {
+      if (document.hidden) return; // a hidden app asks nothing, and would chime for old alerts on return
+      void api
         .alerts(since.current)
         .then((alerts) => {
           if (!alerts.length) return;
@@ -24,8 +25,13 @@ export function AlertBanner() {
           setShown((s) => [...alerts.reverse(), ...s].slice(0, 3));
         })
         .catch(() => {});
+    };
     const timer = setInterval(poll, 20_000);
-    return () => clearInterval(timer);
+    document.addEventListener('visibilitychange', poll);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', poll);
+    };
   }, []);
 
   if (!shown.length) return null;

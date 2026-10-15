@@ -33,6 +33,55 @@ describe('keeping your data safe', () => {
     expect(fs.readdirSync(dir)).toEqual([]);
   });
 
+  it('stops rather than treat an unreadable file as a first run and later overwrite it', async () => {
+    const dir = freshDir();
+    const file = path.join(dir, 'store.json');
+    fs.mkdirSync(file); // a directory where the file should be: reading fails with EISDIR, not "not found"
+    await expect(loadStore(file)).rejects.toThrow(/could not be opened/);
+  });
+
+  it('keeps a damaged file that is valid JSON but not a store, and starts fresh', async () => {
+    const dir = freshDir();
+    const file = path.join(dir, 'store.json');
+    fs.writeFileSync(file, '[1,2,3]');
+    const { state } = await loadStore(file);
+    expect(state.events.length).toBeGreaterThan(0);
+    expect(fs.readdirSync(dir).some((f) => f.includes('.damaged-'))).toBe(true);
+  });
+
+  it('survives a failed write and tries again, instead of crashing and losing what is in memory', async () => {
+    vi.useFakeTimers();
+    const dir = freshDir();
+    const file = path.join(dir, 'store.json');
+    const { state, save, flushSave } = await loadStore(file);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    state.reminders.push({ id: 'r1', title: 'Keep me', when: '', repeat: 'once', done: false });
+    const blocker = `${file}.${process.pid}.tmp`;
+    fs.mkdirSync(blocker, { recursive: true }); // makes the write fail
+    save();
+    expect(() => flushSave()).not.toThrow();
+    expect(errors).toHaveBeenCalled();
+    fs.rmSync(blocker, { recursive: true });
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(fs.readFileSync(file, 'utf8')).toContain('Keep me');
+    errors.mockRestore();
+  });
+
+  it('lets go of old finished cards and old turns, but never a card still waiting', async () => {
+    const dir = freshDir();
+    const { state, save, flushSave } = await loadStore(path.join(dir, 'store.json'));
+    const card = (n: number, status: 'pending' | 'approved') => ({ id: `p${n}`, kind: 'remember' as const, status, title: `t${n}`, category: 'other' as const });
+    state.proposals = [card(0, 'pending'), ...Array.from({ length: 250 }, (_, i) => card(i + 1, 'approved'))];
+    state.conversations = [{ id: 'c', apiMessages: [], turns: Array.from({ length: 400 }, () => ({ role: 'user' as const, text: 'x' })) }];
+    save();
+    flushSave();
+    expect(state.proposals.filter((p) => p.status === 'pending')).toHaveLength(1);
+    expect(state.proposals.filter((p) => p.status === 'approved')).toHaveLength(200);
+    expect(state.proposals.find((p) => p.id === 'p250')).toBeDefined();
+    expect(state.proposals.find((p) => p.id === 'p1')).toBeUndefined();
+    expect(state.conversations[0].turns).toHaveLength(300);
+  });
+
   it('keeps a copy of a damaged file before starting fresh, so nothing is lost for good', async () => {
     const dir = freshDir();
     const file = path.join(dir, 'store.json');

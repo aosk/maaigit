@@ -7,7 +7,7 @@ const keyFile = { client_email: 'maai@project.iam.gserviceaccount.com', private_
 
 async function load(env: Record<string, string | undefined>) {
   vi.resetModules();
-  for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v as string);
+  for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
   return import('./gwrite');
 }
 afterEach(() => vi.unstubAllEnvs());

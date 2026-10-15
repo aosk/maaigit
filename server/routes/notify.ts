@@ -29,6 +29,8 @@ notify.post('/notify/subscribe', (req, res) => {
   if (typeof s?.endpoint !== 'string' || !isPushServiceUrl(s.endpoint) || typeof s?.keys?.p256dh !== 'string' || typeof s?.keys?.auth !== 'string') {
     throw new HttpError(400, 'Not a valid push subscription');
   }
+  // Real push subscriptions are a few hundred characters; a device list is a handful.
+  if (s.endpoint.length > 1000 || s.keys.p256dh.length > 200 || s.keys.auth.length > 100) throw new HttpError(400, 'Not a valid push subscription');
   subscribe({ endpoint: s.endpoint, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } }, lang(req.body.lang));
   audit('Notifications turned on for a device', 'User', 'done');
   res.status(204).end();
@@ -52,6 +54,6 @@ notify.post('/notify/briefing', wrap(async (_req, res) => {
 }));
 
 notify.get('/alerts', (req, res) => {
-  const since = Date.parse(String(req.query.since ?? ''));
+  const since = Date.parse(typeof req.query.since === 'string' ? req.query.since : '');
   res.json(Number.isNaN(since) ? [] : state.alerts.filter((a) => Date.parse(a.at) > since));
 });

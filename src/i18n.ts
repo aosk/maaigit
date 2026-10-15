@@ -2,6 +2,7 @@ import type { Lang } from '../shared/types';
 
 const en = {
   appName: 'MAAI',
+  tabsLabel: 'Main sections',
   today: 'Today',
   assistant: 'Assistant',
   inbox: 'Inbox',
@@ -402,6 +403,7 @@ type Strings = typeof en;
 const n = (x: number) => x.toLocaleString('ar-SA');
 
 const ar: Strings = {
+  tabsLabel: 'الأقسام الرئيسية',
   appName: 'مساعد',
   today: 'اليوم',
   assistant: 'المساعد',

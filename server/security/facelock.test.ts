@@ -37,8 +37,8 @@ beforeEach(() => {
   faceSetUp = false;
 });
 
-const cookies = (res: Reply) => ((res.headers['set-cookie'] ?? []) as string[]).map((c) => c.split(';')[0]);
-const named = (res: Reply, name: string) => ((res.headers['set-cookie'] ?? []) as string[]).find((c) => c.startsWith(`${name}=`));
+const cookies = (res: Reply) => ((res.headers['set-cookie'] ?? [])).map((c) => c.split(';')[0]);
+const named = (res: Reply, name: string) => ((res.headers['set-cookie'] ?? [])).find((c) => c.startsWith(`${name}=`));
 const unlock = async (s = site) => raw(s.port, 'POST', '/api/unlock', { body: JSON.stringify({ pin: PASSWORD }) });
 const ping = (jar: string[], s = site, background = false) => raw(s.port, 'GET', '/api/ping', { headers: { cookie: jar.join('; '), ...(background ? { 'x-maai-background': '1' } : {}) } });
 

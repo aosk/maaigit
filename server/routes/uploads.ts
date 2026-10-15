@@ -10,7 +10,7 @@ export const uploads = Router();
  */
 uploads.post('/uploads', express.raw({ type: () => true, limit: '11mb' }), (req, res) => {
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, 'No file was sent.');
-  let name = '';
+  let name: string;
   try {
     name = decodeURIComponent(text(req.get('x-filename'), 300));
   } catch {

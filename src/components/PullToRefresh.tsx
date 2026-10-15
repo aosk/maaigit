@@ -78,6 +78,9 @@ export function PullToRefresh({ onRefresh, disabled }: { onRefresh: () => Promis
       document.removeEventListener('touchend', onEnd);
       document.removeEventListener('touchcancel', reset);
       clearTimeout(timer);
+      // Leaving mid-refresh must not strand the "done" pill on screen.
+      busy = false;
+      reset();
     };
   }, [disabled]);
 

@@ -114,7 +114,7 @@ describe('reading the sources', () => {
       if (route === undefined) return new Response('not found', { status: 404 });
       if (typeof route === 'string') return new Response(route, { status: 200 });
       return new Response(route.body ?? '', { status: route.status, headers: route.location ? { location: route.location } : undefined });
-    }) as typeof fetch;
+    });
 
   it('keeps recent stories that link to the source, and drops old, foreign and future ones', async () => {
     const feed = rss([
@@ -187,7 +187,7 @@ describe('updating the news', () => {
     (async (input: RequestInfo | URL) => {
       const body = feeds[String(input)];
       return body === undefined ? new Response('no', { status: 404 }) : new Response(body, { status: 200 });
-    }) as typeof fetch;
+    });
 
   it('keeps each source\'s result, and an old headline for a source that fails this time', async () => {
     const first = everything({ 'https://www.technologyreview.com/feed/': rss([{ title: 'MIT story', link: 'https://www.technologyreview.com/2026/a' }]), 'https://www.arabnews.com/rss.xml': rss([{ title: 'Riyadh summit opens', link: 'https://www.arabnews.com/node/1' }]) });

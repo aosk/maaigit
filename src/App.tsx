@@ -47,7 +47,7 @@ export function App() {
   useEffect(() => {
     if (!settings.sound || !('serviceWorker' in navigator)) return;
     const onMessage = (e: MessageEvent) => {
-      if (e.data?.type === 'chime') playChime();
+      if ((e.data as { type?: string } | null)?.type === 'chime') playChime();
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
@@ -109,7 +109,7 @@ export function App() {
         {route === 'settings' && <SettingsScreen />}
         {route === 'profile' && <ProfileScreen />}
       </main>
-      <nav className="tabs" aria-label="Tabs">
+      <nav className="tabs" aria-label={t.tabsLabel}>
         {tabs.map((tab) => (
           <a key={tab.route} className="tab" href={`#/${tab.route}`} aria-current={(route === 'profile' ? 'settings' : route) === tab.route ? 'page' : undefined}>
             {tab.icon}

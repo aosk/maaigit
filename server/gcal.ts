@@ -1,4 +1,4 @@
-import ical, { type VEvent } from 'node-ical';
+import ical from 'node-ical';
 import type { CalendarEvent, CalendarStatus } from '../shared/types.js';
 import { dedupeEvents } from '../shared/schedule.js';
 import { calendarId as liveCalendarId, googleCalendarConfigured } from './gauth.js';
@@ -52,7 +52,7 @@ let inFlight: Promise<void> | null = null;
 
 /** iCal text fields can come with parameters attached; this gets the plain text. */
 const plain = (value: unknown): string =>
-  typeof value === 'string' ? value : value && typeof value === 'object' && 'val' in value ? String((value as { val: unknown }).val) : '';
+  typeof value === 'string' ? value : value && typeof value === 'object' && 'val' in value ? String((value).val) : '';
 
 /** Notes sometimes carry a little HTML; this keeps the words and the line breaks. */
 export function plainNotes(text: string): string {
@@ -108,7 +108,7 @@ export function eventsFromIcs(text: string, now = new Date(), calendar = 'Google
   const out: CalendarEvent[] = [];
   for (const item of Object.values(ical.sync.parseICS(text))) {
     if (!item || item.type !== 'VEVENT') continue;
-    const ev = item as VEvent;
+    const ev = item;
     if (plain(ev.status).toUpperCase() === 'CANCELLED') continue;
     const allDay = (ev as { datetype?: string }).datetype === 'date';
     const extra = { location: plain(ev.location), notes: plain(ev.description), conference: plain((ev as unknown as Record<string, unknown>)['GOOGLE-CONFERENCE']) || plain(ev.url), calendar };

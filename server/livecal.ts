@@ -63,13 +63,15 @@ export function eventFromApi(item: ApiEvent): CalendarEvent | null {
 type Patch = Partial<Pick<CalendarEvent, 'title' | 'start' | 'minutes'>>;
 
 /** What changed for the meetings MAAI wrote to Google, and which ones Google's list no longer shows. */
-export function compare(own: CalendarEvent[], items: ApiEvent[]): { patches: { event: CalendarEvent; patch: Patch }[]; missing: CalendarEvent[] } {
+export function compare(own: CalendarEvent[], items: ApiEvent[], window?: { timeMin: string; timeMax: string }): { patches: { event: CalendarEvent; patch: Patch }[]; missing: CalendarEvent[] } {
   const byId = new Map(items.map((i) => [i.id, i]));
   const patches: { event: CalendarEvent; patch: Patch }[] = [];
   const missing: CalendarEvent[] = [];
   for (const event of own) {
     if (!event.googleId || event.demo) continue;
     const item = byId.get(event.googleId);
+    // Outside the list's dates it is not shown there whatever happened to it: no reason to ask Google about it every minute.
+    if (!item && window && (Date.parse(event.start) + event.minutes * 60_000 < Date.parse(window.timeMin) || Date.parse(event.start) > Date.parse(window.timeMax))) continue;
     if (!item) {
       missing.push(event);
       continue;
@@ -91,11 +93,15 @@ function changes(event: CalendarEvent, item: ApiEvent): Patch | null {
   return Object.keys(patch).length ? patch : null;
 }
 
-async function fetchWindow(now = new Date()): Promise<ApiEvent[]> {
+/** The dates the calendar is read for: a few days back, a month ahead. */
+function windowOf(now = new Date()): { timeMin: string; timeMax: string } {
   const day = new Date(now);
   day.setHours(0, 0, 0, 0);
-  const timeMin = new Date(day.getTime() - PAST_DAYS * 86_400_000).toISOString();
-  const timeMax = new Date(day.getTime() + FUTURE_DAYS * 86_400_000).toISOString();
+  return { timeMin: new Date(day.getTime() - PAST_DAYS * 86_400_000).toISOString(), timeMax: new Date(day.getTime() + FUTURE_DAYS * 86_400_000).toISOString() };
+}
+
+async function fetchWindow(now = new Date()): Promise<ApiEvent[]> {
+  const { timeMin, timeMax } = windowOf(now);
   const items: ApiEvent[] = [];
   let pageToken: string | undefined;
   for (let page = 0; page < MAX_PAGES; page++) {
@@ -151,7 +157,7 @@ export function refreshLiveCalendar(): Promise<void> {
   running ??= (async () => {
     try {
       const items = await fetchWindow();
-      const { patches, missing } = compare(state.events, items);
+      const { patches, missing } = compare(state.events, items, windowOf());
       const settled = await settleMissing(missing);
       apply([...patches, ...settled.patches], settled.removed);
       // MAAI's own copy of a meeting it wrote to Google is the one shown; the rest come from Google.

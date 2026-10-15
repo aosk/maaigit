@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Briefing, BriefingFacts, CalendarEvent, TodayData } from '../../shared/types';
 import { PRAYER_BUFFER_MINUTES } from '../../shared/prayer';
 import { dayPeriod, eventEnd, leaveTime } from '../../shared/schedule';
@@ -129,16 +129,29 @@ export function Today() {
     }
   }
 
+  const focusing = useRef(false);
   async function addFocus(start: Date) {
-    const event = await api.addEvent({ title: t.focusTitle, start: start.toISOString(), minutes: 120 });
-    setNote(event.googleError ? t.googleFailed(event.googleError) : event.googleId ? `${t.added} ${t.googleAdded}.` : t.added);
-    setDismissed(true);
-    load();
+    if (focusing.current) return; // a double tap must not book two blocks
+    focusing.current = true;
+    try {
+      const event = await api.addEvent({ title: t.focusTitle, start: start.toISOString(), minutes: 120 });
+      setNote(event.googleError ? t.googleFailed(event.googleError) : event.googleId ? `${t.added} ${t.googleAdded}.` : t.added);
+      setDismissed(true);
+      load();
+    } catch (e) {
+      setError((e as Error).message || t.errorGeneric);
+    } finally {
+      focusing.current = false;
+    }
   }
 
   async function done(id: string) {
-    await api.reminderDone(id);
-    load();
+    try {
+      await api.reminderDone(id);
+      load();
+    } catch (e) {
+      setError((e as Error).message || t.errorGeneric);
+    }
   }
 
   return (

@@ -129,11 +129,38 @@ describe('the conversation loop', () => {
     const c = conversation();
     script(reply([say('First answer.')], 'end_turn'));
     await chat(c, 'hello', 'en');
-    const before = JSON.stringify(c.apiMessages);
     scripted.mockRejectedValueOnce(new Error('network down'));
+    const count = c.apiMessages.length;
     await expect(chat(c, 'second', 'en')).rejects.toThrow('network down');
-    expect(JSON.stringify(c.apiMessages)).toBe(before);
+    // nothing of the failed turn is left (older snapshots may have been shrunk, which is harmless)
+    expect(c.apiMessages).toHaveLength(count);
     expect(c.turns.map((t) => t.role)).toEqual(['user', 'assistant']);
+  });
+
+  it('keeps an old snapshot of the day out of every later message, and tells Claude about each card only once', async () => {
+    script(reply([say('One.')], 'end_turn'), reply([say('Two.')], 'end_turn'), reply([say('Three.')], 'end_turn'));
+    const c = conversation();
+    await chat(c, 'first', 'en');
+    await chat(c, 'second', 'en');
+    expect(JSON.stringify(c.apiMessages[0])).toContain('no longer current');
+    expect(JSON.stringify(c.apiMessages[0])).not.toMatch(/Open reminders|Calendar/);
+    // the newest message still has the current snapshot
+    expect(JSON.stringify(c.apiMessages[2])).not.toContain('no longer current');
+  });
+
+  it('never leaves a call without an answer in the history, so the next message still works', async () => {
+    script(reply([say('Let me check'), tool('propose_reminder', { title: 'x', when: 'x', at: '', after_prayer: 'none', offset_minutes: 0, repeat: 'once' })], 'max_tokens'), reply([say('Back.')], 'end_turn'));
+    const c = conversation();
+    await chat(c, 'one', 'en');
+    expect(JSON.stringify(c.apiMessages)).not.toContain('tool_use');
+    expect((await chat(c, 'two', 'en')).text).toBe('Back.');
+  });
+
+  it('keeps a readable turn when the model declines with nothing to say', async () => {
+    script(reply([], 'refusal'));
+    const c = conversation();
+    await chat(c, 'x', 'en');
+    expect(JSON.stringify(c.apiMessages[1])).toMatch(/can't help/);
   });
 
   it('says so when the model declines', async () => {

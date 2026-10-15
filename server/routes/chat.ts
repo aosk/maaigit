@@ -2,13 +2,15 @@ import { Router } from 'express';
 import type { Proposal, StreamEvent } from '../../shared/types.js';
 import { chat } from '../ai/chat.js';
 import { addFact } from '../profile.js';
+import { config } from '../config.js';
+import { firstPrayerTime } from '../notify.js';
 import { releaseUploads, takeUploads } from '../uploads.js';
 import { sendMail } from '../mail.js';
 import { createTask, updateTask, validateNewTask } from '../asana.js';
 import { mirrorToGoogle } from '../gwrite.js';
 import { canAnswer, sendWhatsApp, whatsappConfigured } from '../whatsapp.js';
 import { markHandled, markReplyTo } from '../mail-handled.js';
-import { audit, id, save, state, type Conversation } from '../store.js';
+import { agentEnabled, audit, id, save, state, type Conversation } from '../store.js';
 import { HttpError, explain, find, lang, text, wrap } from './http.js';
 
 export const assistant = Router();
@@ -28,6 +30,9 @@ assistant.get('/chat', (_req, res) => {
  * Sends a message and streams the answer as server-sent events, so the app can
  * show what MAAI is doing: its thinking, each step, and the reply as it is written.
  */
+/** Conversations Claude is answering in right now. */
+const answering = new Set<string>();
+
 assistant.post('/chat/stream', async (req, res) => {
   let files: ReturnType<typeof takeUploads>;
   try {
@@ -38,6 +43,10 @@ assistant.post('/chat/stream', async (req, res) => {
   }
   const message = text(req.body.text, 4000) || (files.length ? 'Please summarise this for me.' : '');
   if (!message) return res.status(400).json({ error: 'Say or type something first' });
+  // Two answers at once would interleave in one conversation and break the history for every later message.
+  const current = conversation();
+  if (answering.has(current.id)) return res.status(409).json({ error: 'MAAI is still answering your last message. Wait for it, then try again.' });
+  answering.add(current.id);
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -48,12 +57,13 @@ assistant.post('/chat/stream', async (req, res) => {
   // A comment line every 15 s keeps proxies from closing a long, quiet connection.
   const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15_000);
   try {
-    const reply = await chat(conversation(), message, lang(req.body.lang), send, files);
+    const reply = await chat(current, message, lang(req.body.lang), send, files);
     releaseUploads(files);
     send({ type: 'done', reply: reply.text, proposals: reply.proposals });
   } catch (error) {
     send({ type: 'error', error: explain(error).error });
   } finally {
+    answering.delete(current.id);
     clearInterval(keepAlive);
     res.end();
   }
@@ -70,6 +80,7 @@ assistant.post('/chat/reset', (_req, res) => {
 async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<string> {
   switch (p.kind) {
     case 'email': {
+      if (!agentEnabled('messaging')) throw new HttpError(403, 'Messaging is switched off by the admin.');
       const mail = { to: text(body.to, 320) || p.to, subject: text(body.subject, 300) || p.subject, body: text(body.body, 20_000) || p.body };
       await sendMail(mail);
       Object.assign(p, mail, { title: mail.subject });
@@ -78,6 +89,7 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
       return `Emailed ${mail.to}: ${mail.subject}`;
     }
     case 'whatsapp': {
+      if (!agentEnabled('messaging')) throw new HttpError(403, 'Messaging is switched off by the admin.');
       const reply = text(body.body, 1500) || p.body;
       if (!reply) throw new HttpError(400, 'The reply is empty');
       if (!whatsappConfigured) throw new HttpError(400, 'WhatsApp is not connected yet.');
@@ -89,6 +101,7 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
     }
     case 'meeting': {
       const option = p.options.find((o) => o.start === text(body.start, 40)) ?? p.options[0];
+      if (!option) throw new HttpError(400, 'This card has no time to book.');
       p.chosen = option.start;
       const event = { id: id(), title: p.title, start: option.start, minutes: p.minutes, place: p.attendeeEmail, bookedByMaai: true };
       state.events.push(event);
@@ -119,24 +132,36 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
       Object.assign(p, { title: fact.text, category: fact.category });
       return `Remembered: ${fact.text}`;
     }
-    case 'reminder':
-      state.reminders.push({ id: id(), title: p.title, when: p.when, at: p.at, prayer: p.prayer, offsetMinutes: p.offsetMinutes, repeat: p.repeat, done: false });
+    case 'reminder': {
+      // A prayer reminder has no clock time of its own: record the first day, so a "once" or weekly one is not repeated every day.
+      const at = p.at ?? (p.prayer ? firstPrayerTime(p.prayer, p.offsetMinutes ?? 0, new Date(), config.latitude, config.longitude).toISOString() : undefined);
+      state.reminders.push({ id: id(), title: p.title, when: p.when, at, prayer: p.prayer, offsetMinutes: p.offsetMinutes, repeat: p.repeat, done: false });
       return `Saved reminder: ${p.title}`;
+    }
   }
 }
+
+/** Cards being carried out right now: a second tap or a network retry must not send, book or create the same thing twice. */
+const approving = new Set<string>();
 
 assistant.post('/proposals/:id/approve', wrap(async (req, res) => {
   const p = find(state.proposals, req.params.id);
   if (p.status !== 'pending') throw new HttpError(409, `Already ${p.status}`);
-  const done = await carryOut(p, req.body);
-  p.status = 'approved';
-  audit(done, 'User', 'approved');
+  if (approving.has(p.id)) throw new HttpError(409, 'Already being done: one moment.');
+  approving.add(p.id);
+  try {
+    const done = await carryOut(p, req.body ?? {});
+    p.status = 'approved';
+    audit(done, 'User', 'approved');
+  } finally {
+    approving.delete(p.id);
+  }
   res.json(p);
 }));
 
 assistant.post('/proposals/:id/cancel', (req, res) => {
   const p = find(state.proposals, req.params.id);
-  if (p.status === 'pending') {
+  if (p.status === 'pending' && !approving.has(p.id)) {
     p.status = 'cancelled';
     audit(`Cancelled ${p.kind}: ${p.title}`, 'User', 'cancelled');
   }

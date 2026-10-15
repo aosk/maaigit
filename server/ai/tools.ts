@@ -4,7 +4,7 @@ import { agentEnabled, id, state } from '../store.js';
 import { config } from '../config.js';
 import { isEmail, mailConfigured } from '../mail.js';
 import { cachedInbox, getEmail } from '../gmail-inbox.js';
-import { AsanaError, asanaConfigured, cachedTasks, getTask, projects, validateNewTask } from '../asana.js';
+import { AsanaError, asanaConfigured, cachedTasks, getTask, isGid, projects, validateNewTask } from '../asana.js';
 import { canAnswer, lastFrom, whatsappConfigured } from '../whatsapp.js';
 import { emailForClaude, dayTime } from './context.js';
 import { neutralize } from './untrusted.js';
@@ -114,6 +114,7 @@ const read_asana_task: ToolSpec<{ task_gid: string }> = {
   },
   async run({ task_gid }) {
     if (!asanaConfigured) throw new ToolError('Asana is not connected.');
+    if (!isGid(task_gid)) throw new ToolError('That is not an Asana task id. Use an id from the list.');
     const { task, comments } = await getTask(task_gid).catch((error: Error) => {
       throw new ToolError(error.message);
     });
@@ -348,9 +349,11 @@ const propose_remember: ToolSpec<{ fact: string; category: ProfileCategory }> = 
   detail: lastTitle,
 };
 
+// Each tool has its own input type, checked by its strict schema; the table of them cannot name one type for all.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const SPECS: Record<string, ToolSpec<any>> = { read_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder, propose_remember };
 
-export const tools: Tool[] = Object.entries(SPECS).map(([name, spec]) => ({ name, strict: true, ...spec.definition }) as Tool);
+export const tools: Tool[] = Object.entries(SPECS).map(([name, spec]) => ({ name, strict: true, ...spec.definition }));
 
 /** Runs one tool call and returns its result for Claude, plus a short note for the progress list. */
 export async function runTool(block: ToolUse, created: Proposal[]): Promise<{ result: ToolResult; detail?: string }> {
@@ -361,7 +364,7 @@ export async function runTool(block: ToolUse, created: Proposal[]): Promise<{ re
     const text = await spec.run(block.input, created);
     return { result: reply(text), detail: spec.detail?.(block.input, created) };
   } catch (error) {
-    if (error instanceof ToolError || error instanceof AsanaError) return { result: reply((error as Error).message, true) };
+    if (error instanceof ToolError || error instanceof AsanaError) return { result: reply((error).message, true) };
     throw error;
   }
 }

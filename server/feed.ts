@@ -30,7 +30,7 @@ const TOKEN = token();
 export const feedPath = `/calendar/${TOKEN}.ics`;
 
 const stamp = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-const escapeText = (t: string) => t.replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const escapeText = (t: string) => t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r\n|\r|\n/g, '\\n');
 
 /** iCalendar lines may be at most 75 bytes; longer ones continue on the next line after a space. */
 export function fold(line: string): string {

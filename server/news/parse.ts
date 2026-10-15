@@ -38,7 +38,8 @@ export function plain(value: unknown, max: number): string {
   // Feeds often hold HTML as escaped text, so decode, remove the tags, then decode what was inside them.
   const cleaned = decode(decode(text(value)).replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]*>/g, ' '))
     // control characters and invisible direction marks have no place in a headline
-    .replace(/[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]/g, ' ')
+    // eslint-disable-next-line no-control-regex -- the control characters are the point
+    .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return cleaned.length > max ? `${cleaned.slice(0, max - 1).trimEnd()}…` : cleaned;

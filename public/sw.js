@@ -41,8 +41,8 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
       for (const w of windows) {
         if ('focus' in w) {
-          w.navigate(url);
-          return w.focus();
+          // Opening the page matters more than moving an existing window to it: a failed navigate must not stop the tap doing something.
+          return w.navigate(url).catch(() => w).then((target) => (target || w).focus());
         }
       }
       return self.clients.openWindow(url);

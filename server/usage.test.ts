@@ -70,7 +70,7 @@ describe('counting Claude tokens', () => {
   });
 
   it('ignores nonsense numbers instead of corrupting the totals', () => {
-    recordUsage('chat', { input_tokens: -5, output_tokens: Number.NaN as never, cache_read_input_tokens: null }, NOON);
+    recordUsage('chat', { input_tokens: -5, output_tokens: Number.NaN, cache_read_input_tokens: null }, NOON);
     expect(Object.values(state.usageLog[0]).filter((v) => typeof v === 'number').every((v) => Number.isFinite(v) && v >= 0)).toBe(true);
   });
 });

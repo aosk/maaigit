@@ -6,6 +6,7 @@ import { runTool, tools } from './tools.js';
 import type { Upload } from '../uploads.js';
 import { demoChat } from './demo.js';
 import { aboutTheUser } from '../profile.js';
+import { neutralize } from './untrusted.js';
 
 const SYSTEM = `You are MAAI (Musaed Abdulrahman AI), a warm, efficient personal assistant for one user in Saudi Arabia.
 You help plan the day, book meetings and set reminders. You speak the user's language: reply in Arabic when they write in Arabic (natural Saudi-friendly Modern Standard Arabic), otherwise in English.
@@ -54,13 +55,53 @@ function dropThinking(messages: MessageParam[], from = 0) {
   }
 }
 
-/** Notes the user's taps on approval cards since the last message, so MAAI knows what really happened. */
-function decisionsSince(conversation: Conversation): string {
-  const ids = new Set(conversation.turns.flatMap((t) => t.proposalIds ?? []));
-  const lines = state.proposals
-    .filter((p) => ids.has(p.id) && p.status !== 'pending')
-    .map((p) => `"${p.title}": ${p.status}${p.kind === 'meeting' && p.chosen ? ` for ${dayTime(p.chosen)}` : ''}`);
-  return lines.length ? `[Approval cards so far: ${lines.join('; ')}]\n\n` : '';
+/** What happened to the approval cards since Claude was last told, so it knows what really happened. Each is announced once. */
+function decisionsSince(conversation: Conversation): { note: string; ids: string[] } {
+  const mine = new Set(conversation.turns.flatMap((t) => t.proposalIds ?? []));
+  const told = new Set(conversation.announced ?? []);
+  const fresh = state.proposals.filter((p) => mine.has(p.id) && p.status !== 'pending' && !told.has(p.id));
+  // Titles can carry words from other people (a sender's name, an email subject): tidy and defuse them.
+  const line = (p: Proposal) => `"${neutralize(p.title).replace(/["\r\n]+/g, ' ').slice(0, 80)}": ${p.status}${p.kind === 'meeting' && p.chosen ? ` for ${dayTime(p.chosen)}` : ''}`;
+  return { note: fresh.length ? `[Approval cards since your last reply: ${fresh.map(line).join('; ')}]` : '', ids: fresh.map((p) => p.id) };
+}
+
+/** Most messages kept in the history sent to Claude; older whole exchanges are let go. */
+const KEEP_MESSAGES = 40;
+const STALE_CONTEXT = '<context>(an earlier snapshot of the day, no longer current)</context>';
+const CONTEXT = /<context>[\s\S]*?<\/context>/;
+
+const startsExchange = (m: MessageParam) => m.role === 'user' && (typeof m.content === 'string' || m.content.some((b) => b.type !== 'tool_result'));
+
+/**
+ * Before a new message: every earlier message carries a full snapshot of the calendar, mail and tasks as they were then.
+ * Those are out of date and, resent each time, the main cost of a long chat, so they are shrunk; very old exchanges go.
+ * Claude's saved reasoning is signed against what came before it, so it is dropped when anything above it changes.
+ */
+function compact(messages: MessageParam[]) {
+  let changed = false;
+  while (messages.length > KEEP_MESSAGES) {
+    const next = messages.findIndex((m, i) => i > 0 && startsExchange(m));
+    if (next < 0) break;
+    messages.splice(0, next);
+    changed = true;
+  }
+  for (const m of messages) {
+    if (m.role !== 'user') continue;
+    if (typeof m.content === 'string') {
+      const shrunk = m.content.replace(CONTEXT, STALE_CONTEXT);
+      if (shrunk !== m.content) {
+        m.content = shrunk;
+        changed = true;
+      }
+    } else {
+      m.content = m.content.map((b) => {
+        if (b.type !== 'text' || !CONTEXT.test(b.text) || b.text.includes(STALE_CONTEXT)) return b;
+        changed = true;
+        return { ...b, text: b.text.replace(CONTEXT, STALE_CONTEXT) };
+      });
+    }
+  }
+  if (changed) dropThinking(messages);
 }
 
 /**
@@ -90,8 +131,10 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
 
   await refreshContext();
   const messages = conversation.apiMessages;
+  compact(messages);
   const before = messages.length;
-  const prompt = `${decisionsSince(conversation)}${withContext(userText, aboutTheUser(userText))}`;
+  const decisions = decisionsSince(conversation);
+  const prompt = withContext(userText, [decisions.note, aboutTheUser(userText)].filter(Boolean).join('\n\n'));
   messages.push({ role: 'user', content: files.length ? [...fileBlocks(files), { type: 'text', text: prompt }] : prompt });
   const created: Proposal[] = [];
   try {
@@ -111,6 +154,7 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
       forgetFiles(messages[before]);
       dropThinking(messages, before + 1);
     }
+    conversation.announced = [...(conversation.announced ?? []), ...decisions.ids].slice(-200);
     return { text: text || (lang === 'ar' ? 'تم.' : 'Done.'), proposals: created };
   } catch (error) {
     // Roll back so a failed turn never leaves half a tool exchange in the history.
@@ -127,7 +171,12 @@ async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[]
     messages.push({ role: 'assistant', content: response.content });
     reply = textOf(response.content) || reply;
 
-    if (response.stop_reason === 'refusal') return lang === 'ar' ? 'عذراً، لا أستطيع المساعدة في هذا الطلب.' : "Sorry, I can't help with that request.";
+    if (response.stop_reason === 'refusal') {
+      // Keep a readable turn in the history: a refusal can come with no content at all.
+      const sorry = lang === 'ar' ? 'عذراً، لا أستطيع المساعدة في هذا الطلب.' : "Sorry, I can't help with that request.";
+      messages[messages.length - 1] = { role: 'assistant', content: [{ type: 'text', text: sorry }] };
+      return sorry;
+    }
     if (response.stop_reason === 'pause_turn') continue;
     if (response.stop_reason !== 'tool_use') break;
 
@@ -141,5 +190,18 @@ async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[]
     );
     messages.push({ role: 'user', content: results });
   }
+  settle(messages, reply);
   return reply;
+}
+
+/**
+ * A reply cut off mid-way (it ran out of room, or the rounds ran out) can end with a tool call nobody answered.
+ * Left in the history, every later message would be refused by Claude's API, so such calls are removed.
+ */
+function settle(messages: MessageParam[], reply: string) {
+  const last = messages[messages.length - 1];
+  if (last?.role !== 'assistant' || typeof last.content === 'string') return;
+  if (!last.content.some((b) => b.type === 'tool_use')) return;
+  const kept = last.content.filter((b) => b.type !== 'tool_use');
+  last.content = kept.some((b) => b.type === 'text') ? kept : [...kept, { type: 'text', text: reply || '…' }];
 }
