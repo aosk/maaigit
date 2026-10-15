@@ -3,11 +3,23 @@ import type { ChatTurn, Proposal, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
 import { canListen, listen, speak, stopSpeaking, type ListenProblem } from '../speech';
-import { Mic, Plus, Send } from '../components/Icons';
+import { FileText, Mic, Paperclip, Plus, Send } from '../components/Icons';
+import { AttachError, prepare, type AttachKind } from '../attach';
 import { takeArrival } from '../nav';
 import { Logo } from '../components/Logo';
 import { ProposalCard } from '../components/ProposalCard';
 import { WorkingBubble, addEvent, emptyProgress, type Progress } from '../components/WorkingBubble';
+
+interface Pending {
+  key: number;
+  name: string;
+  kind: AttachKind;
+  preview?: string;
+  status: 'uploading' | 'ready';
+  id?: string;
+}
+
+let pendingKey = 0;
 
 export function Assistant() {
   const { t, settings, update } = useSettings();
@@ -24,6 +36,8 @@ export function Assistant() {
   const [voiceNote, setVoiceNote] = useState('');
   const [progress, setProgress] = useState<Progress>(emptyProgress);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<Pending[]>([]);
 
   useEffect(() => {
     api.status().then(setStatus).catch(() => {});
@@ -47,22 +61,61 @@ export function Assistant() {
     endRef.current?.scrollIntoView({ behavior: settings.toggles.reduceMotion ? 'auto' : 'smooth', block: 'end' });
   }, [turns, busy, settings.toggles.reduceMotion]);
 
+  async function attach(list: FileList | null) {
+    if (!list) return;
+    setError('');
+    for (const file of Array.from(list)) {
+      const key = ++pendingKey;
+      try {
+        const ready = await prepare(file);
+        const preview = ready.kind === 'image' ? URL.createObjectURL(ready.blob) : undefined;
+        setPending((ps) => [...ps, { key, name: ready.name, kind: ready.kind, preview, status: 'uploading' }]);
+        try {
+          const info = await api.upload(ready.blob, ready.name);
+          setPending((ps) => ps.map((p) => (p.key === key ? { ...p, status: 'ready', id: info.id } : p)));
+        } catch (e) {
+          setPending((ps) => ps.filter((p) => p.key !== key));
+          if (preview) URL.revokeObjectURL(preview);
+          setError(t.attachFailed((e as Error).message));
+        }
+      } catch (e) {
+        const err = e as Error;
+        setError(err instanceof AttachError ? (err.reason === 'too-big' ? t.attachTooBig : t.attachNotSupported) : t.attachFailed(err.message));
+      }
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  function removePending(key: number) {
+    setPending((ps) => {
+      const gone = ps.find((p) => p.key === key);
+      if (gone?.preview) URL.revokeObjectURL(gone.preview);
+      return ps.filter((p) => p.key !== key);
+    });
+  }
+
   async function send(text: string) {
-    const message = text.trim();
-    if (!message || busy) return;
+    if (busy) return;
+    if (pending.some((p) => p.status === 'uploading')) return setError(t.attachWaiting);
+    const files = pending.filter((p) => p.id);
+    const message = text.trim() || (files.length ? t.attachDefaultPrompt : '');
+    if (!message) return;
     setInput('');
     setError('');
     setBusy(true);
-    setTurns((ts) => [...ts, { role: 'user', text: message }]);
+    const shown = text.trim() || (files.length ? '' : message);
+    setTurns((ts) => [...ts, { role: 'user', text: shown, attachments: files.length ? files.map((f) => ({ name: f.name, kind: f.kind })) : undefined }]);
+    setPending([]);
     setProgress(emptyProgress());
     try {
-      const res = await api.send(message, lang, (e) => setProgress((p) => addEvent(p, e)));
+      const res = await api.send(message, lang, (e) => setProgress((p) => addEvent(p, e)), files.map((f) => f.id!));
       setProposals((ps) => ({ ...ps, ...Object.fromEntries(res.proposals.map((p) => [p.id, p])) }));
       setTurns((ts) => [...ts, { role: 'assistant', text: res.reply, proposalIds: res.proposals.map((p) => p.id) }]);
       if (settings.toggles.speakReplies) speak(res.reply, lang, settings.toggles.slow);
     } catch (e) {
       setTurns((ts) => ts.slice(0, -1));
-      setInput(message);
+      setInput(text.trim());
+      setPending(files);
       setError((e as Error).message || t.errorGeneric);
     } finally {
       setBusy(false);
@@ -137,7 +190,12 @@ export function Assistant() {
         {turns.map((turn, i) => (
           <div key={i} style={{ display: 'contents' }}>
             {(turn.role === 'user' || settings.toggles.captions || !settings.toggles.speakReplies) && (
-              <div className={`bubble ${turn.role}`}>{turn.text}</div>
+              <div className={`bubble ${turn.role}`}>
+                {turn.attachments?.map((a, k) => (
+                  <span key={k} className="file-chip"><FileText size={16} />{a.name}</span>
+                ))}
+                {turn.text}
+              </div>
             )}
             {turn.proposalIds?.map((pid) =>
               proposals[pid] ? (
@@ -156,7 +214,20 @@ export function Assistant() {
         <div className="composer-hint" aria-live="polite">
           {live ? t.listening : voiceNote || t.tapToSpeak}
         </div>
+        {pending.length > 0 && (
+          <ul className="attachments" aria-label={t.attach}>
+            {pending.map((p) => (
+              <li key={p.key} className={`file-chip${p.status === 'uploading' ? ' wait' : ''}`}>
+                {p.preview ? <img src={p.preview} alt="" /> : <FileText size={16} />}
+                <span className="file-name">{p.status === 'uploading' ? t.attachPreparing : p.name}</span>
+                <button type="button" className="file-x" aria-label={t.attachRemove(p.name)} onClick={() => removePending(p.key)}>×</button>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="composer-row">
+          <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => void attach(e.target.files)} />
+          <button type="button" className="attach" aria-label={t.attach} onClick={() => fileRef.current?.click()} disabled={busy}><Paperclip size={22} /></button>
           <label htmlFor="chat-input" className="sr-only">{t.typeMessage}</label>
           <input
             id="chat-input"
@@ -168,7 +239,7 @@ export function Assistant() {
             disabled={busy}
             autoComplete="off"
           />
-          {input.trim() && !live ? (
+          {(input.trim() || pending.some((p) => p.id)) && !live ? (
             <button type="submit" className="mic" aria-label={t.send} disabled={busy}><Send size={22} /></button>
           ) : (
             <button

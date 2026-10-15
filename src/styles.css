@@ -195,6 +195,15 @@ a { color: var(--tint-text); }
 .composer-row { display: flex; align-items: center; gap: 10px; }
 .composer input { flex: 1; min-width: 0; min-height: 48px; border-radius: 24px; border: 1px solid var(--border); background: var(--bg); padding: 0 16px; }
 .mic { width: 56px; height: 56px; border-radius: 28px; border: 5px solid var(--tint-soft); background: var(--tint); color: var(--on-tint); display: flex; align-items: center; justify-content: center; flex: none; }
+.attach { width: 48px; height: 48px; border-radius: 24px; border: 1px solid var(--border); background: var(--bg); color: var(--tint-text); display: flex; align-items: center; justify-content: center; flex: none; }
+.attachments { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.file-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; border-radius: 14px; background: var(--tint-soft); color: var(--tint-text); padding: 4px 10px; font-size: 0.82em; margin-block-end: 4px; }
+.attachments .file-chip { margin: 0; padding-inline-end: 4px; }
+.file-chip img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
+.file-chip.wait { opacity: 0.7; }
+.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+.file-x { border: 0; padding: 0; width: 32px; height: 32px; border-radius: 16px; background: transparent; color: inherit; font-size: 1.3em; line-height: 1; }
+.bubble .file-chip { display: flex; width: fit-content; }
 .mic.live { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 10px var(--tint-soft); } }
 .chips { display: flex; flex-direction: column; gap: 8px; }

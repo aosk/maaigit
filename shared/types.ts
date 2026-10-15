@@ -154,6 +154,16 @@ export interface ChatTurn {
   role: 'user' | 'assistant';
   text: string;
   proposalIds?: string[];
+  /** Files shown with this message (names only: their contents are never kept). */
+  attachments?: { name: string; kind: 'image' | 'pdf' }[];
+}
+
+/** What POST /api/uploads answers: an id to attach to the next chat message. */
+export interface UploadInfo {
+  id: string;
+  name: string;
+  kind: 'image' | 'pdf';
+  bytes: number;
 }
 
 /** Live progress while MAAI works: its thinking, each step ("read_email", then "read_email:done"), the reply as it is written. */

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Proposal, StreamEvent } from '../../shared/types.js';
 import { chat } from '../ai/chat.js';
+import { releaseUploads, takeUploads } from '../uploads.js';
 import { sendMail } from '../mail.js';
 import { createTask, updateTask, validateNewTask } from '../asana.js';
 import { mirrorToGoogle } from '../gwrite.js';
@@ -27,7 +28,14 @@ assistant.get('/chat', (_req, res) => {
  * show what MAAI is doing: its thinking, each step, and the reply as it is written.
  */
 assistant.post('/chat/stream', async (req, res) => {
-  const message = text(req.body.text, 4000);
+  let files: ReturnType<typeof takeUploads>;
+  try {
+    files = takeUploads(req.body.attachments);
+  } catch (error) {
+    const { status, error: why } = explain(error);
+    return res.status(status).json({ error: why });
+  }
+  const message = text(req.body.text, 4000) || (files.length ? 'Please summarise this for me.' : '');
   if (!message) return res.status(400).json({ error: 'Say or type something first' });
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -39,7 +47,8 @@ assistant.post('/chat/stream', async (req, res) => {
   // A comment line every 15 s keeps proxies from closing a long, quiet connection.
   const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15_000);
   try {
-    const reply = await chat(conversation(), message, lang(req.body.lang), send);
+    const reply = await chat(conversation(), message, lang(req.body.lang), send, files);
+    releaseUploads(files);
     send({ type: 'done', reply: reply.text, proposals: reply.proposals });
   } catch (error) {
     send({ type: 'error', error: explain(error).error });

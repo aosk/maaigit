@@ -1,3 +1,4 @@
+import type { UploadInfo } from '../shared/types';
 import type { AuthenticationResponseJSON, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
 import type {
   AdminOverview,
@@ -110,7 +111,17 @@ export const api = {
 
   chat: () => call<{ turns: ChatTurn[]; proposals: Proposal[] }>('GET', '/chat'),
   /** Streams MAAI's progress (thinking, steps, reply text) and resolves with the final reply. */
-  send: async (text: string, lang: Lang, onEvent: (e: ChatEvent) => void) => readStream(await request('POST', '/chat/stream', { text, lang }), onEvent),
+  /** Uploads a photo or PDF for the assistant; answers with the id to attach to the next message. */
+  upload: async (file: Blob, name: string): Promise<UploadInfo> => {
+    const res = await fetch('/api/uploads', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(name) }, body: file });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string; kind?: string; face?: boolean };
+      if (res.status === 401 && data.error === 'locked') window.dispatchEvent(new CustomEvent(LOCKED_EVENT, { detail: { kind: data.kind, face: data.face === true } }));
+      throw new Error(data.error ?? `Upload failed (${res.status})`);
+    }
+    return (await res.json()) as UploadInfo;
+  },
+  send: async (text: string, lang: Lang, onEvent: (e: ChatEvent) => void, attachments: string[] = []) => readStream(await request('POST', '/chat/stream', { text, lang, attachments }), onEvent),
   resetChat: () => call<void>('POST', '/chat/reset'),
   approve: (id: string, start?: string) => call<Proposal>('POST', `/proposals/${id}/approve`, { start }),
   approveEmail: (id: string, mail: { to: string; subject: string; body: string }) => call<Proposal>('POST', `/proposals/${id}/approve`, mail),
