@@ -26,3 +26,4 @@ export const Trash = (p: P) => <Icon {...p}><path d="M3 6h18M8 6V4h8v2M6 6l1 14h
 export const Moon = (p: P) => <Icon {...p}><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></Icon>;
 export const Sunrise = (p: P) => <Icon {...p}><path d="M17 18a5 5 0 0 0-10 0" /><path d="M12 2v7M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M8 6l4-4 4 4" /></Icon>;
 export const Newspaper = (p: P) => <Icon {...p}><path d="M4 5h13a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z" /><path d="M19 9h1.5A1.5 1.5 0 0 1 22 10.5V19a2 2 0 0 1-2 2M8 9h7M8 13h7M8 17h4" /></Icon>;
+export const Clock = (p: P) => <Icon {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Icon>;

@@ -8,6 +8,8 @@ import { useSettings } from '../settings';
 import { speak, stopSpeaking } from '../speech';
 import { Bell, Mic } from '../components/Icons';
 import { BriefingCard } from '../components/BriefingCard';
+import { StressCard } from '../components/StressCard';
+import { CountBadge } from '../components/CountBadge';
 import { askAssistant, talkToAssistant } from '../nav';
 import { Logo } from '../components/Logo';
 import { AsanaTasks } from '../components/AsanaTasks';
@@ -171,8 +173,10 @@ export function Today() {
         }}
       />
 
+      {facts && <StressCard stress={facts.stress} />}
+
       <div className="between" id="today-schedule">
-        <h2 className="h2 sec sec-event">{t.schedule}</h2>
+        <h2 className="h2 sec sec-event">{t.schedule}{facts && facts.events.total > 0 && <CountBadge kind="event" n={facts.events.left} of={facts.events.total} />}</h2>
         {next && (
           <div className="pill">{t.inPrayer(t.prayers[next.name], t.hoursMinutes(Math.floor(minsToPrayer / 60), minsToPrayer % 60))}</div>
         )}
@@ -220,7 +224,7 @@ export function Today() {
 
       <div id="today-tasks"><AsanaTasks /></div>
 
-      <h2 className="h2 sec sec-reminder" id="today-reminders">{t.reminders}</h2>
+      <h2 className="h2 sec sec-reminder" id="today-reminders">{t.reminders}<CountBadge kind="reminder" n={openReminders.length} /></h2>
       <section className="card flush" aria-label={t.reminders}>
         {openReminders.length === 0 && <div className="check"><span className="sub">{t.noReminders}</span></div>}
         {openReminders.map((r) => (
@@ -236,7 +240,7 @@ export function Today() {
 
       {upcoming.length > 0 && (
         <>
-          <h2 className="h2 extra sec sec-event">{t.upcoming}</h2>
+          <h2 className="h2 extra sec sec-event">{t.upcoming}<CountBadge kind="event" n={upcoming.length} /></h2>
           <section className="card flush extra">
             {upcoming.map((e) => (
               <button key={e.id} type="button" className="slot slot-btn" onClick={() => setSelected(e)} aria-haspopup="dialog">

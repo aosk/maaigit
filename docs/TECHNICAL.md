@@ -34,6 +34,7 @@ Express server (server/)
 | `server/sync.ts` | Refreshes calendars, Asana, Gmail and pending Google writes (every 3 h, on pull-to-refresh, on demand) |
 | `server/gcal.ts`, `livecal.ts`, `gwrite.ts`, `gauth.ts` | Calendar read (ICS + live API), write-back of approved meetings, service-account token |
 | `server/news/*`, `server/ai/news.ts` | The News tab: reads a fixed list of trusted feeds every 6 h, ranks stories, Claude picks and summarises |
+| `server/stress.ts` | The day-load (stress) score: plain arithmetic on events, tasks, email, WhatsApp, reminders and time pressure, each part capped; shown in the Today "Day load" card |
 | `server/ai/facts.ts` | The counts and next event on the Today briefing card (no AI call), from `GET /api/briefing/facts` |
 | `server/mail-handled.ts` | Remembers which inbox emails were dealt with (reply sent, meeting booked), so they leave "Needs your decision" |
 | `server/anthropic-usage.ts`, `anthropic-limits.ts` | What Anthropic reports for the key MAAI uses: live rate limits (from response headers) and, with an Admin API key, tokens and cost (Admin API) |

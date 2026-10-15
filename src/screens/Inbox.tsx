@@ -9,6 +9,7 @@ import { Back, Chat, Send, Trash } from '../components/Icons';
 import { mailtoLink } from '../components/EmailCard';
 import { MailDigest } from './MailDigest';
 import { WhatsAppDigest } from './WhatsAppDigest';
+import { CountBadge } from '../components/CountBadge';
 
 const TONES: Tone[] = ['short', 'friendly', 'formal', 'arabic'];
 
@@ -160,6 +161,22 @@ export function Inbox() {
   const { t } = useSettings();
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [replying, setReplying] = useState<InboxMessage | null>(null);
+  // How much is waiting in each tab, shown on the tab itself.
+  const [counts, setCounts] = useState({ email: 0, whatsapp: 0, messages: 0 });
+  const lang = useSettings().settings.lang;
+  const loadCounts = useCallback(() => {
+    void Promise.all([api.briefingFacts(lang, true), api.inbox()])
+      .then(([facts, messages]) =>
+        setCounts({
+          email: facts.email.toDecide + facts.email.toReply || facts.email.unread,
+          whatsapp: facts.whatsapp.waiting,
+          messages: messages.filter((m) => !m.replied && m.via !== 'twilio').length,
+        }),
+      )
+      .catch(() => {});
+  }, [lang]);
+  useEffect(loadCounts, [loadCounts, replying]);
+  useOnRefresh(loadCounts);
   // Email first; the choice is remembered for this visit.
   const [view, setView] = useState<View>(() => (sessionStorage.getItem(VIEW_KEY) as View | null) ?? 'email');
   const pickView = (v: View) => {
@@ -174,9 +191,9 @@ export function Inbox() {
     <>
       <h1 className="title">{t.inboxTitle}</h1>
       <div className="seg" role="radiogroup" aria-label={t.inboxTitle}>
-        <button role="radio" aria-checked={view === 'email'} onClick={() => pickView('email')}>{t.emailTab}</button>
-        <button role="radio" aria-checked={view === 'whatsapp'} onClick={() => pickView('whatsapp')}>{t.whatsappTab}</button>
-        <button role="radio" aria-checked={view === 'messages'} onClick={() => pickView('messages')}>{t.messagesTab}</button>
+        <button role="radio" aria-checked={view === 'email'} onClick={() => pickView('email')}>{t.emailTab}<CountBadge kind="mail" n={counts.email} /></button>
+        <button role="radio" aria-checked={view === 'whatsapp'} onClick={() => pickView('whatsapp')}>{t.whatsappTab}<CountBadge kind="chat" n={counts.whatsapp} /></button>
+        <button role="radio" aria-checked={view === 'messages'} onClick={() => pickView('messages')}>{t.messagesTab}<CountBadge kind="reminder" n={counts.messages} /></button>
       </div>
     </>
   );

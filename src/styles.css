@@ -381,3 +381,49 @@ a { color: var(--tint-text); }
 .story:focus-visible { outline-offset: -3px; }
 .news-sources li { display: flex; gap: 8px; align-items: baseline; font-size: 0.86em; }
 .news-sources ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+
+/* ---------- Day load (stress) ---------- */
+.load { --lv: var(--success); --lv-soft: var(--success-soft); }
+.load[data-level='steady'] { --lv: var(--tint-text); --lv-soft: var(--tint-soft); }
+.load[data-level='busy'] { --lv: var(--warn-text); --lv-soft: var(--warn-soft); }
+.load[data-level='heavy'] { --lv: var(--danger); --lv-soft: var(--danger-soft); }
+.load-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.load-score { font-size: 2.1em; font-weight: 800; line-height: 1; color: var(--lv); font-variant-numeric: tabular-nums; }
+.load-level { display: inline-block; background: var(--lv-soft); color: var(--lv); border-radius: 14px; padding: 4px 12px; font-weight: 700; font-size: 0.85em; }
+.gauge { position: relative; height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--success) 0 25%, var(--tint) 25% 50%, var(--warn-bar) 50% 75%, var(--danger) 75% 100%); opacity: 0.9; }
+.gauge i { position: absolute; top: -5px; width: 6px; height: 22px; border-radius: 3px; background: var(--text); border: 2px solid var(--surface); transform: translateX(-50%); }
+:root[dir='rtl'] .gauge { transform: scaleX(-1); }
+:root[dir='rtl'] .gauge i { transform: translateX(50%); }
+.load-why summary { cursor: pointer; font-weight: 600; font-size: 0.9em; }
+.factor { display: grid; grid-template-columns: 24px 1fr auto; gap: 4px 10px; align-items: center; padding: 6px 0; }
+.factor .ic { color: var(--f); display: grid; place-items: center; }
+.factor .name { font-size: 0.9em; font-weight: 600; }
+.factor .what { font-size: 0.78em; color: var(--text2); }
+.factor .bar { grid-column: 2 / 4; height: 8px; border-radius: 4px; background: var(--sep); overflow: hidden; }
+.factor .bar span { display: block; height: 100%; background: var(--f); border-radius: 4px; }
+.factor .pts { font-size: 0.8em; font-weight: 700; color: var(--f); font-variant-numeric: tabular-nums; }
+.factor.schedule { --f: var(--c-event); }
+.factor.tasks { --f: var(--c-task); }
+.factor.email { --f: var(--c-mail); }
+.factor.whatsapp { --f: var(--c-chat); }
+.factor.reminders { --f: var(--c-reminder); }
+.factor.time { --f: var(--text2); }
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; height: 84px; margin: 0; padding: 0; list-style: none; }
+.week li { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; font-size: 0.7em; color: var(--text2); }
+.week .col { width: 100%; max-width: 28px; border-radius: 6px 6px 3px 3px; background: var(--b); min-height: 4px; }
+.week li[aria-current='date'] { color: var(--text); font-weight: 700; }
+.week li[aria-current='date'] .col { outline: 2px solid var(--text); outline-offset: 1px; }
+.week .calm { --b: var(--success); } .week .steady { --b: var(--tint); } .week .busy { --b: var(--warn-bar); } .week .heavy { --b: var(--danger); }
+
+/* ---------- Count badges on every section ---------- */
+.count { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 26px; padding: 0 9px; margin-inline-start: 8px; border-radius: 13px; font-size: 0.62em; font-weight: 800; vertical-align: middle; background: var(--k-soft); color: var(--k); font-variant-numeric: tabular-nums; }
+.count.alert { background: var(--danger-soft); color: var(--danger); }
+.count.event { --k: var(--c-event); --k-soft: var(--c-event-soft); }
+.count.task { --k: var(--c-task); --k-soft: var(--c-task-soft); }
+.count.reminder { --k: var(--c-reminder); --k-soft: var(--c-reminder-soft); }
+.count.mail { --k: var(--c-mail); --k-soft: var(--c-mail-soft); }
+.count.chat { --k: var(--c-chat); --k-soft: var(--c-chat-soft); }
+.count.zero { opacity: 0.55; }
+.seg .count { font-size: 0.8em; height: 22px; min-width: 22px; margin-inline-start: 6px; }
+
+.h2.sec { white-space: nowrap; }

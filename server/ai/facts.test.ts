@@ -35,6 +35,7 @@ beforeEach(() => {
   state.inbox = [];
   state.handledMail = {};
   state.aiCache = {};
+  state.stressDays = {};
 });
 
 describe('the numbers on the briefing card', () => {
@@ -83,5 +84,38 @@ describe('the numbers on the briefing card', () => {
     const msg = (phone: string, replied: boolean) => ({ id: id(), from: phone, phone, channel: 'whatsapp' as const, text: 'hi', receivedAt: NOW.toISOString(), replied });
     state.inbox = [msg('1', false), msg('1', false), msg('2', false), msg('3', true)];
     expect(briefingFacts('en', NOW).whatsapp).toEqual({ waiting: 2 });
+  });
+
+  it('works out the day\'s load from all of it, and remembers the day\'s highest', () => {
+    state.events = [
+      { id: 'a', title: 'One', start: at(1), minutes: 60 },
+      { id: 'b', title: 'Two, straight after', start: at(2), minutes: 60 },
+      { id: 'c', title: 'Three', start: at(5), minutes: 30 },
+    ];
+    state.reminders = [{ id: id(), title: 'late one', when: 'x', at: at(-1), repeat: 'once', done: false }];
+    const msg = (phone: string) => ({ id: id(), from: phone, phone, channel: 'whatsapp' as const, text: 'hi', receivedAt: NOW.toISOString(), replied: false });
+    state.inbox = [msg('1'), msg('2')];
+    state.aiCache['whatsapp-digest:en'] = { fingerprint: 'x', at: NOW.toISOString(), value: { summary: '', items: [{ key: '1', priority: 'high' }, { key: '2', priority: 'low' }] } };
+    state.aiCache['mail-digest:en'] = { fingerprint: 'x', at: NOW.toISOString(), value: { summary: '', items: [{ uid: 1, category: 'decide', priority: 'high' }, { uid: 2, category: 'reply', priority: 'normal' }] } };
+
+    const { stress } = briefingFacts('en', NOW);
+    const part = (key: string) => stress.factors.find((f) => f.key === key)!;
+    expect(part('schedule')).toMatchObject({ count: 3, points: 14 }); // 3 left (9) + 1 back to back (3) + 0.5 h beyond the free 2 (1.5) = 13.5, rounded
+    expect(part('whatsapp')).toMatchObject({ count: 2, points: 6 + 3 }); // 2 waiting, 1 important
+    expect(part('email')).toMatchObject({ count: 2, points: 4 + 2 + 3 });
+    expect(part('reminders')).toMatchObject({ count: 1, points: 2 + 3 }); // due today, and late
+    expect(stress.score).toBe(stress.factors.reduce((a, f) => a + f.points, 0));
+    expect(stress.drivers).toContain('schedule');
+    expect(state.stressDays['2026-10-15']).toBe(stress.score);
+    expect(stress.week).toHaveLength(7);
+    expect(stress.week[6]).toEqual({ day: '2026-10-15', score: stress.score });
+
+    // a lighter moment later in the day does not lower the day's highest score
+    state.inbox = [];
+    state.aiCache = {};
+    const lighter = briefingFacts('en', NOW).stress;
+    expect(lighter.score).toBeLessThan(stress.score);
+    expect(state.stressDays['2026-10-15']).toBe(stress.score);
+    expect(lighter.week[6].score).toBe(stress.score);
   });
 });

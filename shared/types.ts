@@ -206,6 +206,23 @@ export interface BriefingFacts {
   reminders: { open: number };
   email: { unread: number; toDecide: number; toReply: number };
   whatsapp: { waiting: number };
+  /** How loaded the day is, worked out from everything above. */
+  stress: Stress;
+}
+
+export type StressFactor = 'schedule' | 'tasks' | 'email' | 'whatsapp' | 'reminders' | 'time';
+export type StressLevel = 'calm' | 'steady' | 'busy' | 'heavy';
+
+/** The day's load as a score out of 100, with what it is made of. Every point has a visible cause. */
+export interface Stress {
+  score: number;
+  level: StressLevel;
+  /** Each part: what was counted, the points it adds, and the most it can add. */
+  factors: { key: StressFactor; count: number; points: number; max: number }[];
+  /** The parts that add the most, biggest first (empty on a calm day). */
+  drivers: StressFactor[];
+  /** The highest score of each of the last 7 days, oldest first (today last). */
+  week: { day: string; score: number }[];
 }
 
 export type NewsSection = 'tech' | 'saudi';

@@ -192,6 +192,15 @@ Online, open **Settings → Face ID → Set up Face ID** (on the iPhone, from th
 Face ID. From then on the sign-in screen has a **Sign in with Face ID** button. MAAI keeps only a public key, never your face
 or fingerprint; the password still works. Remove a device any time in the same place.
 
+### Day load (stress level)
+
+Today shows a **Day load** card: a score out of 100 (Calm, Steady, Busy, Heavy) with a gauge, the one or two things driving it,
+and a one-line suggestion. Open "What it is made of" to see every part and its share, plus the highest score of each of the last
+seven days. It is plain arithmetic on what MAAI already knows (no AI), and no part can count for more than its ceiling:
+meetings ahead and back-to-back ones (25), tasks (25: overdue count most), email needing a decision or an answer (20),
+WhatsApp people waiting (15), reminders due today (10) and something starting within the hour (5). Every section on Today
+and every Inbox tab also has a coloured count badge.
+
 ### Anthropic account usage (Admin → Anthropic account)
 
 The admin portal shows what **Anthropic itself** reports for the key MAAI uses:

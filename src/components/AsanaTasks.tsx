@@ -6,6 +6,7 @@ import { useAction } from '../useAction';
 import { useOnRefresh } from '../refresh';
 import { Plus } from './Icons';
 import { AsanaNewFields } from './AsanaNewFields';
+import { CountBadge } from './CountBadge';
 
 /** How many tasks show before "Show more". */
 const SHOWN = 8;
@@ -73,7 +74,7 @@ export function AsanaTasks() {
     // Never vanish without a word: say that it is loading, or why it could not be loaded.
     return (
       <>
-        <div className="between"><h2 className="h2 sec sec-task">{t.asanaTasks}</h2></div>
+        <div className="between wrap"><h2 className="h2 sec sec-task">{t.asanaTasks}</h2></div>
         {loadError ? (
           <div className="card soft" role="alert">
             <span className="sub">{t.asanaLoadFailed(loadError)}</span>
@@ -125,8 +126,8 @@ export function AsanaTasks() {
 
   return (
     <>
-      <div className="between">
-        <h2 className="h2 sec sec-task">{t.asanaTasks}</h2>
+      <div className="between wrap">
+        <h2 className="h2 sec sec-task">{t.asanaTasks}{data.configured && !data.error && <CountBadge kind="task" n={data.open} alert={data.overdue > 0} />}</h2>
         <div className="row" style={{ gap: 8 }}>
           {data.overdue > 0 && <div className="pill warn">{t.asanaOverdue(data.overdue)}</div>}
           {data.configured && !data.error && (
