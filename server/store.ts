@@ -11,6 +11,7 @@ import type {
   AppAlert,
   AuditEntry,
   CalendarEvent,
+  UsageRow,
   ChatTurn,
   InboxMessage,
   Lang,
@@ -37,6 +38,8 @@ interface State {
   agents: AgentSetting[];
   drafts: number;
   usage: { inputTokens: number; outputTokens: number; requests: number };
+  /** Token use per day and feature (kept 90 days). */
+  usageLog: UsageRow[];
   /** Phones and browsers that turned on notifications. */
   subscriptions: { subscription: { endpoint: string; keys: { p256dh: string; auth: string } }; lang: Lang; createdAt: string }[];
   notifyPrefs: NotifyPrefs;
@@ -105,6 +108,7 @@ function seed(): State {
     ],
     drafts: 0,
     usage: { inputTokens: 0, outputTokens: 0, requests: 0 },
+    usageLog: [],
     subscriptions: [],
     notifyPrefs: { ...DEFAULT_PREFS },
     sentAlerts: [],

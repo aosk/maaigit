@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { ChatEvent } from '../../shared/types.js';
-import { state } from '../store.js';
+import type { ChatEvent, UsagePurpose } from '../../shared/types.js';
+import { recordUsage } from '../usage.js';
 
 /** The one place MAAI talks to the Claude API. */
 
@@ -17,6 +17,8 @@ export const MODEL = 'claude-opus-5-5';
 export const client = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
 
 interface Request {
+  /** What the request is for, so the admin portal can split token use by feature. */
+  purpose: UsagePurpose;
   system: string;
   messages: MessageParam[];
   tools?: Tool[];
@@ -62,7 +64,7 @@ const EXTRAS = {
 // without them rather than failing every request.
 let useExtras = true;
 
-async function withExtras(send: (extras: Partial<typeof EXTRAS>) => Promise<Message>): Promise<Message> {
+async function withExtras(purpose: UsagePurpose, send: (extras: Partial<typeof EXTRAS>) => Promise<Message>): Promise<Message> {
   let response: Message;
   try {
     response = await send(useExtras ? EXTRAS : {});
@@ -73,10 +75,7 @@ async function withExtras(send: (extras: Partial<typeof EXTRAS>) => Promise<Mess
     useExtras = false;
     response = await send({});
   }
-  const usage = response.usage;
-  state.usage.inputTokens += usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
-  state.usage.outputTokens += usage.output_tokens;
-  state.usage.requests += 1;
+  recordUsage(purpose, response.usage);
   return response;
 }
 
@@ -87,12 +86,12 @@ function api() {
 
 /** One request, answered in full. */
 export function create(req: Request): Promise<Message> {
-  return withExtras((extras) => api().create({ ...params(req), ...extras }));
+  return withExtras(req.purpose, (extras) => api().create({ ...params(req), ...extras }));
 }
 
 /** One request, streamed: thinking summaries, tool starts and reply text reach `onEvent` as they happen. */
 export function stream(req: Request, onEvent: OnEvent): Promise<Message> {
-  return withExtras(async (extras) => {
+  return withExtras(req.purpose, async (extras) => {
     const s = api().stream({
       ...params(req),
       ...extras,

@@ -69,7 +69,7 @@ async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[]
   const system = `${SYSTEM}\n\nThe app is currently set to ${lang === 'ar' ? 'Arabic' : 'English'}.`;
   let reply = '';
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const response = await stream({ system, messages, tools, effort: 'medium', maxTokens: 16000 }, onEvent);
+    const response = await stream({ purpose: 'chat', system, messages, tools, effort: 'medium', maxTokens: 16000 }, onEvent);
     messages.push({ role: 'assistant', content: response.content });
     reply = textOf(response.content) || reply;
 

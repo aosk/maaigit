@@ -86,6 +86,7 @@ export async function digestWhatsApp(lang: Lang, refresh: boolean): Promise<What
   if (!refresh && cache?.key === key) return { ...cache.digest, threads: list.map((t) => ({ ...t, insight: cache!.digest.threads.find((x) => x.key === t.key)?.insight })) };
 
   const response = await create({
+    purpose: 'whatsapp',
     system: `You are MAAI, the user's personal assistant. Sort the WhatsApp messages people sent to the user's business number so they can deal with them fast. Write in ${ar ? 'Arabic' : 'English'}.
 Categories: "decide" = the user must choose something (give 2-3 options, your recommendation first); "reply" = needs an answer but no real choice; "fyi" = worth knowing, no action; "ignore" = spam, promotions, automated notices.
 Priority "high" only for deadlines, money, family, clients, or important people. A conversation already marked answered needs no reply unless the person wrote again after it. Use the calendar to spot clashes. Keep every line short.

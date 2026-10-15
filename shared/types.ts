@@ -209,6 +209,20 @@ export interface StatusInfo {
   location: { latitude: number; longitude: number; timezone: string };
 }
 
+/** What a Claude request was for, so token use can be split by feature. */
+export type UsagePurpose = 'chat' | 'briefing' | 'email-digest' | 'email-draft' | 'whatsapp';
+
+/** One day's Claude use for one feature. `input` excludes tokens read from the cache, which are in `cached`. */
+export interface UsageRow {
+  /** YYYY-MM-DD in the app's time zone. */
+  day: string;
+  purpose: UsagePurpose;
+  input: number;
+  cached: number;
+  output: number;
+  requests: number;
+}
+
 export interface AdminOverview {
   counts: {
     events: number;
@@ -224,6 +238,8 @@ export interface AdminOverview {
   audit: AuditEntry[];
   status: StatusInfo;
   usage: { inputTokens: number; outputTokens: number; requests: number };
+  /** Claude use per day and feature, the last 30 days. */
+  usageLog: UsageRow[];
 }
 
 /** Which alerts MAAI sends. */

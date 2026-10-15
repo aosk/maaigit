@@ -33,6 +33,7 @@ Express server (server/)
 | `server/store.ts` | The only state: in-memory object, saved to `data/store.json` |
 | `server/sync.ts` | Refreshes calendars, Asana, Gmail and pending Google writes (every 3 h, on pull-to-refresh, on demand) |
 | `server/gcal.ts`, `livecal.ts`, `gwrite.ts`, `gauth.ts` | Calendar read (ICS + live API), write-back of approved meetings, service-account token |
+| `server/usage.ts` | Counts Claude tokens per day and feature (kept 90 days) for Admin → Token usage |
 | `server/notify.ts` | Prayer/meeting/briefing alerts, Web Push |
 | `src/` | React screens (Today, Assistant, Email, Settings, Admin), PWA service worker |
 

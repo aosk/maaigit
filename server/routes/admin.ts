@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { AdminOverview } from '../../shared/types.js';
 import { allEvents, audit, state } from '../store.js';
 import { status } from '../status.js';
+import { recentUsage } from '../usage.js';
 import { find } from './http.js';
 
 export const admin = Router();
@@ -24,6 +25,7 @@ admin.get('/admin', (_req, res) => {
     audit: state.audit.slice(0, 50),
     status: status(),
     usage: state.usage,
+    usageLog: recentUsage(30),
   };
   res.json(overview);
 });

@@ -45,6 +45,7 @@ export async function draftReply(input: { from: string; text: string; tone: Tone
   if (!client) return demoDraft(input);
 
   const response = await create({
+    purpose: 'email-draft',
     system: `You draft replies for the user of MAAI, a personal assistant. You see the user's calendar so replies can propose real free times.
 Write the summary in ${input.lang === 'ar' ? 'Arabic' : 'English'}. Tone for the draft: ${TONES[input.tone]}
 ${input.tone === 'arabic' ? '' : 'Write the draft in the language the sender used.'}
@@ -102,6 +103,7 @@ export async function digestInbox(lang: Lang, refresh: boolean): Promise<MailDig
   }
 
   const response = await create({
+    purpose: 'email-digest',
     system: `You are MAAI, the user's personal assistant. Sort their recent emails so they can deal with them fast. Write in ${ar ? 'Arabic' : 'English'}.
 Categories: "decide" = the user must choose something (give 2-3 options, your recommendation first); "reply" = needs an answer but no real choice; "fyi" = worth knowing, no action; "ignore" = newsletters, automated notices, nothing needed.
 Priority "high" only for deadlines, money, family, or important people. Use the calendar to spot clashes. Keep every line short.

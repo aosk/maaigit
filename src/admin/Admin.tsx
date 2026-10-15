@@ -3,6 +3,7 @@ import type { AdminOverview, AgentSetting } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
 import { Moon } from '../components/Icons';
+import { TokenUsage } from './TokenUsage';
 import { Logo } from '../components/Logo';
 
 const when = (iso: string) =>
@@ -24,6 +25,7 @@ function Badge({ outcome, label }: { outcome: string; label?: string }) {
 /** The admin portal from the design: live counts, agent switches, integration health and the audit log. */
 const SECTIONS = [
   { id: '', label: 'Overview' },
+  { id: 'usage', label: 'Token usage' },
   { id: 'agents', label: 'Agents' },
   { id: 'integrations', label: 'Integrations' },
   { id: 'audit', label: 'Safety & audit' },
@@ -80,7 +82,7 @@ export function Admin() {
         { label: 'Proposals made', value: data.counts.proposals, note: `${data.counts.approved} approved · ${data.counts.cancelled} cancelled` },
         { label: 'Approval rate', value: data.approvalRate === null ? '—' : `${Math.round(data.approvalRate * 100)}%`, note: 'cards users approved' },
         { label: 'Calendar items', value: data.counts.events, note: `${data.counts.reminders} reminders` },
-        { label: 'Claude usage', value: data.usage.requests, note: `${(data.usage.inputTokens / 1000).toFixed(1)}k in · ${(data.usage.outputTokens / 1000).toFixed(1)}k out tokens` },
+        { label: 'Claude usage', value: data.usage.requests, note: `${(data.usage.inputTokens / 1000).toFixed(1)}k in · ${(data.usage.outputTokens / 1000).toFixed(1)}k out tokens (all time)` },
       ]
     : [];
 
@@ -125,6 +127,8 @@ export function Admin() {
             </div>
           ))}
         </section>
+
+        {data && <TokenUsage rows={data.usageLog} timeZone={data.status.location.timezone} allTime={data.usage} />}
 
         <div className="row wrap" style={{ alignItems: 'stretch', gap: 24 }}>
           <section id="agents" aria-label="Agents" className="admin-card" style={{ flex: '999 1 520px', minWidth: 0 }}>
