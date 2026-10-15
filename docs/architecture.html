@@ -1,0 +1,380 @@
+<title>MAAI Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a one-sheet engineering poster. Header, the system diagram, API reference in columns, then stack and flows. Teal is MAAI's own colour. */
+:root {
+  --bg: #f4f6f5;
+  --surface: #ffffff;
+  --ink: #14211f;
+  --muted: #55645f;
+  --line: #cfd8d5;
+  --teal: #0a6e63;
+  --teal-soft: #dcefeb;
+  --amber: #8a5a00;
+  --amber-soft: #f6ead0;
+  --blue: #1f5fa8;
+  --blue-soft: #e0ebf7;
+  --plum: #7a3b6e;
+  --plum-soft: #f1e2ee;
+  --grey-soft: #e8edeb;
+  --get: #0a6e63;
+  --post: #1f5fa8;
+  --put: #8a5a00;
+  --del: #a4372b;
+  --font: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1816; --surface: #17231f; --ink: #e6efec; --muted: #9fb2ac; --line: #2c3d38;
+    --teal: #4fc3b3; --teal-soft: #17352f; --amber: #e3b34f; --amber-soft: #3a2f14;
+    --blue: #7fb2ee; --blue-soft: #172a3f; --plum: #d79ac9; --plum-soft: #35203a; --grey-soft: #1f2d29;
+    --get: #4fc3b3; --post: #7fb2ee; --put: #e3b34f; --del: #f08a7c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1816; --surface: #17231f; --ink: #e6efec; --muted: #9fb2ac; --line: #2c3d38;
+  --teal: #4fc3b3; --teal-soft: #17352f; --amber: #e3b34f; --amber-soft: #3a2f14;
+  --blue: #7fb2ee; --blue-soft: #172a3f; --plum: #d79ac9; --plum-soft: #35203a; --grey-soft: #1f2d29;
+  --get: #4fc3b3; --post: #7fb2ee; --put: #e3b34f; --del: #f08a7c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.45; margin: 0; }
+.page { max-width: 1240px; margin: 0 auto; padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 22px; }
+header { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: end; justify-content: space-between; border-bottom: 2px solid var(--ink); padding-bottom: 14px; }
+h1 { font-size: clamp(26px, 4vw, 38px); line-height: 1.05; margin: 0; letter-spacing: -0.02em; font-weight: 700; }
+h1 span { color: var(--teal); }
+.tag { margin: 6px 0 0; color: var(--muted); max-width: 62ch; text-wrap: balance; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; font-family: var(--mono); font-size: 12px; }
+.facts b { font-weight: 500; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; }
+h2 { font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+
+/* diagram */
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow-x: auto; }
+.diagram svg { display: block; width: 100%; min-width: 920px; height: auto; }
+svg text { font-family: var(--font); fill: var(--ink); }
+svg .m { font-family: var(--mono); font-size: 10.5px; fill: var(--muted); }
+svg .h { font-size: 13px; font-weight: 600; }
+svg .s { font-size: 11px; fill: var(--muted); }
+svg .lane { font-size: 10.5px; font-weight: 600; letter-spacing: 0.12em; fill: var(--muted); }
+svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+svg .teal { fill: var(--teal-soft); stroke: var(--teal); }
+svg .blue { fill: var(--blue-soft); stroke: var(--blue); }
+svg .amber { fill: var(--amber-soft); stroke: var(--amber); }
+svg .plum { fill: var(--plum-soft); stroke: var(--plum); }
+svg .grey { fill: var(--grey-soft); stroke: var(--line); }
+svg .zone { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 5 4; }
+svg .wire { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+svg .wire.ai { stroke: var(--teal); stroke-width: 2; }
+svg .wire.dash { stroke-dasharray: 4 4; }
+
+/* reference */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+.card h3 { font-size: 14px; margin: 0 0 2px; }
+.card .sub { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.ep { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 2px 8px; padding: 4px 0; border-top: 1px solid var(--line); align-items: baseline; }
+.ep:first-of-type { border-top: 0; }
+.v { font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.02em; }
+.v.GET { color: var(--get); } .v.POST { color: var(--post); } .v.PUT, .v.PATCH { color: var(--put); } .v.DELETE { color: var(--del); }
+.ep code { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.ep span.d { grid-column: 2; color: var(--muted); font-size: 12px; }
+.public { font-size: 10px; font-family: var(--mono); background: var(--amber-soft); color: var(--amber); border-radius: 3px; padding: 0 5px; margin-left: 6px; }
+
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.tablewrap { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+th, td { text-align: left; padding: 8px 12px; vertical-align: top; border-top: 1px solid var(--line); }
+th { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); border-top: 0; font-weight: 600; white-space: nowrap; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+td code { font-family: var(--mono); font-size: 11.5px; }
+
+.stack { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chips span { font-family: var(--mono); font-size: 11.5px; background: var(--grey-soft); border-radius: 4px; padding: 2px 7px; }
+.flow { margin: 0; padding-left: 18px; font-size: 12.5px; }
+.flow li { margin: 3px 0; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.rules div { border-left: 3px solid var(--teal); padding-left: 10px; font-size: 12.5px; }
+.rules b { display: block; font-size: 13px; }
+footer { color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+</style>
+
+<div class="page">
+  <header>
+    <div>
+      <h1><span>MAAI</span> architecture</h1>
+      <p class="tag">Musaed Abdulrahman AI: a personal assistant for one user. An iPhone home-screen web app talks to one Node server on Render, which reads calendar, mail, tasks and news, and uses Claude to think. Nothing is sent, booked or created without a tap.</p>
+    </div>
+    <div class="facts"><b>~11.7k lines TypeScript</b><b>434 tests</b><b>1 server · 1 disk</b><b>Asia/Riyadh</b><b>15 Oct 2026</b></div>
+  </header>
+
+  <section>
+    <h2>System at a glance</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 1200 566" role="img" aria-label="MAAI system diagram: devices on the left call the Render web service in the middle, which uses core services and stores data on a disk, and reaches outside providers on the right.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--muted)"/></marker>
+          <marker id="at" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--teal)"/></marker>
+        </defs>
+
+        <text class="lane" x="20" y="22">DEVICES</text>
+        <text class="lane" x="268" y="22">RENDER WEB SERVICE · NODE 22 · EXPRESS 4 · FRANKFURT</text>
+        <text class="lane" x="962" y="22">OUTSIDE PROVIDERS</text>
+
+        <!-- devices -->
+        <rect class="box teal" x="20" y="40" width="200" height="190" rx="8"/>
+        <text class="h" x="34" y="64">iPhone web app (PWA)</text>
+        <text class="s" x="34" y="84">React 18 · Vite · TypeScript</text>
+        <text class="s" x="34" y="102">Today · Assistant · Inbox</text>
+        <text class="s" x="34" y="118">News · Settings · Profile</text>
+        <text class="s" x="34" y="138">Arabic / English, RTL, dark mode</text>
+        <text class="s" x="34" y="156">Face ID (WebAuthn) lock</text>
+        <text class="s" x="34" y="174">Web Push + service worker</text>
+        <text class="s" x="34" y="192">Speech in / out (browser)</text>
+        <text class="s" x="34" y="210">Photo / PDF attach</text>
+
+        <rect class="box" x="20" y="252" width="200" height="74" rx="8"/>
+        <text class="h" x="34" y="276">Calendar apps</text>
+        <text class="s" x="34" y="296">iPhone / Google subscribe to</text>
+        <text class="s" x="34" y="312">a secret .ics link</text>
+
+        <rect class="box grey" x="20" y="348" width="200" height="74" rx="8"/>
+        <text class="h" x="34" y="372">Twilio WhatsApp</text>
+        <text class="s" x="34" y="392">posts incoming messages</text>
+        <text class="s" x="34" y="408">(feature paused by owner)</text>
+
+        <!-- service zone -->
+        <rect class="zone" x="262" y="34" width="660" height="512" rx="10"/>
+
+        <rect class="box amber" x="278" y="46" width="628" height="52" rx="6"/>
+        <text class="h" x="292" y="68">Edge</text>
+        <text class="s" x="292" y="86">HTTPS only · HSTS · strict CSP · no-store · case-sensitive routes · 1 MB JSON, 11 MB upload caps</text>
+
+        <rect class="box amber" x="278" y="108" width="628" height="62" rx="6"/>
+        <text class="h" x="292" y="130">Guard on /api</text>
+        <text class="s" x="292" y="148">Password → session cookie (HttpOnly, SameSite=Strict) · Face ID lock after idle · lockout on failures</text>
+        <text class="s" x="292" y="163">Public on purpose: /api/health · /calendar/‹secret›.ics · /webhook/whatsapp (Twilio signature)</text>
+
+        <rect class="box blue" x="278" y="182" width="300" height="196" rx="6"/>
+        <text class="h" x="292" y="204">API routes (JSON, SSE)</text>
+        <text class="m" x="292" y="224">today · chat · uploads · inbox</text>
+        <text class="m" x="292" y="240">asana · calendar · notify · news</text>
+        <text class="m" x="292" y="256">profile · admin · passkeys · sync</text>
+        <text class="s" x="292" y="282">Every body is read through small</text>
+        <text class="s" x="292" y="297">checkers (text(), isGid(), cleanFact())</text>
+        <text class="s" x="292" y="318">One approval gate: a card must be</text>
+        <text class="s" x="292" y="333">approved before any action runs</text>
+        <text class="s" x="292" y="354">Approve is once-only; one chat</text>
+        <text class="s" x="292" y="369">answer at a time per conversation</text>
+
+        <rect class="box teal" x="598" y="182" width="308" height="196" rx="6"/>
+        <text class="h" x="612" y="204">AI layer (server/ai)</text>
+        <text class="s" x="612" y="224">Chat loop: Claude + 10 tools, max 6 rounds</text>
+        <text class="s" x="612" y="240">read_* tools return data; propose_* make cards</text>
+        <text class="s" x="612" y="262">Saved answers (fingerprint cache) for</text>
+        <text class="s" x="612" y="277">briefing, mail digest, news, WhatsApp</text>
+        <text class="s" x="612" y="299">Context: calendar, mail, tasks, profile facts</text>
+        <text class="s" x="612" y="314">Untrusted text is defused (neutralize) and</text>
+        <text class="s" x="612" y="329">named as data in the system prompt</text>
+        <text class="s" x="612" y="351">History compaction · token usage log</text>
+
+        <rect class="box" x="278" y="390" width="300" height="62" rx="6"/>
+        <text class="h" x="292" y="412">Background scheduler</text>
+        <text class="s" x="292" y="430">alerts 30 s · Google calendar 60 s</text>
+        <text class="s" x="292" y="445">full sync 3 h · news 6 h (all configurable)</text>
+
+        <rect class="box" x="598" y="390" width="308" height="62" rx="6"/>
+        <text class="h" x="612" y="412">Domain logic (pure, tested)</text>
+        <text class="s" x="612" y="430">Prayer times (adhan) · day-load score</text>
+        <text class="s" x="612" y="445">reminders · leave-time · calendar merge</text>
+
+        <rect class="box plum" x="278" y="466" width="628" height="68" rx="6"/>
+        <text class="h" x="292" y="488">Data</text>
+        <text class="s" x="292" y="507">Render disk (1 GB): store.json (mode 0600, atomic writes, pruned) · push.json (push keys)</text>
+        <text class="s" x="292" y="522">In memory only: photos and PDFs (30 min, 4 per message), calendar / mail / task caches</text>
+
+        <!-- providers -->
+        <rect class="box teal" x="962" y="40" width="218" height="74" rx="8"/>
+        <text class="h" x="976" y="64">Anthropic API</text>
+        <text class="s" x="976" y="82">Claude Opus 5.5 · streaming · tools</text>
+        <text class="s" x="976" y="98">images / PDF · Admin API (usage)</text>
+        <rect class="box" x="962" y="126" width="218" height="58" rx="8"/>
+        <text class="h" x="976" y="148">Gmail</text>
+        <text class="s" x="976" y="166">IMAP read · SMTP send (app password)</text>
+        <rect class="box" x="962" y="196" width="218" height="58" rx="8"/>
+        <text class="h" x="976" y="218">Google Calendar</text>
+        <text class="s" x="976" y="236">Events API (service account) + ICS feeds</text>
+        <rect class="box" x="962" y="266" width="218" height="46" rx="8"/>
+        <text class="h" x="976" y="286">Asana</text>
+        <text class="s" x="976" y="302">REST: tasks, comments, projects</text>
+        <rect class="box grey" x="962" y="324" width="218" height="46" rx="8"/>
+        <text class="h" x="976" y="344">Twilio (paused)</text>
+        <text class="s" x="976" y="360">WhatsApp send / receive</text>
+        <rect class="box" x="962" y="382" width="218" height="58" rx="8"/>
+        <text class="h" x="976" y="404">Web Push services</text>
+        <text class="s" x="976" y="422">Apple · Google · Mozilla · Windows</text>
+        <rect class="box" x="962" y="452" width="218" height="82" rx="8"/>
+        <text class="h" x="976" y="474">News feeds</text>
+        <text class="s" x="976" y="492">RSS / Atom, https only, 12 allow-listed</text>
+        <text class="s" x="976" y="508">sources (AI &amp; tech, Saudi Arabia)</text>
+        <text class="s" x="976" y="524">read every 6 h</text>
+
+        <!-- wires -->
+        <path class="wire" d="M220 135H262" marker-end="url(#ar)"/>
+        <text class="m" x="226" y="128">HTTPS</text>
+        <path class="wire" d="M220 289H262" marker-end="url(#ar)"/>
+        <path class="wire dash" d="M220 385H262" marker-end="url(#ar)"/>
+        <path class="wire ai" d="M922 76H962" marker-end="url(#at)"/>
+        <path class="wire" d="M922 155H962" marker-end="url(#ar)"/>
+        <path class="wire" d="M922 225H962" marker-end="url(#ar)"/>
+        <path class="wire" d="M922 289H962" marker-end="url(#ar)"/>
+        <path class="wire dash" d="M922 347H962" marker-end="url(#ar)"/>
+        <path class="wire" d="M922 411H962" marker-end="url(#ar)"/>
+        <path class="wire" d="M922 493H962" marker-end="url(#ar)"/>
+        <path class="wire" d="M578 280H598" marker-end="url(#at)"/>
+        <path class="wire" d="M428 378V390M752 378V390M592 452V466" />
+        <text class="m" x="20" y="448">Solid: calls MAAI makes or receives.</text>
+        <text class="m" x="20" y="464">Dashed: paused feature.</text>
+        <text class="m" x="20" y="480">Teal: where Claude is involved.</text>
+        <text class="m" x="20" y="520">One user, one process, one</text>
+        <text class="m" x="20" y="536">copy of the data. Simple to</text>
+        <text class="m" x="20" y="552">run; not built for many users.</text>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>Inbound API · what the app calls (all under <code>/api</code> and behind the guard)</h2>
+    <div class="cols">
+      <div class="card"><h3>Session &amp; security</h3><div class="sub">Sign-in, Face ID, status</div>
+        <div class="ep"><span class="v GET">GET</span><code>/health</code><span class="d">Hosting health check <span class="public">public</span></span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/unlock</code><span class="d">Password → session cookie</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/logout</code><span class="d">End the session</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/passkey/login/options · /passkey/login</code><span class="d">Face ID sign-in (WebAuthn) <span class="public">public</span></span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/passkeys</code><span class="d">List Face ID keys</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/passkeys/options · /passkeys</code><span class="d">Register a key</span></div>
+        <div class="ep"><span class="v DELETE">DEL</span><code>/passkeys/:id</code><span class="d">Remove a key</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/active</code><span class="d">Heartbeat for the idle lock</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/status</code><span class="d">What is connected</span></div>
+      </div>
+      <div class="card"><h3>Today &amp; calendar</h3><div class="sub">Day view, briefing, events</div>
+        <div class="ep"><span class="v GET">GET</span><code>/today</code><span class="d">Events, reminders, prayers, tasks, day load</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/briefing</code><span class="d">Claude-written briefing (cached)</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/briefing/facts</code><span class="d">Counts and next item, no AI call</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/events</code><span class="d">Add an event (also to Google)</span></div>
+        <div class="ep"><span class="v DELETE">DEL</span><code>/events/:id</code><span class="d">Remove an event</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/reminders/:id/done</code><span class="d">Mark a reminder done</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/sync</code><span class="d">Re-read calendars, Asana, Gmail</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/calendar/feed</code><span class="d">The private subscribe link</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/calendar/‹secret›.ics</code><span class="d">The feed itself <span class="public">public</span></span></div>
+      </div>
+      <div class="card"><h3>Assistant</h3><div class="sub">Chat, approval cards, attachments</div>
+        <div class="ep"><span class="v GET">GET</span><code>/chat</code><span class="d">Saved turns and cards</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/chat/stream</code><span class="d">Ask; server-sent events: thinking, steps, reply</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/chat/reset</code><span class="d">New conversation</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/proposals/:id/approve</code><span class="d">Do what an approved card says (once only)</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/proposals/:id/cancel</code><span class="d">Dismiss a card</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/uploads</code><span class="d">Raw photo or PDF; checked by its bytes; held in memory</span></div>
+      </div>
+      <div class="card"><h3>Inbox &amp; messages</h3><div class="sub">Email, WhatsApp, drafts</div>
+        <div class="ep"><span class="v GET">GET</span><code>/inbox</code><span class="d">Messages and waiting count</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/inbox</code><span class="d">Paste a message in</span></div>
+        <div class="ep"><span class="v DELETE">DEL</span><code>/inbox/:id</code><span class="d">Delete a message</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/inbox/:id/draft</code><span class="d">Claude drafts a reply</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/inbox/:id/email · /whatsapp</code><span class="d">Send the reply you approved</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/inbox/:id/replied</code><span class="d">Mark as answered</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/mail/count · /mail/digest</code><span class="d">Unread count; sorted summary</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/whatsapp/digest</code><span class="d">Grouped, ranked summary</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/webhook/whatsapp</code><span class="d">Twilio delivers messages here <span class="public">public</span> signed</span></div>
+      </div>
+      <div class="card"><h3>Asana</h3><div class="sub">Tasks you own</div>
+        <div class="ep"><span class="v GET">GET</span><code>/asana · /asana/check</code><span class="d">Task list; connection check</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/asana/projects</code><span class="d">Projects for new tasks</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/asana/tasks/:gid/controls</code><span class="d">Status options for a task</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/asana/tasks</code><span class="d">Create a task</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/asana/tasks/:gid/complete · /due · /status</code><span class="d">Finish, reschedule, move</span></div>
+      </div>
+      <div class="card"><h3>Notifications</h3><div class="sub">Web Push and in-app alerts</div>
+        <div class="ep"><span class="v GET">GET</span><code>/notify</code><span class="d">Push status, key, preferences</span></div>
+        <div class="ep"><span class="v PATCH">PATCH</span><code>/notify/prefs</code><span class="d">Choose which alerts</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/notify/subscribe · /unsubscribe</code><span class="d">Add / remove this device</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/notify/test · /briefing</code><span class="d">Send a test / the briefing now</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/alerts</code><span class="d">Recent alerts for the open app</span></div>
+      </div>
+      <div class="card"><h3>News &amp; profile</h3><div class="sub">Trusted news; what MAAI knows about you</div>
+        <div class="ep"><span class="v GET">GET</span><code>/news</code><span class="d">Two sections, picked and summarised</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/news/refresh</code><span class="d">Read the sources now</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/profile · /profile/export</code><span class="d">Facts; download a copy</span></div>
+        <div class="ep"><span class="v POST">POST</span><code>/profile/facts</code><span class="d">Add a fact (secrets refused)</span></div>
+        <div class="ep"><span class="v PATCH">PATCH</span><code>/profile/facts/:id</code><span class="d">Edit or pin</span></div>
+        <div class="ep"><span class="v DELETE">DEL</span><code>/profile/facts/:id · /profile</code><span class="d">Forget one / everything</span></div>
+        <div class="ep"><span class="v PUT">PUT</span><code>/profile/enabled</code><span class="d">Pause or resume use</span></div>
+      </div>
+      <div class="card"><h3>Admin</h3><div class="sub">Owner's portal</div>
+        <div class="ep"><span class="v GET">GET</span><code>/admin</code><span class="d">Agents, audit log, token use, status</span></div>
+        <div class="ep"><span class="v GET">GET</span><code>/admin/cloud</code><span class="d">Live rate limits; cost from Anthropic</span></div>
+        <div class="ep"><span class="v PATCH">PATCH</span><code>/admin/agents/:id</code><span class="d">Switch an ability on or off</span></div>
+        <div class="sub" style="margin-top:8px">Agents: Assistant, Booking, Reminders, Messaging, Day planner.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Outbound APIs · what MAAI calls</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Provider</th><th>How</th><th>Used for</th><th>Guarded by</th></tr></thead>
+        <tbody>
+          <tr><td>Anthropic Messages</td><td><code>@anthropic-ai/sdk</code> (beta), streaming</td><td>Chat with tools, briefing, mail and WhatsApp digests, news picks, drafts; reads photos and PDFs</td><td>API key in env; approval cards; defused untrusted text; cache and usage log</td></tr>
+          <tr><td>Anthropic Admin</td><td>REST, optional admin key</td><td>Tokens and cost for the last 30 days; live rate limits from response headers</td><td>Read-only; key can be removed any time</td></tr>
+          <tr><td>Gmail</td><td>IMAP (imapflow) + SMTP (nodemailer)</td><td>Read the inbox; send replies you approve</td><td>App password; send only after a tap</td></tr>
+          <tr><td>Google Calendar</td><td>Events API with a service account; ICS feeds (node-ical)</td><td>Live calendar every 60 s; writes meetings MAAI books</td><td>Calendar shared with the service account only</td></tr>
+          <tr><td>Asana</td><td>REST with a personal token</td><td>Read tasks and comments; create, complete, reschedule</td><td>Changes only from approved cards or explicit taps</td></tr>
+          <tr><td>Twilio WhatsApp</td><td>Webhook in, REST out</td><td>Receive messages on the business number; reply inside 24 hours (paused)</td><td>HMAC-SHA1 signature check; fixed auto-reply text</td></tr>
+          <tr><td>Web Push</td><td>VAPID (web-push) to Apple, Google, Mozilla, Windows</td><td>Reminders, leave-time, prayer and briefing alerts</td><td>Allow-list of push hosts</td></tr>
+          <tr><td>News sources</td><td>RSS / Atom over https</td><td>12 trusted sources, every 6 hours</td><td>Fixed list; links must stay on the source's own site</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tech stack</h2>
+    <div class="stack">
+      <div class="card"><h3>App</h3><div class="chips"><span>React 18</span><span>Vite 8</span><span>TypeScript 5 strict</span><span>hash routing</span><span>PWA + service worker</span><span>WebAuthn</span><span>Web Speech</span><span>CSS tokens, RTL</span></div></div>
+      <div class="card"><h3>Server</h3><div class="chips"><span>Node 22</span><span>Express 4</span><span>tsx</span><span>imapflow</span><span>nodemailer</span><span>mailparser</span><span>node-ical</span><span>fast-xml-parser</span><span>web-push</span><span>adhan</span><span>@simplewebauthn</span></div></div>
+      <div class="card"><h3>Data &amp; hosting</h3><div class="chips"><span>JSON store, atomic, 0600</span><span>Render web service</span><span>1 GB persistent disk</span><span>auto-deploy from GitHub main</span><span>env-var secrets</span></div></div>
+      <div class="card"><h3>Quality</h3><div class="chips"><span>Vitest 434 tests</span><span>security + fuzz suites</span><span>ESLint (type-aware)</span><span>knip</span><span>madge (no cycles)</span><span>npm audit</span><span>axe-core</span><span>GitHub Actions</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Three flows</h2>
+    <div class="stack">
+      <div class="card"><h3>Ask, then approve</h3>
+        <ol class="flow"><li>You type, speak, or attach a photo.</li><li>Server adds today's calendar, mail, tasks and your profile facts, and streams the question to Claude.</li><li>Claude may read data with <code>read_*</code> tools, and proposes actions with <code>propose_*</code>.</li><li>Each proposal becomes an editable card. Nothing runs until you tap Approve.</li><li>Approve runs once, is written to the audit log, and shows the result.</li></ol></div>
+      <div class="card"><h3>Briefing and alerts</h3>
+        <ol class="flow"><li>Scheduler wakes every 30 s and checks reminders, meetings, prayers, briefing time.</li><li>Due items go out as Web Push to your phone and as banners in the open app.</li><li>The briefing is written by Claude only when the data or period changed, otherwise the saved text is reused.</li><li>Day load and counts are computed locally, with no AI call.</li></ol></div>
+      <div class="card"><h3>Photo or PDF to task</h3>
+        <ol class="flow"><li>Phone shrinks the photo and uploads it raw.</li><li>Server checks the file type from its first bytes and holds it in memory.</li><li>Claude reads it (Arabic and English), writes a short brief, and prepares a reminder or Asana task card.</li><li>The file is released; only its name stays in the chat.</li></ol></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Design rules the code enforces</h2>
+    <div class="rules">
+      <div><b>No action without a tap</b>Every send, booking, task and fact is a card the owner approves.</div>
+      <div><b>Other people's words are data</b>Emails, messages, titles, news and documents are defused and named as information.</div>
+      <div><b>Secrets stay server-side</b>Keys live in env vars; the profile refuses passwords and ID numbers.</div>
+      <div><b>Deny by default</b>Unknown paths under /api are refused; public routes are three and each proves itself.</div>
+      <div><b>Fail safe</b>Failed saves retry, an unreadable store stops the server, history never keeps a half-finished tool call.</div>
+    </div>
+  </section>
+
+  <footer>Technical notes in docs/TECHNICAL.md · Known limits and open review items are listed in section 7 there.</footer>
+</div>
