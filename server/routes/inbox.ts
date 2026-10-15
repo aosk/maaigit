@@ -93,4 +93,4 @@ inbox.get('/mail/digest', wrap(async (req, res) => res.json(await digestInbox(la
 
 // ---------- WhatsApp business number: summary and ranking ----------
 
-inbox.get('/whatsapp/digest', wrap(async (req, res) => res.json(await digestWhatsApp(lang(req.query.lang), req.query.refresh === '1'))));
+inbox.get('/whatsapp/digest', wrap(async (req, res) => res.json(await digestWhatsApp(lang(req.query.lang)))));

@@ -221,6 +221,8 @@ export interface UsageRow {
   cached: number;
   output: number;
   requests: number;
+  /** Times the saved answer was reused because nothing had changed (no tokens spent). */
+  hits?: number;
 }
 
 export interface AdminOverview {

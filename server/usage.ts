@@ -46,6 +46,18 @@ export function recordUsage(purpose: UsagePurpose, usage: ApiUsage, now = new Da
   save();
 }
 
+/** An answer was reused from the cache instead of asking Claude again. */
+export function recordCacheHit(purpose: UsagePurpose, now = new Date()): void {
+  const day = dayKey(now);
+  let row = state.usageLog.find((r) => r.day === day && r.purpose === purpose);
+  if (!row) {
+    row = { day, purpose, input: 0, cached: 0, output: 0, requests: 0 };
+    state.usageLog.push(row);
+  }
+  row.hits = (row.hits ?? 0) + 1;
+  save();
+}
+
 /** The last `days` days of use (today included), oldest first. */
 export function recentUsage(days: number, now = new Date()): UsageRow[] {
   const oldest = dayKey(new Date(now.getTime() - (days - 1) * 86_400_000));

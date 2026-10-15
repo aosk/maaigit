@@ -38,6 +38,8 @@ interface State {
   agents: AgentSetting[];
   drafts: number;
   usage: { inputTokens: number; outputTokens: number; requests: number };
+  /** Claude's last answer for each kind of summary, with the data it was based on. */
+  aiCache: Record<string, { fingerprint: string; at: string; value: unknown }>;
   /** Token use per day and feature (kept 90 days). */
   usageLog: UsageRow[];
   /** Phones and browsers that turned on notifications. */
@@ -109,6 +111,7 @@ function seed(): State {
     drafts: 0,
     usage: { inputTokens: 0, outputTokens: 0, requests: 0 },
     usageLog: [],
+    aiCache: {},
     subscriptions: [],
     notifyPrefs: { ...DEFAULT_PREFS },
     sentAlerts: [],

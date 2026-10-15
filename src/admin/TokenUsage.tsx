@@ -9,7 +9,7 @@ const LABELS: Record<UsagePurpose, string> = {
 };
 
 const total = (r: Pick<UsageRow, 'input' | 'cached' | 'output'>) => r.input + r.cached + r.output;
-const sum = (rows: UsageRow[]) => rows.reduce((a, r) => ({ input: a.input + r.input, cached: a.cached + r.cached, output: a.output + r.output, requests: a.requests + r.requests }), { input: 0, cached: 0, output: 0, requests: 0 });
+const sum = (rows: UsageRow[]) => rows.reduce((a, r) => ({ input: a.input + r.input, cached: a.cached + r.cached, output: a.output + r.output, requests: a.requests + r.requests, hits: a.hits + (r.hits ?? 0) }), { input: 0, cached: 0, output: 0, requests: 0, hits: 0 });
 const compact = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 /** Local YYYY-MM-DD, matching the day keys the server writes (the app's time zone). */
@@ -28,7 +28,7 @@ export function TokenUsage({ rows, timeZone, allTime }: { rows: UsageRow[]; time
 
   const byPurpose = (Object.keys(LABELS) as UsagePurpose[])
     .map((purpose) => ({ purpose, ...sum(rows.filter((r) => r.purpose === purpose)) }))
-    .filter((r) => r.requests > 0)
+    .filter((r) => r.requests > 0 || r.hits > 0)
     .sort((a, b) => total(b) - total(a));
   const monthTotal = total(month) || 1;
 
@@ -53,7 +53,7 @@ export function TokenUsage({ rows, timeZone, allTime }: { rows: UsageRow[]; time
           <div key={t.label} className="admin-card" style={{ background: 'transparent' }}>
             <span className="sub" style={{ fontWeight: 600 }}>{t.label}</span>
             <span style={{ fontSize: 26, fontWeight: 700 }}>{compact(total(t))}</span>
-            <span className="sub">{t.requests} request{t.requests === 1 ? '' : 's'} · {compact(t.input + t.cached)} in · {compact(t.output)} out</span>
+            <span className="sub">{t.requests} request{t.requests === 1 ? '' : 's'}{t.hits ? ` (+${t.hits} reused)` : ''} · {compact(t.input + t.cached)} in · {compact(t.output)} out</span>
           </div>
         ))}
       </div>
@@ -65,12 +65,13 @@ export function TokenUsage({ rows, timeZone, allTime }: { rows: UsageRow[]; time
         ) : (
           <div style={{ overflowX: 'auto' }} role="region" aria-label="Token use by feature" tabIndex={0}>
             <table className="admin-table">
-              <thead><tr><th>Feature</th><th>Requests</th><th>Input</th><th>From cache</th><th>Output</th><th>Total</th><th>Share</th></tr></thead>
+              <thead><tr><th>Feature</th><th>Requests</th><th>Reused</th><th>Input</th><th>From cache</th><th>Output</th><th>Total</th><th>Share</th></tr></thead>
               <tbody>
                 {byPurpose.map((r) => (
                   <tr key={r.purpose}>
                     <td>{LABELS[r.purpose]}</td>
                     <td>{r.requests}</td>
+                    <td>{r.hits}</td>
                     <td>{compact(r.input)}</td>
                     <td>{compact(r.cached)}</td>
                     <td>{compact(r.output)}</td>
@@ -98,7 +99,7 @@ export function TokenUsage({ rows, timeZone, allTime }: { rows: UsageRow[]; time
           ))}
         </ol>
       </div>
-      <p className="sub">Input counts everything sent to Claude, including tokens it read from its cache (shown separately). Counts are kept for 90 days.</p>
+      <p className="sub">Reused = answers served from the saved copy because nothing had changed, so no tokens were spent. Input counts everything sent to Claude, including tokens it read from its cache (shown separately). Counts are kept for 90 days.</p>
     </section>
   );
 }
