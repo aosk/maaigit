@@ -120,6 +120,26 @@ describe('setting up Face ID', () => {
   });
 });
 
+describe('Face ID sign-in under flood (penetration-test finding)', () => {
+  it('limits challenge requests per address, and a full list refuses rather than evicting the owner\'s challenge', async () => {
+    resetPasskeyState();
+    state.passkeys = [{ id: 'aWQ', publicKey: 'AAAA', counter: 0, name: 'iPhone', createdAt: new Date().toISOString() }];
+    const inner = createInnerApp();
+    inner.get('*', (_req, res) => res.send('<!doctype html>'));
+    const site = await listen(createOnlineSite(inner, { password: PASSWORD, secret: 'test-secret' }));
+    try {
+      const codes: number[] = [];
+      for (let i = 0; i < 30; i++) codes.push((await raw(site.port, 'POST', '/api/passkey/login/options', { body: '{}' })).status);
+      expect(codes.filter((c) => c === 200)).toHaveLength(20);
+      expect(codes.slice(20).every((c) => c === 429)).toBe(true);
+    } finally {
+      await site.close();
+      state.passkeys = [];
+      resetPasskeyState();
+    }
+  });
+});
+
 describe('signing in with Face ID', () => {
   it('gives the same kind of session the password does', async () => {
     const device = await setUp();

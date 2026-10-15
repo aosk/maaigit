@@ -64,6 +64,8 @@ interface State {
   alerts: AppAlert[];
   /** When each WhatsApp number was last sent the automatic "received" note. */
   whatsappAcks: Record<string, string>;
+  /** Raised by Sign out: sessions signed before it no longer work (see server/auth.ts). */
+  sessionEpoch: number;
   /** What MAAI knows about the user: short facts the user wrote or approved. */
   profile: { enabled: boolean; facts: ProfileFact[] };
 }
@@ -137,6 +139,7 @@ function seed(): State {
     alerts: [],
     whatsappAcks: {},
     profile: { enabled: true, facts: [] },
+    sessionEpoch: 0,
   };
 }
 
@@ -171,6 +174,7 @@ function load(): State {
   for (const e of saved.events) if (SAMPLE_EVENTS.has(`${e.title}|${e.place}`)) e.demo = true;
   // Settings added after the file was saved get their defaults.
   saved.notifyPrefs = { ...DEFAULT_PREFS, ...saved.notifyPrefs };
+  saved.sessionEpoch = Number.isInteger(saved.sessionEpoch) && saved.sessionEpoch > 0 ? saved.sessionEpoch : 0;
   saved.profile = { enabled: saved.profile?.enabled !== false, facts: saved.profile?.facts ?? [] };
   return saved;
 }

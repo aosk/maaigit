@@ -31,6 +31,11 @@ interface GuardOptions {
   lockActive?: () => boolean;
   /** How long MAAI stays open without being used before it asks for Face ID again. */
   lockMinutes?: number;
+  /**
+   * The sign-out counter. Every session is signed with its value, so raising it (Sign out) makes every session
+   * issued before it stop working, even one that was copied. Kept between restarts by whoever builds the guard.
+   */
+  epoch?: { get: () => number; bump: () => void };
 }
 
 export function createGuard(kind: AuthKind, passcode: string, secret: string, now: () => number = Date.now, options: GuardOptions = {}) {
@@ -41,7 +46,11 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
   // cookie can't be altered, expires by itself, and stops working when the passcode changes.
   // It never contains the passcode.
   const passcodeHash = hash(passcode);
-  const sign = (expires: number) => createHmac('sha256', secret).update(`${kind}|${expires}|${passcodeHash}`).digest('hex');
+  let localEpoch = 0;
+  const epoch = options.epoch ?? { get: () => localEpoch, bump: () => void localEpoch++ };
+  // Epoch 0 signs exactly as before, so sessions already issued stay valid until the first sign-out.
+  const mark = () => (epoch.get() ? `|e${epoch.get()}` : '');
+  const sign = (expires: number) => createHmac('sha256', secret).update(`${kind}|${expires}|${passcodeHash}${mark()}`).digest('hex');
   const seconds = () => Math.floor(now() / 1000);
   const issue = () => {
     const expires = seconds() + SESSION_DAYS * DAY;
@@ -56,7 +65,7 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
 
   // The "recent unlock" cookie works the same way but lasts only a few minutes of not being used.
   const lockSeconds = Math.max(60, Math.round((options.lockMinutes ?? 5) * 60));
-  const signFace = (expires: number) => createHmac('sha256', secret).update(`face|${kind}|${expires}|${passcodeHash}`).digest('hex');
+  const signFace = (expires: number) => createHmac('sha256', secret).update(`face|${kind}|${expires}|${passcodeHash}${mark()}`).digest('hex');
   const issueFace = () => {
     const expires = seconds() + lockSeconds;
     return `${FACE_COOKIE}=${expires}.${signFace(expires)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${lockSeconds}`;
@@ -99,6 +108,8 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
 
     if (req.path === '/logout' && req.method === 'POST') {
       const gone = (name: string) => `${name}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+      // Only a real session can end sessions; a stranger's request just clears their own cookies.
+      if (check(cookieValue(req, COOKIE))) epoch.bump();
       res.setHeader('Set-Cookie', [gone(COOKIE), gone(FACE_COOKIE)]);
       return res.status(204).end();
     }

@@ -141,3 +141,54 @@ describe('the admin switches', () => {
     }
   });
 });
+
+describe('penetration-test findings, kept fixed', () => {
+  const signIn = async (port: number) => {
+    const res = await raw(port, 'POST', '/api/unlock', { body: JSON.stringify({ pin: 'correct-horse-battery' }) });
+    return (res.headers['set-cookie'] as unknown as string[]).map((c) => c.split(';')[0]).join('; ');
+  };
+
+  it('Sign out ends the session for good: a copied cookie stops working', async () => {
+    const { site } = await owner();
+    try {
+      const stolen = await signIn(site.port);
+      const other = await signIn(site.port);
+      expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie: stolen } })).status).toBe(200);
+      expect((await raw(site.port, 'POST', '/api/logout', { headers: { cookie: other } })).status).toBe(204);
+      expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie: stolen } })).status).toBe(401);
+      expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie: other } })).status).toBe(401);
+      // a new sign-in works, and its cookie is good
+      const fresh = await signIn(site.port);
+      expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie: fresh } })).status).toBe(200);
+    } finally {
+      await site.close();
+    }
+  });
+
+  it('a stranger calling Sign out cannot end the owner\'s session', async () => {
+    const { site } = await owner();
+    try {
+      const mine = await signIn(site.port);
+      await raw(site.port, 'POST', '/api/logout');
+      await raw(site.port, 'POST', '/api/logout', { headers: { cookie: 'maai_session=1.' + 'a'.repeat(64) } });
+      expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie: mine } })).status).toBe(200);
+    } finally {
+      await site.close();
+    }
+  });
+
+  it('the calendar link is never built from a forged Host header', async () => {
+    const { site } = await owner();
+    try {
+      vi.stubEnv('RENDER_EXTERNAL_URL', 'https://maai.example');
+      const cookie = await signIn(site.port);
+      const res = await raw(site.port, 'GET', '/api/calendar/feed', { headers: { host: 'evil.example', 'x-forwarded-host': 'evil.example', cookie } });
+      expect(res.status).toBe(200);
+      expect(res.body).not.toContain('evil.example');
+      expect(res.body).toContain('https://maai.example/calendar/');
+      vi.unstubAllEnvs();
+    } finally {
+      await site.close();
+    }
+  });
+});

@@ -37,9 +37,20 @@ const challenges = new Map<string, { kind: 'register' | 'login'; expires: number
 
 function rememberChallenge(challenge: string, kind: 'register' | 'login', now = Date.now()) {
   for (const [key, value] of challenges) if (value.expires < now) challenges.delete(key);
-  // A bounded list: nobody can fill the server's memory by asking for challenges.
-  if (challenges.size >= 200) challenges.delete(challenges.keys().next().value!);
+  // A bounded list: nobody can fill the server's memory by asking for challenges. When it is full of challenges still
+  // in use, ask for patience rather than throw out the oldest one (which may be the owner's).
+  if (challenges.size >= 200) throw new HttpError(429, 'Too many tries. Wait a few minutes, or use the password.');
   challenges.set(challenge, { kind, expires: now + CHALLENGE_MS });
+}
+
+/** At most `max` calls from one address in `windowMs`. */
+const hits = new Map<string, number[]>();
+function limited(ip: string, max: number, windowMs: number, now = Date.now()): boolean {
+  const recent = (hits.get(ip) ?? []).filter((t) => t > now - windowMs);
+  recent.push(now);
+  hits.set(ip, recent);
+  if (hits.size > 5000) for (const [key, list] of hits) if (!list.some((t) => t > now - windowMs)) hits.delete(key);
+  return recent.length > max;
 }
 
 /** Accepts a challenge once, and only for what it was made for. */
@@ -53,11 +64,14 @@ function takeChallenge(kind: 'register' | 'login', now = Date.now()) {
 
 // ---------- Failed sign-ins ----------
 
-const failures: number[] = [];
-function tooManyFailures(now = Date.now()) {
-  while (failures.length && failures[0] < now - 10 * 60_000) failures.shift();
-  return failures.length >= 10;
+// Counted per address, so someone else's wrong guesses cannot shut the owner's Face ID.
+const failures = new Map<string, number[]>();
+function tooManyFailures(ip: string, now = Date.now()) {
+  const recent = (failures.get(ip) ?? []).filter((t) => t > now - 10 * 60_000);
+  failures.set(ip, recent);
+  return recent.length >= 10;
 }
+const addFailure = (ip: string) => failures.set(ip, [...(failures.get(ip) ?? []), Date.now()]);
 
 // ---------- Setting up (needs a signed-in session: these live under /api) ----------
 
@@ -131,6 +145,7 @@ export function passkeyLogin(startSession: (res: Response) => void): Router {
 
   router.post('/options', wrap(async (req, res) => {
     if (!state.passkeys.length) throw new HttpError(404, 'Face ID is not set up.');
+    if (limited(req.ip ?? '', 20, 60_000)) throw new HttpError(429, 'Too many tries. Wait a minute, or use the password.');
     const options = await generateAuthenticationOptions({
       rpID: rpID(req),
       userVerification: 'required',
@@ -141,11 +156,11 @@ export function passkeyLogin(startSession: (res: Response) => void): Router {
   }));
 
   router.post('/', express.json({ limit: '20kb' }), wrap(async (req, res) => {
-    if (tooManyFailures()) throw new HttpError(429, 'Too many tries. Wait a few minutes, or use the password.');
+    if (limited(req.ip ?? '', 30, 60_000) || tooManyFailures(req.ip ?? '')) throw new HttpError(429, 'Too many tries. Wait a few minutes, or use the password.');
     const response = req.body?.response as AuthenticationResponseJSON | undefined;
     const key = typeof response?.id === 'string' ? state.passkeys.find((p) => p.id === response.id) : undefined;
     const fail = () => {
-      failures.push(Date.now());
+      addFailure(req.ip ?? '');
       return new HttpError(401, 'Face ID did not match. Use the password instead.');
     };
     if (!response || !key) throw fail();
@@ -177,6 +192,7 @@ export function passkeyLogin(startSession: (res: Response) => void): Router {
 /** For tests: forget every waiting challenge and failure. */
 export function resetPasskeyState() {
   challenges.clear();
-  failures.length = 0;
+  failures.clear();
+  hits.clear();
 }
 
