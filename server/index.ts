@@ -38,8 +38,13 @@ if (config.production) {
     console.error('\n  The app has not been built. Use "npm start", or run "npm run build" before "npm run serve".\n');
     process.exit(1);
   }
-  app.use(express.static(dist));
-  app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+  // The page and the service worker are always re-checked, so a new version reaches the phone on the next open.
+  const fresh = (res: express.Response) => res.setHeader('Cache-Control', 'no-cache');
+  app.use(express.static(dist, { setHeaders: (res, file) => (/(index\.html|sw\.js)$/.test(file) ? fresh(res) : undefined) }));
+  app.get('*', (_req, res) => {
+    fresh(res);
+    res.sendFile(path.join(dist, 'index.html'));
+  });
 } else {
   app.use(feedRoutes);
   // One process, one port: Vite serves the app with hot reload, Express serves /api.
