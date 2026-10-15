@@ -6,7 +6,7 @@ import { whatsappWebhook } from './whatsapp.js';
 import { passkeyLogin } from './passkeys.js';
 import { config } from './config.js';
 import { save, state } from './store.js';
-import { bodyErrors, lastResort, noStore, securityHeaders } from './security.js';
+import { bodyErrors, lastResort, noStore, sameOriginOnly, securityHeaders } from './security.js';
 
 /** An Express app set up the way every MAAI server should be. */
 export function createApp(): express.Express {
@@ -47,7 +47,7 @@ export function createOnlineSite(inner: express.Express, options: { password: st
   const guard = createGuard('password', options.password, options.secret, Date.now, { lockActive: () => state.passkeys.length > 0, lockMinutes: config.lockMinutes, epoch: { get: () => state.sessionEpoch, bump: () => { state.sessionEpoch += 1; save(); } } });
   // Signing in with Face ID has to be reachable before there is a session; it proves itself with a signature.
   site.use('/api/passkey/login', noStore, passkeyLogin(guard.startSession));
-  site.use('/api', guard);
+  site.use('/api', sameOriginOnly, guard);
   site.use(inner);
   // The body reader runs here, before the sign-in, so its complaints need answering here too.
   site.use(bodyErrors, lastResort);

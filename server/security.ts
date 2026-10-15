@@ -42,6 +42,28 @@ export const noStore: RequestHandler = (_req, res, next) => {
   next();
 };
 
+/**
+ * A second wall against cross-site request forgery (the cookies are already SameSite=Strict): a request that changes
+ * something and says it came from another website is refused. Requests with no Origin (curl, the server's own tools,
+ * Twilio) are not browsers acting for a visitor, and are left to the sign-in.
+ */
+export const sameOriginOnly: RequestHandler = (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  const origin = req.get('origin');
+  if (origin && origin !== 'null') {
+    let host = '';
+    try {
+      host = new URL(origin).host;
+    } catch {
+      /* not a web address: refused below */
+    }
+    if (host !== req.get('host')) return res.status(403).json({ error: 'That request came from another website.' });
+  } else if (origin === 'null') {
+    return res.status(403).json({ error: 'That request came from another website.' });
+  }
+  next();
+};
+
 /** A request whose body could not be read, answered plainly (and never with a stack trace). */
 export const bodyErrors: ErrorRequestHandler = (error: { type?: string; status?: number }, _req, res, next) => {
   if (error.type === 'entity.too.large') return res.status(413).json({ error: 'That is too much to send.' });

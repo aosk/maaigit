@@ -192,3 +192,23 @@ describe('penetration-test findings, kept fixed', () => {
     }
   });
 });
+
+describe('requests from other websites', () => {
+  it('are refused when they change something, even with a valid cookie; the app itself and plain tools are not', async () => {
+    const { site } = await owner();
+    try {
+      const res = await raw(site.port, 'POST', '/api/unlock', { body: JSON.stringify({ pin: 'correct-horse-battery' }) });
+      const cookie = (res.headers['set-cookie'] as unknown as string[]).map((c) => c.split(';')[0]).join('; ');
+      const host = `127.0.0.1:${site.port}`;
+      const post = (origin?: string) => raw(site.port, 'POST', '/api/chat/reset', { headers: { cookie, host, ...(origin ? { origin } : {}) } });
+      expect((await post('https://evil.example')).status).toBe(403);
+      expect((await post('null')).status).toBe(403);
+      expect((await post('https://127.0.0.1:' + site.port.toString().replace(/\d/g, '1'))).status).toBe(403);
+      expect((await post(`http://${host}`)).status).toBe(204); // the app's own page
+      expect((await post()).status).toBe(204); // no Origin: not a browser acting for a visitor
+      expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie, origin: 'https://evil.example' } })).status).toBe(200); // reading is protected by CORS/SameSite, not here
+    } finally {
+      await site.close();
+    }
+  });
+});
