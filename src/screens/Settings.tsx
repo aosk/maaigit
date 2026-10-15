@@ -7,6 +7,7 @@ import { useOnRefresh } from '../refresh';
 import { CalendarFeed } from '../components/CalendarFeed';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { FaceId } from '../components/FaceId';
+import { VoiceSettings } from '../components/VoiceSettings';
 
 export function SettingsScreen() {
   const { t, settings, update, toggle } = useSettings();
@@ -120,6 +121,8 @@ export function SettingsScreen() {
         })}
       </section>
       <p className="sub">{t.followsDevice}</p>
+
+      <VoiceSettings />
 
     </div>
   );

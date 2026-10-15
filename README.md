@@ -192,6 +192,13 @@ Online, open **Settings → Face ID → Set up Face ID** (on the iPhone, from th
 Face ID. From then on the sign-in screen has a **Sign in with Face ID** button. MAAI keeps only a public key, never your face
 or fingerprint; the password still works. Remove a device any time in the same place.
 
+### Reading voice
+
+MAAI reads the briefing and replies with the best voice installed on the device and says each sentence on its own, with
+natural pauses. **Settings → Reading voice** lets you pick another English or Arabic voice and listen to it. For a much more
+human sound on iPhone, download a better voice: Settings → Accessibility → Spoken Content → Voices → English or Arabic → pick one
+marked **Enhanced** or **Premium** (for example Ava, Zoe, or Majed), then reopen MAAI.
+
 ### Alert sound
 
 Alerts arrive as push notifications titled like reminders (⏰ Reminder, 🚗 Time to leave…). With MAAI closed, the iPhone plays

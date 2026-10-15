@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Lang } from '../shared/types';
 import { strings, type Strings } from './i18n';
+import { setChosenVoices } from './speech';
 
 export type Look = 'system' | 'light' | 'dark';
 export type ToggleId = keyof Strings['toggles'];
@@ -11,12 +12,15 @@ interface Settings {
   toggles: Record<ToggleId, boolean>;
   /** Play MAAI's chime when an alert arrives while the app is open. */
   sound: boolean;
+  /** The voice picked for reading aloud, per language (by the phone's voice id); empty means the best one installed. */
+  voices: Partial<Record<Lang, string>>;
 }
 
 const DEFAULTS: Settings = {
   lang: 'en',
   look: 'system',
   sound: true,
+  voices: {},
   toggles: { longListen: false, simple: false, captions: true, speakReplies: false, slow: false, largeText: false, contrast: false, reduceMotion: false },
 };
 
@@ -49,6 +53,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     } catch {
       // Private windows can refuse storage; settings then last for this visit only.
     }
+    setChosenVoices(settings.voices);
     const root = document.documentElement;
     root.lang = settings.lang;
     root.dir = settings.lang === 'ar' ? 'rtl' : 'ltr';
