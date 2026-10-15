@@ -130,6 +130,7 @@ export const api = {
   /** Re-reads calendars, Asana and Gmail on the server now. */
   sync: () => call<{ at: string; problems: string[] }>('POST', '/sync'),
   asana: () => call<AsanaOverview>('GET', '/asana'),
+  asanaCheck: () => call<{ user: string; email?: string; workspaces: { name: string; open: number }[]; shown: number; cachedAt?: string; error?: string }>('GET', '/asana/check'),
   asanaProjects: () => call<AsanaProject[]>('GET', '/asana/projects'),
   asanaCreate: (task: NewAsanaTask) => call<AsanaTask>('POST', '/asana/tasks', task),
   asanaComplete: (gid: string, done: boolean) => call<void>('POST', `/asana/tasks/${gid}/complete`, { done }),

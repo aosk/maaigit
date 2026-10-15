@@ -24,7 +24,39 @@ export function AsanaTasks() {
   const [created, setCreated] = useState<AsanaTask | null>(null);
   const { busy, error, run } = useAction();
 
-  const load = useCallback(() => api.asana().then(setData).catch(() => {}), []);
+  const [loadError, setLoadError] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [report, setReport] = useState<string[] | null>(null);
+  const load = useCallback(
+    () =>
+      api
+        .asana()
+        .then((d) => {
+          setData(d);
+          setLoadError('');
+        })
+        .catch((e: Error) => setLoadError(e.message)),
+    [],
+  );
+
+  /** "Check Asana": shows what MAAI can see, or why it cannot see anything. */
+  const check = async () => {
+    setChecking(true);
+    setReport(null);
+    try {
+      const r = await api.asanaCheck();
+      setReport([
+        t.asanaCheckUser(r.user),
+        ...r.workspaces.map((w) => t.asanaCheckWorkspace(w.name, w.open)),
+        t.asanaCheckShown(r.shown),
+        ...(r.error ? [t.asanaError(r.error)] : []),
+      ]);
+    } catch (e) {
+      setReport([(e as Error).message]);
+    } finally {
+      setChecking(false);
+    }
+  };
   useEffect(() => {
     void load();
   }, [load]);
@@ -37,7 +69,26 @@ export function AsanaTasks() {
     return () => clearTimeout(timer);
   }, [finished]);
 
-  if (!data) return null;
+  if (!data) {
+    // Never vanish without a word: say that it is loading, or why it could not be loaded.
+    return (
+      <>
+        <div className="between extra"><h2 className="h2 sec sec-task">{t.asanaTasks}</h2></div>
+        {loadError ? (
+          <div className="card soft extra" role="alert">
+            <span className="sub">{t.asanaLoadFailed(loadError)}</span>
+            <div className="row">
+              <button className="btn secondary round" onClick={() => void load()}>{t.asanaRetry}</button>
+              <button className="btn ghost round" onClick={check} disabled={checking}>{checking ? t.asanaChecking : t.asanaCheck}</button>
+            </div>
+            {report && <ul className="sub" style={{ margin: 0, paddingInlineStart: 18 }}>{report.map((line) => <li key={line}>{line}</li>)}</ul>}
+          </div>
+        ) : (
+          <div className="skeleton extra" aria-label={t.loading}><span /><span /></div>
+        )}
+      </>
+    );
+  }
 
   function openForm() {
     setAdding(true);
@@ -111,7 +162,17 @@ export function AsanaTasks() {
       )}
 
       {note ? (
-        <a className="card soft extra" href="#/settings" style={{ textDecoration: 'none', color: 'inherit' }}><span className="sub">{note}</span></a>
+        <div className="card soft extra">
+          <a href="#/settings" style={{ textDecoration: 'none', color: 'inherit' }}><span className="sub">{note}</span></a>
+          {data.configured && (
+            <>
+              <div className="row">
+                <button className="btn secondary round" onClick={check} disabled={checking}>{checking ? t.asanaChecking : t.asanaCheck}</button>
+              </div>
+              {report && <ul className="sub" style={{ margin: 0, paddingInlineStart: 18 }}>{report.map((line) => <li key={line}>{line}</li>)}</ul>}
+            </>
+          )}
+        </div>
       ) : (
         data.tasks.length > 0 && (
           <section className="card flush extra" aria-label={t.asanaTasks}>

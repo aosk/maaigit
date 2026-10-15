@@ -22,7 +22,7 @@ beforeAll(async () => {
     res.setHeader('content-type', 'application/json');
     if (failing) return void res.writeHead(500).end(JSON.stringify({ errors: [{ message: 'Asana is down' }] }));
     const url = new URL(req.url ?? '', 'http://x');
-    if (url.pathname === '/users/me') return void res.end(JSON.stringify({ data: { workspaces: [{ gid: '1' }] } }));
+    if (url.pathname === '/users/me') return void res.end(JSON.stringify({ data: { name: 'Musaed', email: 'm@example.com', workspaces: [{ gid: '1', name: 'Work' }] } }));
     if (url.pathname === '/tasks') {
       const start = Number(url.searchParams.get('offset') ?? 0);
       const end = Math.min(start + 100, total);
@@ -86,6 +86,22 @@ describe('your Asana list', () => {
       const overview = (await raw(app.port, 'GET', '/api/asana')).json() as AsanaOverview;
       expect(overview.tasks.length).toBeGreaterThan(0);
       expect(overview.error).toMatch(/Asana is down/);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('"Check Asana" says who it is signed in as and how many tasks each workspace gives, and why when it cannot', async () => {
+    total = 130;
+    await openTasks(true);
+    const app = await listen(createInnerApp());
+    try {
+      const ok = (await raw(app.port, 'GET', '/api/asana/check')).json() as { user: string; workspaces: { name: string; open: number }[]; shown: number };
+      expect(ok).toMatchObject({ user: 'Musaed', workspaces: [{ name: 'Work', open: 130 }], shown: 130 });
+      failing = true;
+      const bad = await raw(app.port, 'GET', '/api/asana/check');
+      expect(bad.status).toBe(400);
+      expect((bad.json() as { error: string }).error).toMatch(/Asana is down/);
     } finally {
       await app.close();
     }

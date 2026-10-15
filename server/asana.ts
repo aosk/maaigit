@@ -106,9 +106,19 @@ export async function openTasks(force = false): Promise<AsanaTask[]> {
     return tasks;
   } catch (error) {
     lastError = (error as Error).message;
+    console.error('Asana: could not read your tasks:', lastError);
     if (cache) return cache.tasks;
     throw error;
   }
+}
+
+/** What MAAI can see in Asana right now, for the "Check Asana" button: who it is signed in as and how many tasks each workspace gives. */
+export async function diagnose(): Promise<{ user: string; email?: string; workspaces: { name: string; open: number }[]; shown: number; cachedAt?: string; error?: string }> {
+  const me = await call<{ name: string; email?: string; workspaces: { gid: string; name: string }[] }>('GET', '/users/me?opt_fields=name,email,workspaces.name');
+  const workspaces = await Promise.all(
+    me.workspaces.map(async (w) => ({ name: w.name, open: (await callAll<RawTask>(`/tasks?assignee=me&workspace=${w.gid}&completed_since=now&limit=100&opt_fields=gid`)).length })),
+  );
+  return { user: me.name, email: me.email, workspaces, shown: cache?.tasks.length ?? 0, cachedAt: cache ? new Date(cache.at).toISOString() : undefined, error: lastError };
 }
 
 /** The tasks without calling Asana: what is already loaded (for the assistant's context). */

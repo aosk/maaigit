@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { AsanaOverview } from '../../shared/types.js';
-import { asanaConfigured, cachedTasks, createTask, isGid, openTasks, projects, setCompleted, setDueOn, setStatus, statusControls, summarize, validateNewTask } from '../asana.js';
+import { asanaConfigured, cachedTasks, createTask, diagnose, isGid, openTasks, projects, setCompleted, setDueOn, setStatus, statusControls, summarize, validateNewTask } from '../asana.js';
 import { audit } from '../store.js';
 import { HttpError, text, wrap } from './http.js';
 
@@ -19,6 +19,12 @@ asana.get('/asana', wrap(async (_req, res) => {
   const tasks = await openTasks().catch(() => []);
   const overview: AsanaOverview = { ...summarize(tasks), tasks: tasks.slice(0, 80) };
   res.json(overview);
+}));
+
+/** "Check Asana": what MAAI can see (who it is signed in as, how many tasks per workspace), or why it cannot. */
+asana.get('/asana/check', wrap(async (_req, res) => {
+  if (!asanaConfigured) throw new HttpError(400, 'Asana is not connected. Add ASANA_TOKEN on Render → Environment.');
+  res.json(await diagnose());
 }));
 
 asana.get('/asana/projects', wrap(async (_req, res) => res.json(await projects().catch(() => []))));
