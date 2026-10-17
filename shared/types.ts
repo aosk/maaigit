@@ -320,6 +320,8 @@ export interface StatusInfo {
   whatsapp?: WhatsAppStatus;
   /** How this device signed in: not at all on the computer itself, a PIN at home, a password online. */
   auth?: 'none' | 'pin' | 'password';
+  /** Online only: whether saved data is on a disk that survives updates (if not, every update erases it). */
+  storage?: { persistent: boolean; dir: string };
   model: string;
   location: { latitude: number; longitude: number; timezone: string };
 }

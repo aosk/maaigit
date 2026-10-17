@@ -106,6 +106,11 @@ export function SettingsScreen() {
                   ? t.asanaConnected(status.asana.open, status.asana.overdue)
                   : t.asanaOff}
             </Conn>
+            {status.storage && (
+              <Conn state={status.storage.persistent ? 'on' : 'bad'} name={t.storageName}>
+                {status.storage.persistent ? t.storageOk : t.storageLost}
+              </Conn>
+            )}
             <Conn state={status.whatsapp?.configured ? 'on' : 'off'} name={t.whatsappConn}>
               {status.whatsapp?.configured ? t.whatsappConnected(status.whatsapp.number ?? '', status.whatsapp.keepDays) : t.whatsappOff}
             </Conn>

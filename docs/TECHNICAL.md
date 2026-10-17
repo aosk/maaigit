@@ -121,6 +121,7 @@ Security suites: every API route is called without a session in 16 URL disguises
 
 - **Deploy:** push to GitHub `main`; Render rebuilds. Env vars are set in Render → Environment.
 - **Rotate a secret:** create the new one at its provider, paste it into Render, redeploy, revoke the old one. Changing `MAAI_PASSWORD` signs out every device.
+- **Data resets at every update:** the service has no persistent disk (a service made by hand, not from `render.yaml`, has none). Settings → Connections shows "Saved data" in red, and the server logs a WARNING at start. Fix: Render → the service → **Disks → Add Disk** (mount path `/var/data`, 1 GB, needs a paid plan), then add `MAAI_DATA_DIR=/var/data`.
 - **Data damaged:** look for `store.json.damaged-*` next to `store.json`.
 - **Calendar not matching:** Settings shows the live-read health; check the calendar is shared with the service account.
 

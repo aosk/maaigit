@@ -16,6 +16,7 @@ import { briefing } from './ai/briefing.js';
 import { createApp, createInnerApp, createOnlineSite } from './site.js';
 import { writePrivate } from './secure-fs.js';
 import { flushSave } from './store.js';
+import { dataIsPersistent } from './storage.js';
 
 // Render stops the server on every deploy: write what is still waiting to be saved first.
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
@@ -72,6 +73,9 @@ if (config.production) {
     console.error('\n  MAAI_PASSWORD must be set to at least 8 characters before MAAI can run online.');
     console.error('  On Render: your service → Environment → Add Environment Variable → MAAI_PASSWORD.\n');
     process.exit(1);
+  }
+  if (!dataIsPersistent(config.dataDir)) {
+    console.error(`\n  WARNING: MAAI's data folder (${config.dataDir}) is not on a persistent disk. Everything it saves (reminders, chats, Face ID, sign-in sessions) will be erased at the next update.\n  On Render: your service → Disks → Add Disk (mount path /var/data), then set MAAI_DATA_DIR=/var/data.\n`);
   }
   const secretFile = path.join(config.dataDir, 'session-secret');
   if (!fs.existsSync(secretFile)) {

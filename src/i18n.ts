@@ -3,6 +3,9 @@ import type { Lang } from '../shared/types';
 const en = {
   appName: 'MAAI',
   tabsLabel: 'Main sections',
+  storageName: 'Saved data',
+  storageOk: 'On a persistent disk: updates keep your reminders, chats and settings.',
+  storageLost: 'NOT on a persistent disk: every update erases your reminders, chats, Face ID and sign-in. In Render open your service → Disks → Add Disk (mount path /var/data), then add the setting MAAI_DATA_DIR = /var/data.',
   layoutTitle: 'Screen layout',
   layoutHint: 'MAAI fits itself to your screen. Choose one here to override it.',
   layoutChoices: { auto: 'Automatic', phone: 'Phone', tablet: 'Tablet or fold', desktop: 'Computer' } as Record<'auto' | 'phone' | 'tablet' | 'desktop', string>,
@@ -409,6 +412,9 @@ const n = (x: number) => x.toLocaleString('ar-SA');
 
 const ar: Strings = {
   tabsLabel: 'الأقسام الرئيسية',
+  storageName: 'البيانات المحفوظة',
+  storageOk: 'على قرص دائم: التحديثات تُبقي تذكيراتك ومحادثاتك وإعداداتك.',
+  storageLost: 'ليست على قرص دائم: كل تحديث يمسح تذكيراتك ومحادثاتك وFace ID وتسجيل دخولك. في Render افتح خدمتك ← Disks ← Add Disk (مسار التثبيت /var/data)، ثم أضف الإعداد MAAI_DATA_DIR = /var/data.',
   layoutTitle: 'تخطيط الشاشة',
   layoutHint: 'يتكيّف مساعد مع شاشتك تلقائياً. اختر واحداً هنا لتغيير ذلك.',
   layoutChoices: { auto: 'تلقائي', phone: 'جوال', tablet: 'تابلت أو جهاز قابل للطي', desktop: 'كمبيوتر' },
