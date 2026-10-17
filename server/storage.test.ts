@@ -18,3 +18,18 @@ describe('is the saved data kept across updates?', () => {
     ).toBe(false);
   });
 });
+
+describe('a data folder that cannot be written', () => {
+  it('falls back to the app\'s own folder instead of stopping MAAI', async () => {
+    const { vi } = await import('vitest');
+    vi.resetModules();
+    vi.stubEnv('MAAI_DATA_DIR', '/dev/null/not-writable/maai');
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { config } = await import('./config');
+    expect(config.dataDir).toMatch(/\/data$/);
+    expect(config.dataDir).not.toContain('not-writable');
+    expect(errors).toHaveBeenCalledWith(expect.stringContaining('cannot be written to'));
+    errors.mockRestore();
+    vi.unstubAllEnvs();
+  });
+});

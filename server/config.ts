@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import fs from 'node:fs';
 import path from 'node:path';
 
 const num = (value: string | undefined, fallback: number) => {
@@ -6,8 +7,25 @@ const num = (value: string | undefined, fallback: number) => {
   return value && Number.isFinite(n) ? n : fallback;
 };
 
-/** Where MAAI keeps its data: the store, push keys, phone certificate. Online, a persistent disk. */
-const dataDir = path.resolve(process.env.MAAI_DATA_DIR || 'data');
+/** Whether MAAI can create and write in this folder. */
+function writable(dir: string): boolean {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Where MAAI keeps its data: the store, push keys, phone certificate. Online, a persistent disk.
+ * If the chosen folder cannot be written (a disk path set before the disk is attached, say), MAAI starts with its own
+ * "data" folder rather than failing to start, and Settings shows that the data is not on a persistent disk.
+ */
+const wantedDir = path.resolve(process.env.MAAI_DATA_DIR || 'data');
+const dataDir = writable(wantedDir) ? wantedDir : path.resolve('data');
+if (dataDir !== wantedDir) console.error(`MAAI_DATA_DIR (${wantedDir}) cannot be written to: using ${dataDir} instead. Attach the disk, then restart.`);
 
 const timezone = process.env.MAAI_TIMEZONE || 'Asia/Riyadh';
 // Reminder and prayer times use the server's local clock; online servers run on UTC, so pin it.
