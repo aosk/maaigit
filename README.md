@@ -211,8 +211,8 @@ The admin portal shows what **Anthropic itself** reports for the key MAAI uses:
 ### Talking to MAAI in Arabic and English
 
 The phone's built-in dictation listens for **one language at a time**, so a sentence that mixes Arabic and English comes out wrong. Two ways to deal with that:
-- **Switch the language** with the Arabic / English switch above the microphone (or in Settings → Language for talking) before you talk in the other language. MAAI also tells Claude the words were dictated, so it reads mistakes by sound and context.
-- **Smart voice (recommended for mixing):** add `STT_API_KEY` on Render, from a transcription service such as OpenAI, or Groq (also set `STT_BASE_URL=https://api.groq.com/openai/v1` and `STT_MODEL=whisper-large-v3-turbo`). The microphone then records your voice and sends it to that service, which understands both languages in one sentence, and MAAI gives it your names and project words so it spells them right. Your recording goes to that service. **Settings → Language for talking** shows whether it is on. "Check my voice before sending" (Settings) keeps the words in the box for you to correct before they are sent.
+- **Without smart voice** the microphone listens for the app's language (the ع / EN button at the top of the Assistant changes it). MAAI tells Claude the words were dictated, so it reads mistakes by sound and context, but a sentence that mixes both languages can still come out wrong.
+- **Smart voice (recommended for mixing):** add `STT_API_KEY` on Render, from a transcription service such as OpenAI, or Groq (also set `STT_BASE_URL=https://api.groq.com/openai/v1` and `STT_MODEL=whisper-large-v3-turbo`). The microphone then records your voice and sends it to that service, which understands both languages in one sentence, and MAAI gives it your names and project words so it spells them right. Your recording goes to that service. **Settings → Talking to MAAI** shows whether it is on. "Check my voice before sending" (Settings) keeps the words in the box for you to correct before they are sent.
 
 ### Screens: phone, tablet or fold, computer
 

@@ -118,8 +118,8 @@ export function Assistant() {
     setPending((ps) => ps.filter((p) => p.key !== key));
   }
 
-  // The language the microphone listens for, and whether the voice service (which understands both at once) is on.
-  const dictLang: Lang = settings.voiceInput === 'app' ? lang : settings.voiceInput;
+  // The microphone listens for the app's language (the ع / EN button at the top changes it); the voice service, when on, understands both at once.
+  const dictLang: Lang = lang;
   const smart = Boolean(status?.voice?.smart) && canRecord;
 
   async function send(text: string, voice?: Lang) {
@@ -295,13 +295,6 @@ export function Assistant() {
         <div className="composer-hint" aria-live="polite">
           {transcribing ? t.transcribing : live ? t.listening : voiceNote || t.tapToSpeak}
         </div>
-        {!smart && canListen && (
-          <div className="seg mini" role="radiogroup" aria-label={t.dictationTitle}>
-            {(['ar', 'en'] as Lang[]).map((l) => (
-              <button key={l} type="button" role="radio" aria-checked={dictLang === l} disabled={live || transcribing} onClick={() => update({ voiceInput: l })}>{l === 'ar' ? 'العربية' : 'English'}</button>
-            ))}
-          </div>
-        )}
         {pending.length > 0 && (
           <ul className="attachments" aria-label={t.attach}>
             {pending.map((p) => (

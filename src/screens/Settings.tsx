@@ -153,19 +153,7 @@ export function SettingsScreen() {
 
       <div className="section-label">{t.dictationTitle}</div>
       <section className="card">
-        {status?.voice?.smart ? (
-          <p className="sub"><strong>{t.smartVoiceName}:</strong> {t.smartVoiceOn}</p>
-        ) : (
-          <>
-            <div className="seg wrap" role="radiogroup" aria-label={t.dictationTitle}>
-              {(['app', 'ar', 'en'] as const).map((v) => (
-                <button key={v} role="radio" aria-checked={settings.voiceInput === v} onClick={() => update({ voiceInput: v })}>{t.dictationChoices[v]}</button>
-              ))}
-            </div>
-            <p className="sub">{t.dictationHint}</p>
-            <p className="sub"><strong>{t.smartVoiceName}:</strong> {t.smartVoiceOff}</p>
-          </>
-        )}
+        <p className="sub"><strong>{t.smartVoiceName}:</strong> {status?.voice?.smart ? t.smartVoiceOn : t.smartVoiceOff}</p>
       </section>
 
       <VoiceSettings />
