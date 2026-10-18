@@ -101,3 +101,84 @@ export function sentences(text: string, maxLength = 200): string[] {
   }
   return out;
 }
+
+// ---------- What the microphone heard ----------
+
+export interface Heard {
+  text: string;
+  final: boolean;
+}
+
+const words = (text: string) => text.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+/** Edit distance between two words (small words only, so the plain method is fine). */
+function distance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const keep = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = keep;
+    }
+  }
+  return row[b.length];
+}
+
+const near = (x: string, y: string) => x === y || distance(x, y) <= Math.max(1, Math.floor(Math.min(x.length, y.length) * 0.3));
+
+/** True when `next` is a longer or corrected version of the same sentence as `prev`: every word they share a place in is the same or a near miss. */
+function sameSentence(prev: string, next: string): boolean {
+  const a = words(prev);
+  const b = words(next);
+  const n = Math.min(a.length, b.length);
+  if (n === 0) return false;
+  for (let i = 0; i < n; i++) if (!near(a[i], b[i])) return false;
+  return true;
+}
+
+/** "no no no no no" → "no": a recogniser stuck on a word. Up to three in a row are real speech; more are not. */
+export function collapseRepeats(text: string): string {
+  const out: string[] = [];
+  let run = 0;
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    run = out.length && out[out.length - 1].toLowerCase() === word.toLowerCase() ? run + 1 : 1;
+    if (run <= 3) out.push(word);
+  }
+  const joined = out.join(' ');
+  // Stuck on one word 4 or more times: keep one.
+  return text.split(/\s+/).filter(Boolean).length > out.length ? joined.replace(/\b(\S+)(?:\s+\1\b){2,}/gi, '$1') : joined;
+}
+
+/**
+ * The sentence the person said, from the list a speech recogniser reports.
+ * On Android the list repeats itself: each entry is the whole sentence so far ("hello", "hello how", "hello how are"),
+ * and adding them up says the first word dozens of times. Entries that grow the previous one replace it; entries that
+ * are genuinely new sentences are added after it.
+ */
+export function assembleHeard(items: Heard[]): string {
+  const kept: string[] = [];
+  for (const { text } of items) {
+    const t = text.trim();
+    if (!t) continue;
+    const last = kept[kept.length - 1];
+    if (last !== undefined && sameSentence(last, t)) {
+      // The same sentence again: keep the longer, or the newer when they are as long (the recogniser corrected itself).
+      if (t.length >= last.length || words(t).length >= words(last).length) kept[kept.length - 1] = t;
+    } else kept.push(t);
+  }
+  return collapseRepeats(kept.join(' '));
+}
+
+/** Which script a piece of text is mostly written in. Arabic letters count as Arabic; everything else is English. */
+export function scriptOf(text: string): Lang {
+  let arabic = 0;
+  let latin = 0;
+  for (const ch of text) {
+    if (/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/.test(ch)) arabic++;
+    else if (/[A-Za-z]/.test(ch)) latin++;
+  }
+  if (!arabic && !latin) return 'en';
+  return arabic >= latin ? 'ar' : 'en';
+}

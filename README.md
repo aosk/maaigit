@@ -208,6 +208,12 @@ The admin portal shows what **Anthropic itself** reports for the key MAAI uses:
 - **Tokens and cost, last 30 days:** needs an **Admin API key** (Claude Console → Settings → Admin keys; organization accounts only, not individual ones). Add it on Render as `ANTHROPIC_ADMIN_KEY`. MAAI finds which key in your organization is its own by how it starts and ends, and shows that key's tokens per day next to what MAAI itself counted. Anthropic reports **cost** only for the whole organization, so that number is the organization's. An Admin key can manage the organization: add one only if you are comfortable, and delete it in the Console to cut MAAI off.
 - Your **remaining prepaid credit** is not available through any API. See it in the Claude Console under Usage and Cost.
 
+### Talking to MAAI in Arabic and English
+
+The phone's built-in dictation listens for **one language at a time**, so a sentence that mixes Arabic and English comes out wrong. Two ways to deal with that:
+- **Switch the language** with the Arabic / English switch above the microphone (or in Settings → Language for talking) before you talk in the other language. MAAI also tells Claude the words were dictated, so it reads mistakes by sound and context.
+- **Smart voice (recommended for mixing):** add `STT_API_KEY` on Render, from a transcription service such as OpenAI, or Groq (also set `STT_BASE_URL=https://api.groq.com/openai/v1` and `STT_MODEL=whisper-large-v3-turbo`). The microphone then records your voice and sends it to that service, which understands both languages in one sentence, and MAAI gives it your names and project words so it spells them right. Your recording goes to that service. **Settings → Language for talking** shows whether it is on. "Check my voice before sending" (Settings) keeps the words in the box for you to correct before they are sent.
+
 ### Screens: phone, tablet or fold, computer
 
 MAAI fits itself to the width of the window: under 600 px is the phone layout, 600 to 1023 px is tablet or an opened fold (wider page, cards in two columns, tabs still at the bottom), and 1024 px and up is computer (a side menu, cards in columns, a wide chat). It re-checks when a fold opens or the window is resized. **Settings → Screen layout** lets you fix Phone, Tablet or fold, or Computer instead of Automatic.

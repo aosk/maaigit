@@ -8,8 +8,12 @@ import { demoChat } from './demo.js';
 import { aboutTheUser } from '../profile.js';
 import { neutralize } from './untrusted.js';
 
-const SYSTEM = `You are MAAI (Musaed Abdulrahman AI), a warm, efficient personal assistant for one user in Saudi Arabia.
+export const SYSTEM = `You are MAAI (Musaed Abdulrahman AI), a warm, efficient personal assistant for one user in Saudi Arabia.
 You help plan the day, book meetings and set reminders. You speak the user's language: reply in Arabic when they write in Arabic (natural Saudi-friendly Modern Standard Arabic), otherwise in English.
+
+Mixed languages: the user often mixes Arabic and English in one message. That is normal, not a mistake and not a reason to ask which language to use. Answer in the language of the main sentence; if it is truly half and half, use the app language named at the end of these instructions. Keep names, places, companies, products, emails and numbers exactly as the user said them, in their own script ("Asana", "Sara", "WhatsApp" stay in English letters; "أحمد" stays in Arabic). Do not translate English terms into Arabic or the reverse unless asked. Understand both Arabic-Indic (٣) and Western (3) digits and Hijri or Gregorian dates.
+
+Voice: when the context says a message was dictated, it comes from speech recognition and may contain mistakes: words heard wrongly, English words written in Arabic letters ("ميتنق" for "meeting", "اسانا" for "Asana") or Arabic words in Latin letters, missing punctuation, or a word repeated by the recogniser. Read it by sound and by what makes sense for this user's day, and do not comment on the mistakes. If a name, email address, number, date or time could be wrong and acting on it matters, ask one short question first instead of guessing.
 
 How you act:
 - You never do anything on your own. To book a meeting call propose_meeting; to set a reminder call propose_reminder; to send an email call propose_email; to answer someone on WhatsApp call propose_whatsapp (read the conversation first with read_whatsapp). Each call shows the user an approval card they can edit; nothing happens until they tap Approve or Send. Say so briefly ("Tap Send to email it") and do not claim it is done.
@@ -65,6 +69,10 @@ function decisionsSince(conversation: Conversation): { note: string; ids: string
   return { note: fresh.length ? `[Approval cards since your last reply: ${fresh.map(line).join('; ')}]` : '', ids: fresh.map((p) => p.id) };
 }
 
+/** Tells Claude a message was dictated, and in which language the recogniser was listening. */
+const voiceNote = (voice: Lang) =>
+  `[This message was dictated by voice; the speech recogniser was listening for ${voice === 'ar' ? 'Arabic' : 'English'}, so words of the other language may be written in the wrong script or mis-heard.]`;
+
 /** Most messages kept in the history sent to Claude; older whole exchanges are let go. */
 const KEEP_MESSAGES = 40;
 const STALE_CONTEXT = '<context>(an earlier snapshot of the day, no longer current)</context>';
@@ -108,8 +116,8 @@ function compact(messages: MessageParam[]) {
  * One turn of the conversation: Claude replies, calling tools as needed. Any
  * cards it proposes are saved as pending; the turn is added to the conversation.
  */
-export async function chat(conversation: Conversation, userText: string, lang: Lang, onEvent: OnEvent = () => {}, files: Upload[] = []): Promise<{ text: string; proposals: Proposal[] }> {
-  const reply = await answer(conversation, userText, lang, onEvent, files);
+export async function chat(conversation: Conversation, userText: string, lang: Lang, onEvent: OnEvent = () => {}, files: Upload[] = [], voice?: Lang): Promise<{ text: string; proposals: Proposal[] }> {
+  const reply = await answer(conversation, userText, lang, onEvent, files, voice);
   conversation.turns.push({ role: 'user', text: userText, ...(files.length ? { attachments: files.map((f) => ({ name: f.name, kind: f.kind })) } : {}) });
   conversation.turns.push({ role: 'assistant', text: reply.text, proposalIds: reply.proposals.map((p) => p.id) });
   state.proposals.push(...reply.proposals);
@@ -118,7 +126,7 @@ export async function chat(conversation: Conversation, userText: string, lang: L
   return reply;
 }
 
-async function answer(conversation: Conversation, userText: string, lang: Lang, onEvent: OnEvent, files: Upload[]): Promise<{ text: string; proposals: Proposal[] }> {
+async function answer(conversation: Conversation, userText: string, lang: Lang, onEvent: OnEvent, files: Upload[], voice?: Lang): Promise<{ text: string; proposals: Proposal[] }> {
   if (!agentEnabled('assistant')) {
     return { text: lang === 'ar' ? 'المساعد متوقف حالياً من قبل المشرف.' : 'The assistant is switched off by the admin right now.', proposals: [] };
   }
@@ -134,7 +142,7 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
   compact(messages);
   const before = messages.length;
   const decisions = decisionsSince(conversation);
-  const prompt = withContext(userText, [decisions.note, aboutTheUser(userText)].filter(Boolean).join('\n\n'));
+  const prompt = withContext(userText, [decisions.note, voice ? voiceNote(voice) : '', aboutTheUser(userText)].filter(Boolean).join('\n\n'));
   messages.push({ role: 'user', content: files.length ? [...fileBlocks(files), { type: 'text', text: prompt }] : prompt });
   const created: Proposal[] = [];
   try {

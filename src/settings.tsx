@@ -12,6 +12,8 @@ interface Settings {
   look: Look;
   /** Which screen type to lay MAAI out for: automatic (from the window's width) or one chosen here. */
   layout: LayoutChoice;
+  /** Which language the microphone listens for: the app's own, or one chosen here (for talking in the other language). */
+  voiceInput: 'app' | Lang;
   toggles: Record<ToggleId, boolean>;
   /** Play MAAI's chime when an alert arrives while the app is open. */
   sound: boolean;
@@ -23,9 +25,10 @@ const DEFAULTS: Settings = {
   lang: 'en',
   look: 'system',
   layout: 'auto',
+  voiceInput: 'app',
   sound: true,
   voices: {},
-  toggles: { longListen: false, simple: false, captions: true, speakReplies: false, slow: false, largeText: false, contrast: false, reduceMotion: false },
+  toggles: { longListen: false, simple: false, captions: true, speakReplies: false, slow: false, reviewVoice: false, largeText: false, contrast: false, reduceMotion: false },
 };
 
 const KEY = 'maai.settings';

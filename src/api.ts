@@ -149,8 +149,18 @@ export const api = {
     return (await res.json()) as UploadInfo;
   },
   /** Streams MAAI's progress (thinking, steps, reply text) and resolves with the final reply. `signal` abandons it (the screen was left). */
-  send: async (text: string, lang: Lang, onEvent: (e: ChatEvent) => void, attachments: string[] = [], signal?: AbortSignal) =>
-    readStream(await request('POST', '/chat/stream', { text, lang, attachments }, false, signal), onEvent),
+  send: async (text: string, lang: Lang, onEvent: (e: ChatEvent) => void, attachments: string[] = [], signal?: AbortSignal, voice?: Lang) =>
+    readStream(await request('POST', '/chat/stream', { text, lang, attachments, voice }, false, signal), onEvent),
+  /** Sends a recording to be turned into words (Arabic and English may be mixed). */
+  transcribe: async (audio: Blob): Promise<string> => {
+    const res = await fetch('/api/transcribe', { method: 'POST', headers: { 'Content-Type': audio.type || 'application/octet-stream' }, body: audio });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string; kind?: string; face?: boolean };
+      if (res.status === 401 && data.error === 'locked') window.dispatchEvent(new CustomEvent(LOCKED_EVENT, { detail: { kind: data.kind, face: data.face === true } }));
+      throw new Error(data.error ?? `Transcription failed (${res.status})`);
+    }
+    return ((await res.json()) as { text: string }).text;
+  },
   profile: () => call<ProfileInfo>('GET', '/profile'),
   addFact: (text: string, category: ProfileCategory) => call<ProfileFact>('POST', '/profile/facts', { text, category }),
   updateFact: (id: string, change: { text?: string; category?: ProfileCategory; pinned?: boolean }) => call<ProfileFact>('PATCH', `/profile/facts/${id}`, change),

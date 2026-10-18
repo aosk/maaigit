@@ -489,3 +489,7 @@ html[dir='rtl'] .link-row svg { transform: scaleX(-1); }
 :root[data-layout='desktop'] .bubble { max-width: 75%; }
 /* A heading never ends a column on its own: it stays with the card under it. */
 .screen.cols > .between, .screen.cols > :has(> h2) { break-after: avoid; }
+
+/* A small two-way switch (the language the microphone listens for). */
+.seg.mini { grid-template-columns: repeat(2, minmax(88px, auto)); width: fit-content; margin-inline: auto; }
+.seg.mini button { min-height: 44px; padding-inline: 14px; }

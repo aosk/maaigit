@@ -57,7 +57,7 @@ assistant.post('/chat/stream', async (req, res) => {
   // A comment line every 15 s keeps proxies from closing a long, quiet connection.
   const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15_000);
   try {
-    const reply = await chat(current, message, lang(req.body.lang), send, files);
+    const reply = await chat(current, message, lang(req.body.lang), send, files, req.body.voice === 'ar' || req.body.voice === 'en' ? req.body.voice : undefined);
     releaseUploads(files);
     send({ type: 'done', reply: reply.text, proposals: reply.proposals });
   } catch (error) {

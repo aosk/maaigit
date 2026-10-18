@@ -46,6 +46,10 @@ services:
         sync: false
       - key: GOOGLE_CALENDAR_ID
         sync: false
+      # Optional: smart voice. A transcription service that understands Arabic and English in one sentence
+      # (OpenAI, or Groq: set STT_BASE_URL=https://api.groq.com/openai/v1 and STT_MODEL=whisper-large-v3-turbo).
+      - key: STT_API_KEY
+        sync: false
       # Optional: Asana personal access token.
       - key: ASANA_TOKEN
         sync: false

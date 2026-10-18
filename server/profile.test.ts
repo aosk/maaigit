@@ -216,3 +216,21 @@ describe('the profile screen\'s routes', () => {
     }
   });
 });
+
+describe('dictated messages', () => {
+  it('tell Claude the words came from speech recognition, and which language it was listening for; typed ones do not', async () => {
+    script(reply([{ type: 'text', text: 'ok' }], 'end_turn'), reply([{ type: 'text', text: 'ok' }], 'end_turn'));
+    const c: Conversation = { id: 'c', apiMessages: [], turns: [] };
+    await chat(c, 'ذكرني بميتنق مع سارة', 'ar', () => {}, [], 'ar');
+    expect(seen[0]).toContain('dictated by voice');
+    expect(seen[0]).toContain('listening for Arabic');
+    await chat(c, 'plain typed words', 'en');
+    expect(seen[1].split('plain typed words')[0].split('"role":"user"').pop()).not.toContain('dictated by voice');
+  });
+
+  it('the assistant is told that mixing Arabic and English is normal and how to handle dictation mistakes', async () => {
+    const { SYSTEM } = await import('./ai/chat');
+    expect(SYSTEM).toMatch(/mixes Arabic and English/);
+    expect(SYSTEM).toMatch(/ميتنق/);
+  });
+});

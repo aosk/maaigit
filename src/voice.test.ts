@@ -90,3 +90,44 @@ describe('preparing text to be read aloud', () => {
     expect(sentences('...')).toEqual(['...']);
   });
 });
+
+import { assembleHeard, collapseRepeats, scriptOf } from './voice';
+
+describe('what was heard', () => {
+  it('does not repeat the first word when the phone reports the sentence so far in every entry (Android)', () => {
+    const android = ['hello', 'hello how', 'hello how are', 'hello how are you today'].map((text) => ({ text, final: true }));
+    expect(assembleHeard(android)).toBe('hello how are you today');
+  });
+
+  it('handles the same thing in Arabic, and a recogniser that corrects itself', () => {
+    const ar = ['ذكرني', 'ذكرني اتصل', 'ذكرني اتصل بأحمد'].map((text) => ({ text, final: false }));
+    expect(assembleHeard(ar)).toBe('ذكرني اتصل بأحمد');
+    const fix = ['book a meating', 'book a meeting with sara'].map((text) => ({ text, final: false }));
+    expect(assembleHeard(fix)).toBe('book a meeting with sara');
+  });
+
+  it('keeps separate sentences, as a normal browser reports them', () => {
+    const normal = [{ text: 'remind me to call Sara', final: true }, { text: 'and book a room for Monday', final: false }];
+    expect(assembleHeard(normal)).toBe('remind me to call Sara and book a room for Monday');
+  });
+
+  it('copes with empty entries and mixed Arabic and English', () => {
+    expect(assembleHeard([{ text: '', final: true }, { text: 'ضيف اجتماع مع Sara يوم الاثنين', final: true }])).toBe('ضيف اجتماع مع Sara يوم الاثنين');
+  });
+
+  it('collapses a word the recogniser got stuck on, but not real repetition', () => {
+    expect(collapseRepeats('hello hello hello hello hello hello how are you')).toBe('hello how are you');
+    expect(collapseRepeats('no no no thank you')).toBe('no no no thank you');
+    expect(collapseRepeats('')).toBe('');
+  });
+});
+
+describe('which voice to use for a sentence', () => {
+  it('goes by the script it is mostly written in', () => {
+    expect(scriptOf('You have a meeting at 4pm')).toBe('en');
+    expect(scriptOf('عندك اجتماع الساعة ٤')).toBe('ar');
+    expect(scriptOf('عندك meeting مع Sara الساعة ٤')).toBe('ar');
+    expect(scriptOf('Your Asana مهام are done')).toBe('en');
+    expect(scriptOf('12:30 — 4/5')).toBe('en');
+  });
+});

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { ChatTurn, Proposal, StatusInfo } from '../../shared/types';
+import type { ChatTurn, Lang, Proposal, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
 import { canListen, listen, speak, stopSpeaking, type ListenProblem } from '../speech';
+import { canRecord, record } from '../recorder';
 import { FileText, Mic, Paperclip, Plus, Send } from '../components/Icons';
 import { AttachError, prepare, type AttachKind } from '../attach';
 import { takeArrival } from '../nav';
@@ -29,6 +30,7 @@ export function Assistant() {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const stopRef = useRef<() => void>();
@@ -116,7 +118,11 @@ export function Assistant() {
     setPending((ps) => ps.filter((p) => p.key !== key));
   }
 
-  async function send(text: string) {
+  // The language the microphone listens for, and whether the voice service (which understands both at once) is on.
+  const dictLang: Lang = settings.voiceInput === 'app' ? lang : settings.voiceInput;
+  const smart = Boolean(status?.voice?.smart) && canRecord;
+
+  async function send(text: string, voice?: Lang) {
     if (busyRef.current || !alive.current) return;
     const waiting = pendingRef.current;
     if (waiting.some((p) => p.status === 'uploading')) return setError(t.attachWaiting);
@@ -135,7 +141,7 @@ export function Assistant() {
     const abort = new AbortController();
     abortRef.current = abort;
     try {
-      const res = await api.send(message, lang, (e) => alive.current && setProgress((p) => addEvent(p, e)), files.map((f) => f.id!), abort.signal);
+      const res = await api.send(message, lang, (e) => alive.current && setProgress((p) => addEvent(p, e)), files.map((f) => f.id!), abort.signal, voice);
       for (const f of files) if (f.preview) forgetPreview(f.preview);
       if (!alive.current) return;
       setProposals((ps) => ({ ...ps, ...Object.fromEntries(res.proposals.map((p) => [p.id, p])) }));
@@ -162,6 +168,15 @@ export function Assistant() {
     }
   }
 
+  /** What the person said, once it is words: sent at once, or left in the box to check first. */
+  function heardWords(words: string) {
+    if (!words.trim()) return typeInstead('no-speech');
+    if (settings.toggles.reviewVoice) {
+      setInput(words);
+      inputRef.current?.focus();
+    } else void send(words, smart ? undefined : dictLang);
+  }
+
   function toggleMic() {
     if (live) {
       stopRef.current?.();
@@ -169,11 +184,12 @@ export function Assistant() {
     }
     stopSpeaking();
     setVoiceNote('');
+    if (smart) return listenSmart();
     if (!canListen) return typeInstead('unsupported');
     setLive(true);
     let heard = '';
     stopRef.current = listen(
-      lang,
+      dictLang,
       (text) => {
         heard = text;
         setInput(text);
@@ -181,11 +197,30 @@ export function Assistant() {
       (problem) => {
         if (!alive.current) return; // the screen was left while listening: nothing is sent
         setLive(false);
-        if (heard) void send(heard);
+        if (heard) heardWords(heard);
         else if (problem) typeInstead(problem);
       },
       { silenceMs: settings.toggles.longListen ? 5000 : 2500 },
     );
+  }
+
+  /** Records, then has the voice service write it down: Arabic and English can be mixed in one sentence. */
+  function listenSmart() {
+    setLive(true);
+    stopRef.current = record({
+      silenceMs: settings.toggles.longListen ? 4500 : 2200,
+      onDone: (audio, problem) => {
+        if (!alive.current) return;
+        setLive(false);
+        if (!audio) return typeInstead(problem === 'denied' ? 'denied' : problem === 'unsupported' ? 'unsupported' : 'no-speech');
+        setTranscribing(true);
+        api
+          .transcribe(audio)
+          .then((words) => alive.current && heardWords(words))
+          .catch((e: Error) => alive.current && setVoiceNote(t.voiceFailed(e.message)))
+          .finally(() => alive.current && setTranscribing(false));
+      },
+    });
   }
 
   /** When the browser can't listen, open the keyboard: its own microphone key works everywhere. */
@@ -258,8 +293,15 @@ export function Assistant() {
 
       <form className="composer" onSubmit={onSubmit}>
         <div className="composer-hint" aria-live="polite">
-          {live ? t.listening : voiceNote || t.tapToSpeak}
+          {transcribing ? t.transcribing : live ? t.listening : voiceNote || t.tapToSpeak}
         </div>
+        {!smart && canListen && (
+          <div className="seg mini" role="radiogroup" aria-label={t.dictationTitle}>
+            {(['ar', 'en'] as Lang[]).map((l) => (
+              <button key={l} type="button" role="radio" aria-checked={dictLang === l} disabled={live || transcribing} onClick={() => update({ voiceInput: l })}>{l === 'ar' ? 'العربية' : 'English'}</button>
+            ))}
+          </div>
+        )}
         {pending.length > 0 && (
           <ul className="attachments" aria-label={t.attach}>
             {pending.map((p) => (
@@ -294,7 +336,7 @@ export function Assistant() {
               aria-label={live ? t.stopListening : t.startListening}
               aria-pressed={live}
               onClick={toggleMic}
-              disabled={busy}
+              disabled={busy || transcribing}
             >
               <Mic size={26} />
             </button>

@@ -1,6 +1,6 @@
 import type { Lang } from '../shared/types';
 
-import { cleanForSpeech, pickVoice, rankVoices, sentences, type VoiceInfo } from './voice';
+import { assembleHeard, cleanForSpeech, pickVoice, rankVoices, scriptOf, sentences, type VoiceInfo } from './voice';
 
 const voiceLang = (lang: Lang) => (lang === 'ar' ? 'ar-SA' : 'en-GB');
 
@@ -39,10 +39,14 @@ export function speak(text: string, lang: Lang, slow: boolean, onEnd?: () => voi
 
   void installedVoices().then((voices) => {
     if (mine !== session) return; // stopped or replaced while the voices were loading
-    const voice = pickVoice(voices as (SpeechSynthesisVoice & VoiceInfo)[], lang, chosen[lang]);
+    const all = voices as (SpeechSynthesisVoice & VoiceInfo)[];
     parts.forEach((part, i) => {
+      // A sentence written mostly in the other language is read in that language's voice (an English sentence in an
+      // Arabic reply is not read with an Arabic accent).
+      const partLang = scriptOf(part);
+      const voice = pickVoice(all, partLang, chosen[partLang]);
       const utterance = new SpeechSynthesisUtterance(part);
-      utterance.lang = voice?.lang ?? voiceLang(lang);
+      utterance.lang = voice?.lang ?? voiceLang(partLang);
       if (voice) utterance.voice = voice;
       // A touch slower than the default sounds calmer and less hurried.
       utterance.rate = slow ? 0.8 : 0.95;
@@ -80,6 +84,7 @@ const Ctor = (window as unknown as { SpeechRecognition?: RecognitionCtor; webkit
   .SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: RecognitionCtor }).webkitSpeechRecognition;
 
 export const canListen = Boolean(Ctor);
+const ANDROID = /Android/i.test(navigator.userAgent);
 
 /** Why listening stopped early: no voice support, the microphone was refused, or nothing was heard. */
 export type ListenProblem = 'unsupported' | 'denied' | 'no-speech';
@@ -147,9 +152,11 @@ export function listen(
     rec = r;
     r.lang = voiceLang(lang);
     r.interimResults = true;
-    r.continuous = true;
+    // Android's recogniser, when left listening, reports the whole sentence again in every result. Asking for one
+    // sentence at a time (and restarting, below) avoids that; the iPhone and computers are fine as they are.
+    r.continuous = !ANDROID;
     r.onresult = (e) => {
-      current = Array.from(e.results).map((res) => res[0].transcript).join('');
+      current = assembleHeard(Array.from(e.results).map((res) => ({ text: res[0].transcript, final: res.isFinal })));
       if (current.trim()) {
         heardAnything = true;
         clearTimeout(firstWord);
