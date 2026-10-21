@@ -53,11 +53,13 @@ if (envUsed) {
 const BASE = `${(process.env.MAAI_URL ?? '').replace(/\/+$/, '')}/bot/v1`;
 const KEY = process.env.MAAI_BOT_KEY ?? '';
 const XAI_KEY = process.env.XAI_API_KEY ?? '';
-const GROK_MODEL = process.env.GROK_MODEL || 'grok-4';
+/** The Grok model to use: GROK_MODEL if xAI offers it, else the newest Grok model the key can use (found at start). */
+let grokModel = process.env.GROK_MODEL || '';
+const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/+$/, '');
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-21j';
+const VERSION = '2026-10-21k';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -300,23 +302,65 @@ async function backfill() {
 
 // ---------- Commands from MAAI ----------
 
+/** xAI's own explanation of a refused request, in one line. */
+async function xaiError(res) {
+  const body = await res.json().catch(() => ({}));
+  const said = typeof body.error === 'string' ? body.error : body.error?.message ?? body.message ?? body.detail ?? '';
+  const hint =
+    res.status === 401 || res.status === 403 || /api key|unauthori[sz]ed|permission/i.test(said)
+      ? ' Check XAI_API_KEY in .env (from console.x.ai → API Keys; it starts with "xai-"), and that the key has credit and model access.'
+      : res.status === 404 || /model/i.test(said)
+        ? ' The model is not available to this key: remove GROK_MODEL from .env and the bot picks one itself.'
+        : res.status === 429
+          ? ' Out of credit or too many requests: check console.x.ai → Billing.'
+          : '';
+  return `Grok refused (${res.status})${said ? `: ${String(said).slice(0, 200).replace(/[.\s]+$/, '')}` : ''}.${hint}`;
+}
+
+/**
+ * At start: checks the xAI key and finds a model it can use, so a wrong key or model shows up straight away in
+ * this window instead of only when a task fails.
+ */
+let lastGrokCheck = 0;
+async function checkGrok() {
+  lastGrokCheck = Date.now();
+  if (!XAI_KEY) return log('Grok: no XAI_API_KEY in .env, so approved tasks are answered "not set up". (Optional.)');
+  if (!XAI_KEY.startsWith('xai-')) log('⚠ Grok: XAI_API_KEY does not start with "xai-": check it was copied whole from console.x.ai.');
+  const res = await fetch(`${XAI_BASE}/models`, { headers: { authorization: `Bearer ${XAI_KEY}` }, signal: AbortSignal.timeout(20_000) }).catch((e) => e);
+  if (res instanceof Error) return log(`⚠ Grok: could not reach api.x.ai (${why(res)}). A firewall at work may block it.`);
+  if (!res.ok) return log(`⚠ ${await xaiError(res)}`);
+  const ids = ((await res.json().catch(() => ({}))).data ?? []).map((m) => m.id).filter((id) => typeof id === 'string');
+  const chat = ids.filter((id) => /^grok/i.test(id) && !/image|vision|imagine|embed/i.test(id));
+  if (grokModel && !ids.includes(grokModel)) {
+    log(`⚠ Grok: model "${grokModel}" is not offered to this key; using another.`);
+    grokModel = '';
+  }
+  // Newest first by the version in the name (grok-4 before grok-3…).
+  if (!grokModel) grokModel = chat.sort((a, b) => b.localeCompare(a, 'en', { numeric: true }))[0] ?? '';
+  log(grokModel ? `Grok ready: key accepted, model ${grokModel}.` : `⚠ Grok: the key works but offers no chat model (${ids.length} models).`);
+}
+
 async function grok(task) {
   if (!XAI_KEY) return { ok: false, output: 'No XAI_API_KEY on the device, so Grok cannot carry out tasks.' };
-  const res = await fetch('https://api.x.ai/v1/chat/completions', {
+  // A failed start check is tried again at most every 10 minutes, not before every task.
+  if (!grokModel && Date.now() - lastGrokCheck > 10 * 60_000) await checkGrok().catch(() => {});
+  const res = await fetch(`${XAI_BASE}/chat/completions`, {
     method: 'POST',
     headers: { authorization: `Bearer ${XAI_KEY}`, 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: GROK_MODEL,
+      model: grokModel || 'grok-4',
       messages: [
         { role: 'system', content: "You are the user's device assistant. Carry out the task in writing (answer, draft, summary, plan). You cannot run programs, open files or send anything; if the task needs that, say exactly what the user should do. Be brief." },
         { role: 'user', content: task },
       ],
     }),
-    signal: AbortSignal.timeout(90_000),
-  });
-  if (!res.ok) return { ok: false, output: `Grok refused (${res.status}).` };
+    signal: AbortSignal.timeout(120_000),
+  }).catch((e) => e);
+  if (res instanceof Error) return { ok: false, output: `Could not reach Grok (${why(res)}).` };
+  if (!res.ok) return { ok: false, output: await xaiError(res) };
   const data = await res.json();
-  return { ok: true, output: String(data.choices?.[0]?.message?.content ?? '').slice(0, 4000) };
+  const text = String(data.choices?.[0]?.message?.content ?? '').trim();
+  return text ? { ok: true, output: text.slice(0, 4000) } : { ok: false, output: 'Grok answered with nothing.' };
 }
 
 async function handle(commands) {
@@ -388,6 +432,7 @@ async function sync() {
 wa.on('ready', async () => {
   log('WhatsApp ready. Reading recent chats…');
   await shareContacts().catch((error) => log('⚠ Could not share contacts:', why(error)));
+  await checkGrok().catch((error) => log('⚠ Grok check failed:', why(error)));
   log('Listening for new messages. Reading the last day of chats in the background…');
   void backfill()
     .then(() => sync())

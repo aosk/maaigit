@@ -18,7 +18,7 @@
 4. انسخ `.env.example` باسم `.env`، وافتحه، وعبّئ فيه:
    - `MAAI_URL`: عنوان موقعك من Render.
    - `MAAI_BOT_KEY`: المفتاح من MAAI، من بوابة المشرف ثم قسم Device bot.
-   - `XAI_API_KEY` (اختياري): مفتاح Grok من console.x.ai.
+   - `XAI_API_KEY` (اختياري): مفتاح Grok من console.x.ai ← API Keys (يبدأ بـ `xai-`). البوت يتحقق منه عند التشغيل ويختار موديل Grok المتاح لحسابك بنفسه، ويكتب السبب بوضوح إذا رُفض.
 5. شغّل البوت:
    ```
    npm start
