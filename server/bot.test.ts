@@ -214,6 +214,27 @@ describe('messages the bot delivers', () => {
   });
 });
 
+describe('contacts', () => {
+  it('keeps names and numbers only, and finds people by part of the name, Arabic spelled loosely', async () => {
+    state.contacts = [];
+    const sent = await asBot('POST', '/contacts', { contacts: [
+      { name: 'خالد العتيبي', phone: '+966 50 123 4567', email: 'x@y.z' },
+      { name: 'Khalid Work', phone: '966509999999' },
+      { name: 'أحمد', phone: '966501111111' },
+      { name: 'No number', phone: '12' },
+      { name: 'Twice', phone: '966501111111' },
+    ] });
+    expect(JSON.parse(sent.body)).toEqual({ kept: 3 });
+    expect(state.contacts).toEqual([{ name: 'خالد العتيبي', phone: '966501234567' }, { name: 'Khalid Work', phone: '966509999999' }, { name: 'أحمد', phone: '966501111111' }]);
+    const one = await runTool({ type: 'tool_use', id: 'c1', name: 'find_contact', input: { name: 'احمد' } }, []);
+    expect(one.result.content).toContain('أحمد: 966501111111');
+    const many = await runTool({ type: 'tool_use', id: 'c2', name: 'find_contact', input: { name: 'khalid' } }, []);
+    expect(many.result.content).toMatch(/^Found:\n- Khalid Work/);
+    expect((await runTool({ type: 'tool_use', id: 'c3', name: 'find_contact', input: { name: 'زيد' } }, [])).result.is_error).toBe(true);
+    expect((await asBot('POST', '/contacts', { contacts: 'all' })).status).toBe(400);
+  });
+});
+
 describe('the fixed note', () => {
   it('is the user\'s text with a clean name', () => {
     expect(fixedReply('Ahmed')).toBe('الله يحييك Ahmed انا ذكاء اصطناعي خاص ب عبدالرحمن الشغدلي، ارسلت تفاصيل رسالتك ل عبدالرحمن وبرد عليك باسرع وقت. للاسف لحد الان فقط اقدر اقرا ما اقدر اسمع تسجيل او اشوف الصور او مرفقات. فضلا اكتب تفاصيل رسالتك كتابيا');

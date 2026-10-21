@@ -1,5 +1,5 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveFromBot, seen, takeCommands } from '../bot.js';
+import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, seen, takeCommands } from '../bot.js';
 import { state } from '../store.js';
 
 /**
@@ -56,6 +56,12 @@ deviceApi.post('/sync', (req, res) => {
   seen(deviceName(req.body?.device));
   const delivered = receiveFromBot(req.body);
   res.json({ ...delivered, commands: takeCommands() });
+});
+
+/** The phone's contacts (names and numbers), so the assistant can find someone by name. Replaces the last list. */
+deviceApi.post('/contacts', (req, res) => {
+  seen();
+  res.json({ kept: receiveContacts(req.body) });
 });
 
 /** Waiting commands (ask every minute or so). Each command is handed over once. */

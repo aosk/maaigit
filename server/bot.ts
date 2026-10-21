@@ -70,6 +70,7 @@ export function botStatus(now = Date.now()): BotStatus {
     waiting: state.bot.commands.filter((c) => c.status === 'queued').length,
     messages: state.inbox.filter((m) => m.via === 'bot').length,
     replyMode: state.replyMode,
+    contacts: state.contacts.length,
   };
 }
 
@@ -134,8 +135,10 @@ export interface Delivery {
   stored: number;
   repeats: number;
   skipped: number;
-  /** People who got the fixed note. */
+  /** People MAAI is answering by itself. */
   noted: number;
+  /** The user's own messages (they only mark chats as answered). */
+  own: number;
 }
 
 /** Keeps what the bot delivered, marks chats the user already answered on the phone, and queues the fixed note. */
@@ -146,7 +149,7 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
 
   const known = new Set(state.inbox.map((m) => m.externalId).filter(Boolean));
   const parsed = list.map((raw) => parse(raw, now));
-  const result: Delivery = { stored: 0, repeats: 0, skipped: parsed.filter((m) => !m).length, noted: 0 };
+  const result: Delivery = { stored: 0, repeats: 0, skipped: parsed.filter((m) => !m).length, noted: 0, own: 0 };
   const incoming = parsed.filter((m): m is Incoming => m !== null).sort((a, b) => a.at - b.at);
 
   // The user's own messages are not kept; they only show which chats are already answered.
@@ -159,7 +162,10 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
 
   const fresh: InboxMessage[] = [];
   for (const m of incoming) {
-    if (m.fromMe) continue;
+    if (m.fromMe) {
+      result.own += 1;
+      continue;
+    }
     if (known.has(m.externalId)) {
       result.repeats += 1;
       continue;
@@ -198,6 +204,9 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
 
   pruneBotMessages(now);
   state.bot.lastSync = new Date(now).toISOString();
+  // Counts only (never names or text), so a delivery that keeps nothing can be explained from the server log.
+  const version = str((body as { version?: unknown }).version, 40);
+  console.log(`Device bot${version ? ` ${version}` : ''} delivered ${list.length}: ${result.stored} new, ${result.repeats} repeats, ${result.own} own, ${result.skipped} unusable, ${result.noted} to answer`);
   save();
   return result;
 }
@@ -279,4 +288,53 @@ export function recentResults(now = Date.now(), within = 24 * 3_600_000): BotCom
     .filter((c) => c.kind === 'task' && c.finishedAt && now - Date.parse(c.finishedAt) < within)
     .sort((a, b) => (b.finishedAt ?? '').localeCompare(a.finishedAt ?? ''))
     .slice(0, 5);
+}
+
+// ---------- Contacts ----------
+
+/** Most contacts kept. */
+const MAX_CONTACTS = 5000;
+
+/** Replaces the saved contacts with what the bot sent: names and numbers only. */
+export function receiveContacts(body: unknown): number {
+  const list = (body as { contacts?: unknown } | null)?.contacts;
+  if (!Array.isArray(list)) throw new BotInputError('Send {"contacts": [{"name": "...", "phone": "9665..."}]}.');
+  if (list.length > MAX_CONTACTS) throw new BotInputError(`At most ${MAX_CONTACTS} contacts.`);
+  const seen = new Set<string>();
+  const contacts: { name: string; phone: string }[] = [];
+  for (const raw of list) {
+    const c = (raw ?? {}) as Record<string, unknown>;
+    const name = str(c.name, 80).replace(/\p{Cc}|[<>]/gu, '');
+    const phone = digits(c.phone);
+    if (!name || phone.length < 8 || phone.length > 15 || seen.has(phone)) continue;
+    seen.add(phone);
+    contacts.push({ name, phone });
+  }
+  state.contacts = contacts;
+  save();
+  console.log(`Device bot sent ${contacts.length} contacts`);
+  return contacts.length;
+}
+
+/** Arabic and English names compared loosely: no diacritics, one form of alef, taa marbuta and yaa, any case. */
+const fold = (text: string) =>
+  text
+    .normalize('NFKD')
+    .replace(/\p{M}|\u0640/gu, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .toLowerCase()
+    .trim();
+
+/** Contacts whose name contains every word of the query, best first. */
+export function findContacts(query: string, limit = 8): { name: string; phone: string }[] {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  return state.contacts
+    .map((c) => ({ c, name: fold(c.name) }))
+    .filter(({ name }) => words.every((w) => name.includes(w)))
+    .sort((a, b) => Number(b.name.startsWith(words[0])) - Number(a.name.startsWith(words[0])) || a.name.length - b.name.length)
+    .slice(0, limit)
+    .map(({ c }) => c);
 }

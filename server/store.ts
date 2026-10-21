@@ -82,6 +82,8 @@ interface State {
   profile: { enabled: boolean; facts: ProfileFact[] };
   /** The user's device bot: a hash of its key (never the key), when it was last heard from, and what MAAI asked it to do. */
   bot: { keyHash?: string; keyHint?: string; device?: string; lastSeen?: string; lastSync?: string; commands: BotCommand[] };
+  /** Names and numbers from the user's phone (saved contacts, as WhatsApp on the device sees them). */
+  contacts: { name: string; phone: string }[];
   /** How MAAI answers new WhatsApp messages by itself (see server/intake.ts). */
   replyMode: ReplyMode;
   /** Per number: MAAI's own first replies to that person in the last day, and what it found out. */
@@ -161,6 +163,7 @@ function seed(): State {
     bot: { commands: [] },
     replyMode: 'smart',
     intake: {},
+    contacts: [],
     sessionEpoch: 0,
   };
 }
@@ -201,6 +204,7 @@ function load(): State {
   saved.bot = { ...saved.bot, commands: saved.bot?.commands ?? [] };
   saved.replyMode = saved.replyMode === 'fixed' || saved.replyMode === 'off' ? saved.replyMode : 'smart';
   saved.intake = saved.intake ?? {};
+  saved.contacts = saved.contacts ?? [];
   // Agents added after the file was saved appear in the admin list, switched on.
   for (const agent of seed().agents) if (!saved.agents.some((a) => a.id === agent.id)) saved.agents.push(agent);
   return saved;

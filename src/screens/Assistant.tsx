@@ -4,7 +4,8 @@ import { api } from '../api';
 import { useSettings } from '../settings';
 import { canListen, listen, speak, stopSpeaking, type ListenProblem } from '../speech';
 import { canRecord, record } from '../recorder';
-import { FileText, Mic, Paperclip, Plus, Send } from '../components/Icons';
+import { FileText, Mic, Paperclip, Person, Plus, Send } from '../components/Icons';
+import { canPickContacts, pickContacts } from '../contacts';
 import { AttachError, prepare, type AttachKind } from '../attach';
 import { takeArrival } from '../nav';
 import { Logo } from '../components/Logo';
@@ -309,6 +310,21 @@ export function Assistant() {
         <div className="composer-row">
           <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => void attach(e.target.files)} />
           <button type="button" className="attach" aria-label={t.attach} onClick={() => fileRef.current?.click()} disabled={busy}><Paperclip size={22} /></button>
+          {canPickContacts() && (
+            <button
+              type="button"
+              className="attach"
+              aria-label={t.pickContact}
+              disabled={busy}
+              onClick={() =>
+                void pickContacts()
+                  .then((names) => names && setInput((before) => `${before}${before.trim() ? ' ' : ''}${names}`))
+                  .catch(() => {})
+              }
+            >
+              <Person size={22} />
+            </button>
+          )}
           <label htmlFor="chat-input" className="sr-only">{t.typeMessage}</label>
           <input
             id="chat-input"

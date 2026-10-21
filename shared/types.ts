@@ -608,6 +608,8 @@ export interface BotStatus {
   messages: number;
   /** How MAAI answers new WhatsApp messages by itself: an AI first reply that asks for details, the fixed note, or nothing. */
   replyMode: ReplyMode;
+  /** Contacts the bot shared from the phone (names and numbers), for finding someone by name. */
+  contacts: number;
 }
 
 export type ReplyMode = 'smart' | 'fixed' | 'off';

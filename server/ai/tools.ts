@@ -6,7 +6,7 @@ import { isEmail, mailConfigured } from '../mail.js';
 import { cachedInbox, getEmail } from '../gmail-inbox.js';
 import { AsanaError, asanaConfigured, cachedTasks, getTask, isGid, projects, validateNewTask } from '../asana.js';
 import { canAnswer, lastFrom, whatsappConfigured } from '../whatsapp.js';
-import { botConnected, botReplyTarget } from '../bot.js';
+import { botConnected, botReplyTarget, findContacts } from '../bot.js';
 import { emailForClaude, dayTime } from './context.js';
 import { neutralize } from './untrusted.js';
 import { category, cleanFact } from '../profile.js';
@@ -360,6 +360,27 @@ const propose_remember: ToolSpec<{ fact: string; category: ProfileCategory }> = 
   detail: lastTitle,
 };
 
+const find_contact: ToolSpec<{ name: string }> = {
+  definition: {
+    description:
+      "Find someone's WhatsApp number in the user's phone contacts by name (Arabic or English, part of the name is enough). Use it before propose_whatsapp when the user names a person instead of giving a number. Read-only.",
+    input_schema: {
+      type: 'object',
+      properties: { name: { type: 'string', description: 'The name as the user said it, e.g. "خالد" or "Khalid Alotaibi".' } },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+  run({ name }) {
+    if (!state.contacts.length) throw new ToolError('No contacts yet: the device bot shares them once it runs the newest version. Ask the user for the number instead.');
+    const found = findContacts(name);
+    if (!found.length) throw new ToolError(`No contact matches "${name}". Ask the user for the number, or try another spelling.`);
+    // Several matches: the user picks; never guess between two people.
+    return `${found.length > 1 ? 'Several contacts match; ask the user which one before writing to anyone:' : 'Found:'}\n${found.map((c) => `- ${neutralize(c.name)}: ${c.phone}`).join('\n')}`;
+  },
+  detail: ({ name }) => name,
+};
+
 /** Most characters in one instruction to the device bot. */
 const MAX_TASK = 1000;
 
@@ -391,7 +412,7 @@ const propose_device_task: ToolSpec<{ title: string; task: string }> = {
 
 // Each tool has its own input type, checked by its strict schema; the table of them cannot name one type for all.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SPECS: Record<string, ToolSpec<any>> = { read_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder, propose_remember, propose_device_task };
+const SPECS: Record<string, ToolSpec<any>> = { read_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder, propose_remember, propose_device_task, find_contact };
 
 export const tools: Tool[] = Object.entries(SPECS).map(([name, spec]) => ({ name, strict: true, ...spec.definition }));
 

@@ -30,6 +30,8 @@ const XAI_KEY = process.env.XAI_API_KEY ?? '';
 const GROK_MODEL = process.env.GROK_MODEL || 'grok-4';
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
+/** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
+const VERSION = '2026-10-21d';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -193,15 +195,31 @@ wa.on('disconnected', (why) => fail(`WhatsApp disconnected (${why}). Start the b
 wa.on('message_create', async (msg) => {
   try {
     const item = await toItem(msg);
+    if (!item) {
+      if (!msg.fromMe && process.env.DEBUG) log(`Skipped a "${msg.type}" message from ${msg.from}.`);
+      return;
+    }
     if (!add(item)) return;
     keepQueue();
     if (item.byMaai) return;
     if (!item.fromMe) log(`New message from ${item.from ?? `+${item.phone}`}${item.group ? ' (group)' : ''}: sending to MAAI in a minute.`);
     deliverSoon();
   } catch (error) {
-    log('Could not read a message:', error.message);
+    log('⚠ Could not read a message:', error.message);
   }
 });
+
+/** The phone's saved contacts (names and numbers only), so the assistant can find people by name. Once a day. */
+async function shareContacts() {
+  const all = await wa.getContacts();
+  const contacts = all
+    .filter((c) => c.isMyContact && !c.isGroup && !c.isMe && (c.number || c.id?.user))
+    .map((c) => ({ name: c.name || c.pushname || '', phone: digits(c.number || c.id.user) }))
+    .filter((c) => c.name && c.phone.length >= 8)
+    .slice(0, 5000);
+  const out = await maai('POST', '/contacts', { contacts });
+  log(`Shared ${out.kept} contacts with MAAI (names and numbers only).`);
+}
 
 /** The last day of chats, read once when the bot starts, so MAAI also sees what arrived before (repeats are ignored by MAAI). */
 const BACKFILL_HOURS = Math.max(1, Number(process.env.BACKFILL_HOURS) || 24);
@@ -277,11 +295,11 @@ async function sync() {
   try {
     do {
       const batch = queue.slice(0, 200);
-      const out = await maai('POST', '/sync', { device: DEVICE, messages: batch });
+      const out = await maai('POST', '/sync', { device: DEVICE, version: VERSION, messages: batch });
       queue = queue.slice(batch.length);
       for (const m of batch) queued.delete(m.id);
       keepQueue();
-      log(`Delivered ${out.stored} new message(s)${out.noted ? `; MAAI is writing ${out.noted} reply(ies)` : ''}.`);
+      if (batch.length || out.stored) log(`Sent ${batch.length} → MAAI kept ${out.stored} new (${out.repeats} it already had, ${out.own ?? 0} yours, ${out.skipped} unusable)${out.noted ? `; MAAI is writing ${out.noted} reply(ies)` : ''}.`);
       await handle(out.commands);
       // MAAI writes its first replies in the background: collect them in a few seconds, not a minute.
       if (out.noted) setTimeout(() => void pollCommands(), 15_000);
@@ -295,7 +313,9 @@ async function sync() {
 
 wa.on('ready', async () => {
   log('WhatsApp ready. Reading recent chats…');
-  await backfill().catch((error) => log('Could not read recent chats:', error.message));
+  await backfill().catch((error) => log('⚠ Could not read recent chats:', error.message));
+  await shareContacts().catch((error) => log('⚠ Could not share contacts:', error.message));
+  setInterval(() => void shareContacts().catch(() => {}), 24 * 3_600_000);
   await sync();
   setInterval(sync, SYNC_MS);
   setInterval(() => void pollCommands(), 60_000);
@@ -309,7 +329,7 @@ process.on('SIGINT', async () => {
 });
 
 await maai('GET', '/status')
-  .then(() => log('MAAI reachable, key accepted.'))
+  .then(() => log(`MAAI reachable, key accepted. Bot version ${VERSION}.`))
   .catch((error) => fail(`Could not reach MAAI at ${BASE} (${error.cause?.code ?? error.message}). Check MAAI_URL and the internet connection.`));
 wa.initialize().catch((error) => {
   if (/Could not find Chrome|Failed to launch/i.test(error.message)) {
