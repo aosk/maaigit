@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "description": "Reads WhatsApp on your device, delivers it to MAAI, and sends what MAAI asks (the fixed note and replies you approved).",
-  "scripts": { "start": "node bot.mjs" },
+  "scripts": { "start": "node start.mjs" },
   "engines": { "node": ">=20" },
   "dependencies": {
     "qrcode-terminal": "0.12.0",

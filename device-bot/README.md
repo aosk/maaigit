@@ -42,10 +42,13 @@
   Set-Content .env "MAAI_URL=https://maaigit-xxxx.onrender.com`nMAAI_BOT_KEY=maai_المفتاح"
   ```
 
+## التحديث تلقائي
+البوت يتحقق من MAAI عند التشغيل وكل ٦ ساعات: إذا فيه نسخة أحدث ينزّلها ويتأكد منها ويعيد تشغيل نفسه (النسخة القديمة تبقى باسم `bot.mjs.bak`). لازم تشغّله بـ `npm start` (يشغّل `start.mjs` اللي يعيد تشغيله بعد التحديث أو إذا توقف).
+
 ## يشتغل دايماً
 ```
 npm i -g pm2
-pm2 start bot.mjs --name maai-bot
+pm2 start start.mjs --name maai-bot
 pm2 save
 pm2 startup
 ```

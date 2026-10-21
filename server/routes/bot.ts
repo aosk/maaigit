@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, seen, takeCommands } from '../bot.js';
 import { state } from '../store.js';
@@ -76,6 +78,20 @@ deviceApi.post('/commands/:id/result', (req, res) => {
   const done = finishCommand(req.params.id, req.body);
   if (!done) return res.status(404).json({ error: 'No such command' });
   res.json({ id: done.id, status: done.status });
+});
+
+/** The newest bot, as deployed with MAAI, so the bot can update itself (it checks it before using it). */
+const SCRIPT = fileURLToPath(new URL('../../device-bot/bot.mjs', import.meta.url));
+deviceApi.get('/script', (_req, res) => {
+  seen();
+  let code: string;
+  try {
+    code = fs.readFileSync(SCRIPT, 'utf8');
+  } catch {
+    return res.status(404).json({ error: 'No bot file on the server.' });
+  }
+  const version = /const VERSION = '([^']+)'/.exec(code)?.[1] ?? '';
+  res.json({ version, code });
 });
 
 deviceApi.get('/status', (_req, res) => {

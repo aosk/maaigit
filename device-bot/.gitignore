@@ -2,3 +2,7 @@
 .wwebjs_auth/
 .wwebjs_cache/
 node_modules/
+bot.next.mjs
+bot.mjs.bak
+.queue.json
+.chats.json

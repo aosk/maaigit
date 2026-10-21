@@ -1,4 +1,5 @@
 // MAAI device bot: WhatsApp (through WhatsApp Web on this device) ⇄ MAAI. See README.md.
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,7 +32,7 @@ const GROK_MODEL = process.env.GROK_MODEL || 'grok-4';
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-21e';
+const VERSION = '2026-10-21f';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -352,6 +353,42 @@ process.on('SIGINT', async () => {
 await maai('GET', '/status')
   .then(() => log(`MAAI reachable, key accepted. Bot version ${VERSION}.`))
   .catch((error) => fail(`Could not reach MAAI at ${BASE} (${error.cause?.code ?? error.message}). Check MAAI_URL and the internet connection.`));
+
+// ---------- Updating itself ----------
+
+/** Asks to be started again with the new copy (start.mjs does that). */
+const UPDATED = 75;
+
+/**
+ * Takes the newest bot from MAAI when it differs from this one: written next to this file, checked to be
+ * valid JavaScript, the old copy kept as bot.mjs.bak, then restarted. Any problem: keep running as is.
+ */
+async function update() {
+  const { version, code } = await maai('GET', '/script');
+  if (!version || version === VERSION || typeof code !== 'string' || !code.includes("const VERSION = '")) return;
+  const self = path.join(HERE, 'bot.mjs');
+  const next = path.join(HERE, 'bot.next.mjs');
+  fs.writeFileSync(next, code);
+  try {
+    execFileSync(process.execPath, ['--check', next], { stdio: 'ignore' });
+  } catch {
+    fs.rmSync(next, { force: true });
+    log(`⚠ The update to ${version} did not check out; staying on ${VERSION}.`);
+    return;
+  }
+  fs.copyFileSync(self, `${self}.bak`);
+  fs.renameSync(next, self);
+  if (!process.env.MAAI_LAUNCHER) {
+    log(`Updated to ${version}. Start the bot again with "npm start" to use it.`);
+    return;
+  }
+  log(`Updated to ${version}. Restarting…`);
+  await wa.destroy().catch(() => {});
+  process.exit(UPDATED);
+}
+
+await update().catch((error) => log('Could not check for an update:', why(error)));
+setInterval(() => void update().catch((error) => log('Could not check for an update:', why(error))), 6 * 3_600_000);
 wa.initialize().catch((error) => {
   if (/Could not find Chrome|Failed to launch/i.test(error.message)) {
     fail('No browser for WhatsApp. Install Google Chrome (google.com/chrome), or put its path in .env as CHROME_PATH=C:\\...\\chrome.exe, then run npm start again.');
