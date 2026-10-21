@@ -2,6 +2,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import type { MailItem } from '../shared/types.js';
 import { MailError } from './mail.js';
+import { failed, ok } from './signals.js';
 
 /**
  * Reads recent Gmail messages over IMAP with the same App Password used for
@@ -53,6 +54,7 @@ export async function fetchInbox(opts: { days?: number; max?: number; refresh?: 
     return cache.items;
   }
 
+  const started = Date.now();
   const client = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user, pass }, logger: false });
   // A dropped connection is reported as an error event; with no listener Node would stop the whole server.
   client.on('error', (error: Error) => console.error('Gmail inbox connection error:', error.message));
@@ -61,6 +63,7 @@ export async function fetchInbox(opts: { days?: number; max?: number; refresh?: 
   } catch (error) {
     const message = (error as { responseText?: string; message?: string }).responseText ?? (error as Error).message ?? '';
     console.error('Gmail inbox sign-in failed:', message);
+    failed('gmail', /AUTHENTICATIONFAILED|Invalid credentials|auth/i.test(message) ? 'Gmail refused the sign-in (App Password)' : 'Could not reach Gmail');
     if (/AUTHENTICATIONFAILED|Invalid credentials|auth/i.test(message)) {
       throw new MailError('Gmail refused the sign-in for reading. Check GMAIL_USER and the App Password in Render → Environment.');
     }
@@ -100,6 +103,7 @@ export async function fetchInbox(opts: { days?: number; max?: number; refresh?: 
 
   items.sort((a, b) => b.date.localeCompare(a.date));
   cache = { at: Date.now(), days, items };
+  ok('gmail', Date.now() - started);
   return items;
 }
 

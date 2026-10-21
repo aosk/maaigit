@@ -11,7 +11,7 @@ notify.get('/notify', (_req, res) => {
 
 notify.patch('/notify/prefs', (req, res) => {
   const p = { ...DEFAULT_PREFS, ...state.notifyPrefs };
-  for (const key of ['reminders', 'leave', 'events', 'prayers', 'briefing', 'messages'] as const) {
+  for (const key of ['reminders', 'leave', 'events', 'prayers', 'briefing', 'messages', 'health'] as const) {
     if (typeof req.body[key] === 'boolean') p[key] = req.body[key];
   }
   for (const key of ['eventMinutes', 'prayerMinutes'] as const) {

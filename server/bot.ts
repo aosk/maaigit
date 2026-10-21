@@ -218,6 +218,7 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
   state.bot.lastSync = new Date(now).toISOString();
   // Counts only (never names or text), so a delivery that keeps nothing can be explained from the server log.
   const version = str((body as { version?: unknown }).version, 40);
+  if (version) state.bot.version = version;
   console.log(`Device bot${version ? ` ${version}` : ''} delivered ${list.length}: ${result.stored} new, ${result.repeats} repeats, ${result.own} own, ${result.skipped} unusable${result.skipped ? ` (${Object.entries(reasons).map(([r, n]) => `${r}: ${n}`).join(', ')})` : ''}, ${result.noted} to answer${Object.keys(notAnswered).length ? ` (not answered: ${Object.entries(notAnswered).map(([r, n]) => `${r} ×${n}`).join('; ')})` : ''}`);
   save();
   return result;

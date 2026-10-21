@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { AdminOverview, BotOverview } from '../../shared/types.js';
 import { botStatus, createKey, revokeKey } from '../bot.js';
+import { healthReport } from '../health.js';
 import { allEvents, audit, state } from '../store.js';
 import { status } from '../status.js';
 import { recentUsage } from '../usage.js';
@@ -65,3 +66,6 @@ admin.patch('/admin/bot/mode', (req, res) => {
   audit(`Automatic WhatsApp replies set to ${mode}`, 'User', 'done');
   res.json(botOverview());
 });
+
+/** How every part of MAAI is doing (reads what the server already knows; calls nothing outside). */
+admin.get('/admin/health', (_req, res) => res.json(healthReport()));

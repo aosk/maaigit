@@ -2,6 +2,7 @@ import type { InboxMessage } from '../shared/types.js';
 import { client, create, textOf } from './ai/claude.js';
 import { neutralize } from './ai/untrusted.js';
 import { alertMessage } from './notify.js';
+import { failed, ok } from './signals.js';
 import { agentEnabled, audit, save, state, type IntakeState } from './store.js';
 import { claimAck, cleanName, fixedReply } from './whatsapp.js';
 
@@ -164,6 +165,7 @@ export async function answer(message: InboxMessage, send: (text: string) => void
     if (state.replyMode === 'smart' && client) {
       result = await write(phone, round, message.from).catch((error: Error) => {
         console.error('The AI first reply failed:', error.message);
+        failed('replies', error);
         return null;
       });
     }
@@ -186,6 +188,7 @@ export async function answer(message: InboxMessage, send: (text: string) => void
       send(text);
       round.sent.push({ text, at: new Date(now).toISOString() });
       audit(`${result ? 'AI first reply' : 'Fixed note'} queued to ${message.from}`, 'MAAI', 'done');
+      if (result) ok('replies');
     }
     const wasDone = Boolean(round.done);
     if (result) {

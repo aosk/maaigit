@@ -5,7 +5,7 @@ import { dueAlerts, firstPrayerTime, reminderTime } from './notify';
 
 const LAT = 24.7136;
 const LNG = 46.6753;
-const prefs: NotifyPrefs = { reminders: true, leave: true, events: true, eventMinutes: 10, prayers: true, prayerMinutes: 10, briefing: false, briefingTime: '07:00', messages: false };
+const prefs: NotifyPrefs = { reminders: true, leave: true, events: true, eventMinutes: 10, prayers: true, prayerMinutes: 10, briefing: false, briefingTime: '07:00', messages: false, health: false };
 const at = (h: number, m: number, day = new Date('2026-10-12T00:00:00')) => {
   const d = new Date(day);
   d.setHours(h, m, 0, 0);

@@ -6,6 +6,7 @@ import { Moon } from '../components/Icons';
 import { TokenUsage } from './TokenUsage';
 import { CloudUsage } from './CloudUsage';
 import { DeviceBot } from './DeviceBot';
+import { Health } from './Health';
 import { Logo } from '../components/Logo';
 
 const when = (iso: string) =>
@@ -27,6 +28,7 @@ function Badge({ outcome, label }: { outcome: string; label?: string }) {
 /** The admin portal from the design: live counts, agent switches, integration health and the audit log. */
 const SECTIONS = [
   { id: '', label: 'Overview' },
+  { id: 'health', label: 'Server health' },
   { id: 'usage', label: 'Token usage' },
   { id: 'cloud', label: 'Anthropic account' },
   { id: 'agents', label: 'Agents' },
@@ -125,6 +127,8 @@ export function Admin() {
         </header>
 
         {error && <div className="error" role="alert">{error}</div>}
+
+        <Health />
 
         <section aria-label="Key metrics" className="metrics">
           {metrics.map((m) => (

@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { failed, ok } from '../signals.js';
 import type { ChatEvent, UsagePurpose } from '../../shared/types.js';
 import { recordUsage } from '../usage.js';
 import { noteRateLimits } from '../anthropic-limits.js';
@@ -72,16 +73,23 @@ const EXTRAS = {
 let useExtras = true;
 
 async function withExtras(purpose: UsagePurpose, send: (extras: Partial<typeof EXTRAS>) => Promise<Message>): Promise<Message> {
+  const started = Date.now();
   let response: Message;
   try {
-    response = await send(useExtras ? EXTRAS : {});
+    try {
+      response = await send(useExtras ? EXTRAS : {});
+    } catch (error) {
+      const message = apiErrorMessage(error);
+      if (!(error instanceof Anthropic.BadRequestError) || !useExtras || !/fallback|beta|cache_control/i.test(message)) throw error;
+      console.warn(`Claude refused an optional feature (${message}); continuing without it.`);
+      useExtras = false;
+      response = await send({});
+    }
   } catch (error) {
-    const message = apiErrorMessage(error);
-    if (!(error instanceof Anthropic.BadRequestError) || !useExtras || !/fallback|beta|cache_control/i.test(message)) throw error;
-    console.warn(`Claude refused an optional feature (${message}); continuing without it.`);
-    useExtras = false;
-    response = await send({});
+    failed('claude', `${error instanceof Anthropic.APIError ? `${error.status ?? 'network'}: ` : ''}${apiErrorMessage(error)}`);
+    throw error;
   }
+  ok('claude', Date.now() - started);
   recordUsage(purpose, response.usage);
   return response;
 }

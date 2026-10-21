@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { writePrivate } from './secure-fs.js';
+import { failed, ok } from './signals.js';
 import type Anthropic from '@anthropic-ai/sdk';
 import { config } from './config.js';
 import { calendarConfigured, googleEvents } from './gcal.js';
@@ -82,7 +83,7 @@ interface State {
   /** What MAAI knows about the user: short facts the user wrote or approved. */
   profile: { enabled: boolean; facts: ProfileFact[] };
   /** The user's device bot: a hash of its key (never the key), when it was last heard from, and what MAAI asked it to do. */
-  bot: { keyHash?: string; keyHint?: string; device?: string; lastSeen?: string; lastSync?: string; commands: BotCommand[] };
+  bot: { keyHash?: string; keyHint?: string; device?: string; version?: string; lastSeen?: string; lastSync?: string; commands: BotCommand[] };
   /** Names and numbers from the user's phone (saved contacts, as WhatsApp on the device sees them). */
   contacts: { name: string; phone: string }[];
   /** Contacts the user imported from a contacts file (iCloud, Google…): names, numbers, emails, companies. */
@@ -93,7 +94,7 @@ interface State {
   intake: Record<string, IntakeState>;
 }
 
-export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10, briefing: false, briefingTime: '07:00', messages: true };
+export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10, briefing: false, briefingTime: '07:00', messages: true, health: true };
 
 const DATA_FILE = process.env.MAAI_DATA_FILE ?? path.join(config.dataDir, 'store.json');
 
@@ -246,7 +247,9 @@ export function flushSave() {
   try {
     tidy();
     writePrivate(DATA_FILE, JSON.stringify(state, null, 2));
+    ok('storage');
   } catch (error) {
+    failed('storage', error);
     // A full disk or a brief I/O error must not take the server down or lose what is in memory: log it and try again soon.
     console.error(`MAAI could not save its data (${(error as Error).message}). Trying again in 30 seconds.`);
     saveTimer = setTimeout(flushSave, 30_000);

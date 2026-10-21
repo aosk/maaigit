@@ -7,6 +7,7 @@ import qrcode from 'qrcode-terminal';
 import { config } from './config.js';
 import { pinGuard, phoneSetup } from './phone.js';
 import { startScheduler } from './notify.js';
+import { startHealthWatch } from './health.js';
 import { feedRoutes } from './feed.js';
 import { startGoogleWrite } from './gwrite.js';
 import { startBackgroundSync, syncAll } from './sync.js';
@@ -56,6 +57,7 @@ if (config.production) {
 }
 
 // The briefing notification is written from freshly read calendars, Asana and mail.
+startHealthWatch();
 startScheduler(async (lang) => {
   await syncAll();
   return (await briefing(lang)).text;

@@ -7,6 +7,7 @@ import { whatsappWebhook } from './whatsapp.js';
 import { passkeyLogin } from './passkeys.js';
 import { config } from './config.js';
 import { save, state } from './store.js';
+import { failing, signal } from './signals.js';
 import { bodyErrors, lastResort, noStore, sameOriginOnly, securityHeaders } from './security.js';
 
 /** An Express app set up the way every MAAI server should be. */
@@ -41,7 +42,11 @@ export function createOnlineSite(inner: express.Express, options: { password: st
   // The built app can run under a strict Content-Security-Policy; the browser is told to keep to HTTPS.
   site.use(securityHeaders({ csp: true, hsts: true }));
   // The hosting service checks this to know MAAI is up; it reveals nothing.
-  site.get('/api/health', (_req, res) => res.json({ ok: true }));
+  // It reveals nothing beyond up or down; 503 when the data cannot be saved, so the host can restart MAAI.
+  site.get('/api/health', (_req, res) => {
+    const saving = signal('storage');
+    res.status(failing(saving) ? 503 : 200).json({ ok: !failing(saving) });
+  });
   // Calendar apps can't sign in; their link is a long random key (see feed.ts).
   site.use(feedRoutes);
   // Twilio cannot sign in either; every request to this one proves itself with Twilio's signature.

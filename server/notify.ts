@@ -7,6 +7,7 @@ import { dayPeriod, leaveTime } from '../shared/schedule.js';
 import { config } from './config.js';
 import { writePrivate } from './secure-fs.js';
 import { allEvents, id, save, state } from './store.js';
+import { failed, ok } from './signals.js';
 
 /**
  * Alerts: reminders, "time to leave", heads-ups before events and prayers.
@@ -209,7 +210,7 @@ export function dueAlerts(
 // ---------- Sending ----------
 
 /** A small picture at the front of each title, so an alert reads as a reminder at a glance. */
-const ICONS: Record<AppAlert['kind'], string> = { reminder: '⏰', leave: '🚗', event: '📅', prayer: '🕌', briefing: '🗓️', message: '💬', test: '🔔' };
+const ICONS: Record<AppAlert['kind'], string> = { reminder: '⏰', leave: '🚗', event: '📅', prayer: '🕌', briefing: '🗓️', message: '💬', health: '🩺', test: '🔔' };
 
 async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>, url = '/#/today') {
   // Written once per language, even with several devices (a briefing costs an AI call).
@@ -229,11 +230,15 @@ async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>, url = '/#/today'
         // Urgency "high" asks the phone to show it straight away, even when it is saving power.
         const payload = JSON.stringify({ title: `${ICONS[due.kind]} ${title}`, body, tag: due.key, kind: due.kind, lang: s.lang, url });
         await webpush.sendNotification(s.subscription, payload, { TTL: 3600, urgency: 'high' });
+        ok('push');
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;
         // 404/410: the phone or browser dropped this subscription; stop sending to it.
         if (status === 404 || status === 410) gone.push(s.subscription.endpoint);
-        else console.error('Push failed', status ?? '', (error as Error).message);
+        else {
+          console.error('Push failed', status ?? '', (error as Error).message);
+          failed('push', `${status ?? 'network'}: ${(error as Error).message}`);
+        }
       }
     }),
   );
@@ -245,6 +250,12 @@ async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>, url = '/#/today'
 export async function alertMessage(key: string, text: (lang: Lang) => Text): Promise<void> {
   if (!state.notifyPrefs.messages) return;
   await deliver({ key, kind: 'message', text }, '/#/inbox');
+}
+
+/** Tells the user's phones that a part of MAAI stopped working, or works again (when they chose to be told). */
+export async function alertHealth(key: string, text: (lang: Lang) => Text): Promise<void> {
+  if (!state.notifyPrefs.health) return;
+  await deliver({ key, kind: 'health', text }, '/#/admin');
 }
 
 export async function sendTest() {

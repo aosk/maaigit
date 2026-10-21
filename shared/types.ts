@@ -419,6 +419,8 @@ export interface NotifyPrefs {
   briefing: boolean;
   /** A new WhatsApp message (not from groups), and what MAAI found out from the sender. */
   messages: boolean;
+  /** A part of MAAI stopped working (the device bot went silent, Claude failing, data not saving…). */
+  health: boolean;
   /** HH:MM in the app's time zone. */
   briefingTime: string;
 }
@@ -426,7 +428,7 @@ export interface NotifyPrefs {
 export interface AppAlert {
   id: string;
   at: string;
-  kind: 'reminder' | 'leave' | 'event' | 'prayer' | 'briefing' | 'message' | 'test';
+  kind: 'reminder' | 'leave' | 'event' | 'prayer' | 'briefing' | 'message' | 'health' | 'test';
   title: string;
   body: string;
 }
@@ -658,4 +660,27 @@ export interface ContactCount {
   imported: number;
   importedAt?: string;
   fromWhatsApp: number;
+}
+
+export type HealthLevel = 'ok' | 'warn' | 'fail' | 'off';
+
+/** One part of the server, checked. */
+export interface HealthCheck {
+  id: string;
+  name: string;
+  status: HealthLevel;
+  /** What was found, in a sentence. */
+  detail: string;
+  /** What to do about it, when something is wrong. */
+  fix?: string;
+}
+
+/** The whole server's health: the worst of its checks. */
+export interface HealthReport {
+  status: Exclude<HealthLevel, 'off'>;
+  checkedAt: string;
+  /** The deployed code (short commit id), when the host reports it. */
+  version?: string;
+  startedAt: string;
+  checks: HealthCheck[];
 }

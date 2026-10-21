@@ -448,6 +448,7 @@ const en = {
     prayers: ['Prayer times', '10 minutes before each prayer'],
     briefing: ['Daily briefing', 'A short summary of your day, written by MAAI'],
     messages: ['New WhatsApp messages', 'Who wrote, and what MAAI found out from them'],
+    health: ['When something stops working', 'The device bot goes silent, Claude fails, data cannot be saved…'],
   },
   briefingAt: 'Send it at',
   briefingSendNow: 'Send me the briefing now',
@@ -911,6 +912,7 @@ const ar: Strings = {
     briefing: ['الموجز اليومي', 'ملخص قصير ليومك يكتبه مساعد'],
 
     messages: ['رسائل واتساب الجديدة', 'من راسلك، وما عرفه المساعد منه'],
+    health: ['إذا توقف شيء عن العمل', 'بوت الجهاز يسكت، Claude يفشل، البيانات ما تنحفظ…'],
   },
   briefingAt: 'أرسله الساعة',
   briefingSendNow: 'أرسل لي الموجز الآن',
