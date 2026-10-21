@@ -434,7 +434,8 @@ a { color: var(--tint-text); }
 .count.reminder { --k: var(--c-reminder); --k-soft: var(--c-reminder-soft); }
 .count.mail { --k: var(--c-mail); --k-soft: var(--c-mail-soft); }
 .count.chat { --k: var(--c-chat); --k-soft: var(--c-chat-soft); }
-.count.zero { opacity: 0.55; }
+/* Nothing waiting: greyed out, but still readable (WCAG AA contrast). */
+.count.zero { background: var(--raised); color: var(--text2); }
 .seg .count { font-size: 0.8em; height: 22px; min-width: 22px; margin-inline-start: 6px; }
 
 .h2.sec { white-space: nowrap; }
