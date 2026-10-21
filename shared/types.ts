@@ -157,8 +157,10 @@ export type Proposal =
       status: ProposalStatus;
       /** A short name for the task. */
       title: string;
-      /** The exact instruction the device bot gets (editable on the card). */
+      /** The exact instruction the device bot gets (editable on the card); for an action, its link or file. */
       task: string;
+      /** Something the bot does itself on the device instead of asking Grok. */
+      action?: DeviceAction;
       /** The queued command, once approved, so its result can be shown. */
       commandId?: string;
     }
@@ -575,10 +577,15 @@ export interface AsanaOverview extends AsanaStatus {
 }
 
 /** Something MAAI asked the user's device bot to do. Sent once: a command the bot picked up is never sent again. */
+/** What the bot can do on the device by itself, each approved one at a time: open a web link, open a file or folder, send a file to the user on WhatsApp. */
+export type DeviceAction = 'open_url' | 'open_path' | 'send_file';
+
 export interface BotCommand {
   id: string;
   /** reply: send a WhatsApp message from the user's own number; task: an instruction the user approved. */
   kind: 'reply' | 'task';
+  /** A task the bot does itself; text is then the link (open_url) or the file or folder (open_path, send_file). */
+  action?: DeviceAction;
   /** For a reply: the number, digits only, and who it is. */
   phone?: string;
   toName?: string;

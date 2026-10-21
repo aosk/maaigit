@@ -1,12 +1,13 @@
 // MAAI device bot: WhatsApp (through WhatsApp Web on this device) ⇄ MAAI. See README.md.
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import qrcode from 'qrcode-terminal';
 import wweb from 'whatsapp-web.js';
 
-const { Client, LocalAuth } = wweb;
+const { Client, LocalAuth, MessageMedia } = wweb;
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // ---------- Keeping itself running ----------
@@ -59,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-22a';
+const VERSION = '2026-10-22b';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -368,6 +369,124 @@ async function grok(task) {
   return text ? { ok: true, output: text.slice(0, 4000) } : { ok: false, output: 'Grok answered with nothing.' };
 }
 
+// ---------- Actions on this computer (each one approved by the user in MAAI) ----------
+
+const HOME = os.homedir();
+/**
+ * The only folders the bot opens or sends files from: ALLOWED_FOLDERS in .env (separated by ";"), else
+ * Documents, Desktop and Downloads (also the OneDrive copies Windows often uses instead).
+ */
+const ALLOWED = [
+  ...new Set(
+    (process.env.ALLOWED_FOLDERS
+      ? process.env.ALLOWED_FOLDERS.split(';')
+      : ['Documents', 'Desktop', 'Downloads'].flatMap((f) => [path.join(HOME, f), path.join(HOME, 'OneDrive', f)])
+    )
+      .map((f) => f.trim().replace(/^~(?=$|[\\/])/, HOME))
+      .filter((f) => f && fs.existsSync(f))
+      .map((f) => fs.realpathSync(path.resolve(f))),
+  ),
+];
+/** Files that would run something when opened: never opened. */
+const RUNNABLE = /\.(exe|com|bat|cmd|ps1|psm1|psd1|vbs|vbe|js|jse|mjs|cjs|wsf|wsh|msi|msp|msix|appx|scr|pif|lnk|url|reg|hta|cpl|jar|appref-ms|application|gadget|msc|inf|scf|sh|app|command|workflow|py|pyw|iso|img|vhd|vhdx)$/i;
+const MAX_FILE_MB = 60;
+
+const within = (root, file) => {
+  const rel = path.relative(root, file);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+};
+const inside = (file) => ALLOWED.some((root) => within(root, file));
+/** "Documents\\Reports\\q4.pdf": where a file is, without the rest of the computer's paths. */
+const shown = (file) => {
+  const root = ALLOWED.find((r) => within(r, file));
+  return root ? path.join(path.basename(root), path.relative(root, file)) : path.basename(file);
+};
+
+/** Files and folders under the allowed folders whose name matches, exact names first (a few levels deep, hidden folders skipped). */
+async function search(name) {
+  const want = name.toLowerCase();
+  const exact = [];
+  const partial = [];
+  let seen = 0;
+  const queue = ALLOWED.map((dir) => ({ dir, depth: 0 }));
+  while (queue.length && seen < 30_000 && exact.length < 10) {
+    const { dir, depth } = queue.shift();
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const e of entries) {
+      seen++;
+      if (e.name.startsWith('.') || e.name === 'node_modules' || e.isSymbolicLink()) continue;
+      const full = path.join(dir, e.name);
+      const lower = e.name.toLowerCase();
+      if (lower === want || lower.replace(/\.[^.]+$/, '') === want) exact.push(full);
+      else if (lower.includes(want)) partial.push(full);
+      if (e.isDirectory() && depth < 5) queue.push({ dir: full, depth: depth + 1 });
+    }
+  }
+  return exact.length ? exact : partial;
+}
+
+/** The one file or folder the user meant, inside the allowed folders, or an error saying what to do. */
+async function findTarget(target) {
+  const given = target.trim().replace(/^["']|["']$/g, '').replace(/^~(?=$|[\\/])/, HOME);
+  if (!ALLOWED.length) throw new Error('No allowed folders on this computer. Set ALLOWED_FOLDERS in .env (for example C:\\Users\\you\\Documents).');
+  const where = ALLOWED.map((f) => path.basename(f)).join(', ');
+  const tries = path.isAbsolute(given) ? [given] : ALLOWED.map((root) => path.join(root, given));
+  const there = [...new Set(tries.filter((t) => fs.existsSync(t)).map((t) => fs.realpathSync(t)))];
+  if (there.length && !there.some(inside)) throw new Error(`That is outside the folders the bot may use (${where}). To allow it, add its folder to ALLOWED_FOLDERS in .env.`);
+  const name = path.basename(given);
+  if (!name) throw new Error('Give a file or folder name.');
+  const found = there.length ? there.filter(inside) : (await search(name)).map((f) => fs.realpathSync(f)).filter(inside);
+  if (!found.length) throw new Error(`Found nothing named "${name}" in ${where}.`);
+  if (found.length > 1) throw new Error(`Several match "${name}"; say which one:\n${found.slice(0, 5).map((f) => `- ${shown(f)}`).join('\n')}`);
+  return found[0];
+}
+
+/** Hands a link or file to the computer's own default app (browser, viewer, Explorer). Nothing passes through a shell. */
+function openWithDefault(target, isLink) {
+  const [cmd, args] =
+    process.platform === 'win32'
+      ? isLink ? ['rundll32.exe', ['url.dll,FileProtocolHandler', target]] : ['explorer.exe', [target]]
+      : [process.platform === 'darwin' ? 'open' : 'xdg-open', [target]];
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true });
+    child.on('error', reject);
+    // Explorer reports exit code 1 even when it worked: give it a moment and take it as started.
+    setTimeout(resolve, 500);
+    child.unref();
+  });
+}
+
+async function act(action, target) {
+  if (action === 'open_url') {
+    const url = new URL(target);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('Only web links are opened.');
+    await openWithDefault(url.href, true);
+    log(`Opened ${url.host}`);
+    return { ok: true, output: `Opened ${url.href} in the browser.` };
+  }
+  const file = await findTarget(target);
+  const stat = fs.statSync(file);
+  if (action === 'open_path') {
+    if (stat.isFile() && RUNNABLE.test(file)) throw new Error(`"${path.basename(file)}" is a program or script; the bot never runs those.`);
+    await openWithDefault(file, false);
+    log(`Opened ${shown(file)}`);
+    return { ok: true, output: `Opened ${shown(file)}.` };
+  }
+  if (action === 'send_file') {
+    if (!stat.isFile()) throw new Error(`"${path.basename(file)}" is a folder; name one file in it.`);
+    if (stat.size > MAX_FILE_MB * 1024 * 1024) throw new Error(`"${path.basename(file)}" is ${Math.round(stat.size / 1048576)} MB; the bot sends files up to ${MAX_FILE_MB} MB.`);
+    const me = idText(wa.info?.wid);
+    if (!me) throw new Error('WhatsApp is not ready yet; try again in a minute.');
+    const caption = `📎 ${path.basename(file)} (MAAI)`;
+    rememberSent(me, caption);
+    // Only ever to the user's own chat ("Message yourself"), never to anyone else.
+    await wa.sendMessage(me, MessageMedia.fromFilePath(file), { sendMediaAsDocument: true, caption });
+    log(`Sent ${shown(file)} to your own WhatsApp chat`);
+    return { ok: true, output: `Sent ${shown(file)} to the user's own WhatsApp chat.` };
+  }
+  throw new Error('Unknown action.');
+}
+
 async function handle(commands) {
   for (const c of commands ?? []) {
     let result;
@@ -380,6 +499,9 @@ async function handle(commands) {
         await wa.sendMessage(target, c.text);
         log(`Sent to ${c.toName ?? `+${c.phone}`}`);
         result = { ok: true };
+      } else if (c.kind === 'task' && c.action) {
+        log(`Action ${c.action}: ${c.text.slice(0, 80)}`);
+        result = await act(c.action, c.text);
       } else if (c.kind === 'task') {
         log(`Task: ${c.text.slice(0, 80)}`);
         result = await grok(c.text);
@@ -438,6 +560,7 @@ wa.on('ready', async () => {
   log('WhatsApp ready. Reading recent chats…');
   await shareContacts().catch((error) => log('⚠ Could not share contacts:', why(error)));
   await checkGrok().catch((error) => log('⚠ Grok check failed:', why(error)));
+  log(ALLOWED.length ? `Files it may open or send you (each one approved in MAAI): ${ALLOWED.join(', ')}` : '⚠ No allowed folders: set ALLOWED_FOLDERS in .env to open or send files.');
   log('Listening for new messages. Reading the last day of chats in the background…');
   void backfill()
     .then(() => sync())

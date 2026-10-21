@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import type { BotCommand, BotStatus, InboxMessage } from '../shared/types.js';
+import type { BotCommand, BotStatus, DeviceAction, InboxMessage } from '../shared/types.js';
 import { config } from './config.js';
 import { isEmail } from './mail.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
@@ -277,7 +277,33 @@ export function waitForCommands(ms: number, onGone: (gone: () => void) => void):
   });
 }
 
-export function queueCommand(command: Pick<BotCommand, 'kind' | 'text' | 'phone' | 'toName' | 'automatic'>, now = Date.now()): BotCommand {
+export const DEVICE_ACTIONS: readonly DeviceAction[] = ['open_url', 'open_path', 'send_file'];
+
+/**
+ * The link or file an action works on, cleaned, or a BotInputError saying what is wrong. Links are web pages
+ * only (no file:, javascript: or app links, no passwords in them). A file is a name or a path: the bot itself
+ * only opens or sends files inside the folders the user allowed on the device, and never runs a program.
+ */
+export function deviceTarget(action: DeviceAction, value: unknown): string {
+  const target = str(value, 2000).replace(/\p{Cc}/gu, '');
+  if (!target) throw new BotInputError(action === 'open_url' ? 'Give the link to open.' : 'Give the file or folder name.');
+  if (action === 'open_url') {
+    let url: URL;
+    try {
+      // "example.com/page" is a web page; "file:", "javascript:" and app links keep their scheme, and are refused below.
+      url = new URL(/^[a-z][\w+.-]*:(?:\/\/|(?!\d))/i.test(target) ? target : `https://${target}`);
+    } catch {
+      throw new BotInputError('That is not a web link.');
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new BotInputError('Only web links (https://…) can be opened.');
+    if (url.username || url.password) throw new BotInputError('Links with a password in them are not opened.');
+    return url.href;
+  }
+  if (target.length > 300) throw new BotInputError('Keep the file name or path under 300 characters.');
+  return target;
+}
+
+export function queueCommand(command: Pick<BotCommand, 'kind' | 'text' | 'phone' | 'toName' | 'automatic' | 'action'>, now = Date.now()): BotCommand {
   if (!botConnected()) throw new BotInputError('The device bot is not connected. Make a device key in the admin page first.');
   const queued: BotCommand = { id: id(), ...command, status: 'queued', createdAt: new Date(now).toISOString() };
   state.bot.commands.push(queued);
@@ -292,8 +318,8 @@ export function queueCommand(command: Pick<BotCommand, 'kind' | 'text' | 'phone'
 }
 
 /** What the bot gets: each waiting command, once. A command handed over is never handed over again, so nothing is sent twice. */
-export function takeCommands(now = Date.now()): Pick<BotCommand, 'id' | 'kind' | 'phone' | 'toName' | 'text'>[] {
-  const out: Pick<BotCommand, 'id' | 'kind' | 'phone' | 'toName' | 'text'>[] = [];
+export function takeCommands(now = Date.now()): Pick<BotCommand, 'id' | 'kind' | 'phone' | 'toName' | 'text' | 'action'>[] {
+  const out: Pick<BotCommand, 'id' | 'kind' | 'phone' | 'toName' | 'text' | 'action'>[] = [];
   for (const c of state.bot.commands) {
     if (c.status !== 'queued') continue;
     if (now - Date.parse(c.createdAt) > COMMAND_TTL_MS) {
@@ -307,7 +333,7 @@ export function takeCommands(now = Date.now()): Pick<BotCommand, 'id' | 'kind' |
     }
     c.status = 'sent';
     c.sentAt = new Date(now).toISOString();
-    out.push({ id: c.id, kind: c.kind, phone: c.phone, toName: c.toName, text: c.text });
+    out.push({ id: c.id, kind: c.kind, phone: c.phone, toName: c.toName, text: c.text, ...(c.action ? { action: c.action } : {}) });
   }
   if (out.length) save();
   return out;

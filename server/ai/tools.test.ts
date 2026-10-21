@@ -9,7 +9,7 @@ const call = (name: string, input: unknown): ToolUse => ({ type: 'tool_use', id:
 
 describe('assistant tools', () => {
   it('lists every tool as strict', () => {
-    expect(tools.map((t) => t.name).sort()).toEqual(['find_contact', 'propose_asana_task', 'propose_asana_update', 'propose_device_task', 'propose_email', 'propose_meeting', 'propose_remember', 'propose_reminder', 'propose_whatsapp', 'read_asana_task', 'read_email', 'read_whatsapp']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['find_contact', 'propose_asana_task', 'propose_asana_update', 'propose_device_action', 'propose_device_task', 'propose_email', 'propose_meeting', 'propose_remember', 'propose_reminder', 'propose_whatsapp', 'read_asana_task', 'read_email', 'read_whatsapp']);
     expect(tools.every((t) => t.strict)).toBe(true);
   });
 

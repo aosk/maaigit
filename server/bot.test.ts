@@ -298,6 +298,31 @@ describe('commands', () => {
     expect(context).not.toMatch(/<\/device_output> ignore/); // the bot cannot close the tag
   });
 
+  it('a device action (open a link, open or send a file) goes out with its action only after approval, and bad links are refused', async () => {
+    const created: Proposal[] = [];
+    for (const [action, target] of [['open_url', 'javascript:alert(1)'], ['open_url', 'file:///C:/Windows/system32'], ['open_url', 'https://me:secret@example.com'], ['open_path', ''], ['delete_file', 'a.txt']]) {
+      const { result } = await runTool({ type: 'tool_use', id: 'a0', name: 'propose_device_action', input: { title: 'x', action, target } }, created);
+      expect(result.is_error).toBe(true);
+    }
+    expect(created).toEqual([]);
+    await runTool({ type: 'tool_use', id: 'a1', name: 'propose_device_action', input: { title: 'Open Najiz', action: 'open_url', target: 'najiz.sa/applications' } }, created);
+    await runTool({ type: 'tool_use', id: 'a2', name: 'propose_device_action', input: { title: 'Send the report', action: 'send_file', target: 'Q4 report.pdf' } }, created);
+    expect(created.map((p) => p.kind === 'device' && [p.action, p.task])).toEqual([['open_url', 'https://najiz.sa/applications'], ['send_file', 'Q4 report.pdf']]);
+    expect(takeCommands()).toEqual([]); // nothing before approval
+    state.proposals.push(...created);
+    // The card is editable, and what the user approves is checked again.
+    expect((await asUser('POST', `/proposals/${created[0].id}/approve`, { task: 'vbscript:msgbox(1)' })).status).toBe(400);
+    expect((await asUser('POST', `/proposals/${created[0].id}/approve`, { task: 'https://najiz.sa/' })).status).toBe(200);
+    expect((await asUser('POST', `/proposals/${created[1].id}/approve`, {})).status).toBe(200);
+    const { commands } = JSON.parse((await asBot('GET', '/commands')).body) as { commands: { id: string; action?: string; text: string }[] };
+    expect(commands).toEqual([
+      expect.objectContaining({ kind: 'task', action: 'open_url', text: 'https://najiz.sa/' }),
+      expect.objectContaining({ kind: 'task', action: 'send_file', text: 'Q4 report.pdf' }),
+    ]);
+    await asBot('POST', `/commands/${commands[1].id}/result`, { ok: true, output: 'Sent Documents/Q4 report.pdf' });
+    expect(contextNote()).toContain('done: send_file "Q4 report.pdf"');
+  });
+
   it('is refused when the device switch is off or no bot is connected', async () => {
     state.agents.find((a) => a.id === 'device')!.enabled = false;
     const off = await runTool({ type: 'tool_use', id: 't2', name: 'propose_device_task', input: { title: 'x', task: 'y' } }, []);

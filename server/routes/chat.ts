@@ -9,7 +9,7 @@ import { sendMail } from '../mail.js';
 import { createTask, updateTask, validateNewTask } from '../asana.js';
 import { mirrorToGoogle } from '../gwrite.js';
 import { canAnswer, sendWhatsApp, whatsappConfigured } from '../whatsapp.js';
-import { botConnected, botReplyTarget, queueCommand } from '../bot.js';
+import { botConnected, botReplyTarget, deviceTarget, queueCommand } from '../bot.js';
 import { signed } from '../intake.js';
 import { markHandled, markReplyTo } from '../mail-handled.js';
 import { agentEnabled, audit, id, save, state, type Conversation } from '../store.js';
@@ -138,9 +138,16 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
     case 'device': {
       if (!agentEnabled('device')) throw new HttpError(403, 'Tasks on the device are switched off by the admin.');
       // The card is editable: send exactly what the user approved.
-      const task = text(body.task, 1000) || p.task;
+      let task = text(body.task, p.action === 'open_url' ? 2000 : 1000) || p.task;
       if (!task) throw new HttpError(400, 'The task is empty');
-      const command = queueCommand({ kind: 'task', text: task });
+      if (p.action) {
+        try {
+          task = deviceTarget(p.action, task);
+        } catch (error) {
+          throw new HttpError(400, error instanceof Error ? error.message : 'That cannot be used.');
+        }
+      }
+      const command = queueCommand({ kind: 'task', text: task, ...(p.action ? { action: p.action } : {}) });
       Object.assign(p, { task, commandId: command.id });
       return `Sent to the device bot: ${p.title}`;
     }
