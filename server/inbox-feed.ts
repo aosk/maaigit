@@ -3,6 +3,7 @@ import { digestInbox } from './ai/mail.js';
 import { digestWhatsApp, threads } from './ai/whatsapp.js';
 import { botStatus } from './bot.js';
 import { inboxConfigured } from './gmail-inbox.js';
+import { state } from './store.js';
 
 /**
  * The Inbox as one list, newest first: Gmail (read by MAAI), and the WhatsApp and email the device bot
@@ -47,6 +48,7 @@ function fromMessages(digest: Pick<WhatsAppDigest, 'threads'>): FeedItem[] {
       suggestion: ins?.category === 'ignore' ? undefined : ins?.suggestion,
       options: ins?.options?.length ? ins.options : undefined,
       message: last,
+      intake: thread.phone ? state.intake[thread.phone]?.summary : undefined,
       handled: thread.unanswered === 0,
     };
   });

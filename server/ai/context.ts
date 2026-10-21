@@ -51,7 +51,11 @@ function conversations(): Conversation[] {
   return [...byKey.values()].sort((a, b) => b.at.localeCompare(a.at));
 }
 
-const row = (r: Conversation) => `- [${r.tag}] ${n(r.name)}${r.phone ? ` [+${r.phone}]` : ''} (${r.waiting || r.count}, latest ${dayTime(r.at)}): ${n(r.last.replace(/\s+/g, ' ').slice(0, 160))}`;
+const row = (r: Conversation) => {
+  const intake = r.phone ? state.intake[r.phone] : undefined;
+  const asked = intake?.sent.length ? ` [MAAI already replied ${intake.sent.length}x by itself${intake.summary ? `; found out: ${n(intake.summary)}` : ''}]` : '';
+  return `- [${r.tag}] ${n(r.name)}${r.phone ? ` [+${r.phone}]` : ''} (${r.waiting || r.count}, latest ${dayTime(r.at)}): ${n(r.last.replace(/\s+/g, ' ').slice(0, 160))}${asked}`;
+};
 
 /** Conversations waiting for an answer first, then the latest ones already answered, so "what messages do I have?" has an answer. */
 function whatsappOverview(): string {

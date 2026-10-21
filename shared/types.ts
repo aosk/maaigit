@@ -417,6 +417,8 @@ export interface NotifyPrefs {
   prayerMinutes: number;
   /** A daily summary of the day, written by MAAI, at `briefingTime`. */
   briefing: boolean;
+  /** A new WhatsApp message (not from groups), and what MAAI found out from the sender. */
+  messages: boolean;
   /** HH:MM in the app's time zone. */
   briefingTime: string;
 }
@@ -424,7 +426,7 @@ export interface NotifyPrefs {
 export interface AppAlert {
   id: string;
   at: string;
-  kind: 'reminder' | 'leave' | 'event' | 'prayer' | 'briefing' | 'test';
+  kind: 'reminder' | 'leave' | 'event' | 'prayer' | 'briefing' | 'message' | 'test';
   title: string;
   body: string;
 }
@@ -604,7 +606,11 @@ export interface BotStatus {
   waiting: number;
   /** Messages it delivered that are still kept. */
   messages: number;
+  /** How MAAI answers new WhatsApp messages by itself: an AI first reply that asks for details, the fixed note, or nothing. */
+  replyMode: ReplyMode;
 }
+
+export type ReplyMode = 'smart' | 'fixed' | 'off';
 
 export interface BotOverview {
   status: BotStatus;
@@ -633,6 +639,8 @@ export interface FeedItem {
   uid?: number;
   /** The latest message, for the reply screen. */
   message?: InboxMessage;
+  /** What MAAI's first reply found out from the sender (smart replies). */
+  intake?: string;
   handled?: boolean;
 }
 

@@ -56,7 +56,7 @@ export function pruneWhatsApp(now = Date.now()): void {
 // ---------- The automatic "received" note ----------
 
 /** Set MAAI_WHATSAPP_ACK=off to stop it. */
-export const ackEnabled = (process.env.MAAI_WHATSAPP_ACK ?? 'on').trim().toLowerCase() !== 'off';
+const ackEnabled = (process.env.MAAI_WHATSAPP_ACK ?? 'on').trim().toLowerCase() !== 'off';
 /** Someone who keeps writing gets the note once, not after every message (and two auto-replying bots cannot loop). */
 export const ACK_EVERY_MS = 6 * 3_600_000;
 

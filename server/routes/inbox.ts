@@ -8,6 +8,7 @@ import { fetchInbox, inboxConfigured } from '../gmail-inbox.js';
 import { agentEnabled, audit, id, save, state } from '../store.js';
 import { canSendByBot, pruneBotMessages, queueCommand } from '../bot.js';
 import { inboxFeed } from '../inbox-feed.js';
+import { signed } from '../intake.js';
 import { HttpError, find, lang, text, wrap } from './http.js';
 
 export const inbox = Router();
@@ -65,7 +66,7 @@ inbox.post('/inbox/:id/whatsapp', wrap(async (req, res) => {
     if (!canSendByBot(message)) throw new HttpError(400, message.group ? 'MAAI does not answer in groups. Open WhatsApp and write there yourself.' : 'The device bot is not connected, so MAAI cannot send this reply. Use "Open WhatsApp" instead.');
     const body = text(req.body.body, 1500);
     if (!body) throw new HttpError(400, 'The reply is empty');
-    queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text: body });
+    queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text: signed(body, message.text) });
     for (const m of state.inbox) if (m.phone === message.phone && m.receivedAt <= message.receivedAt) m.replied = true;
     audit(`Sent a WhatsApp reply to ${message.from} through the device bot`, 'User', 'approved');
     return res.json(message);

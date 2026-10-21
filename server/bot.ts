@@ -3,7 +3,7 @@ import type { BotCommand, BotStatus, InboxMessage } from '../shared/types.js';
 import { config } from './config.js';
 import { isEmail } from './mail.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
-import { ackEnabled, claimAck, fixedReply } from './whatsapp.js';
+import { answer, shouldAnswer, tell } from './intake.js';
 
 /**
  * The user's own device bot (for example a Grok bot on their computer or phone). It connects to MAAI,
@@ -20,10 +20,8 @@ export const MAX_BATCH = 200;
 const MAX_COMMANDS = 200;
 /** A command the bot has not picked up in this long is dropped: a reply a day late is worse than none. */
 const COMMAND_TTL_MS = 24 * 3_600_000;
-/** Only messages this recent get the fixed note, so the first delivery does not answer weeks of old chats. */
-const ACK_RECENT_MS = 2 * 3_600_000;
-/** At most this many automatic notes an hour, whatever arrives. */
-const ACKS_PER_HOUR = 20;
+/** Only messages this recent are answered or alerted, so reading older chats does not answer weeks of messages. */
+const ACK_RECENT_MS = 30 * 60_000;
 /** Connected but silent longer than this: the Inbox says the bot looks stopped. */
 const STALE_MS = 2 * 3_600_000;
 
@@ -71,6 +69,7 @@ export function botStatus(now = Date.now()): BotStatus {
     stale: connected && (!lastSeen || now - Date.parse(lastSeen) > STALE_MS),
     waiting: state.bot.commands.filter((c) => c.status === 'queued').length,
     messages: state.inbox.filter((m) => m.via === 'bot').length,
+    replyMode: state.replyMode,
   };
 }
 
@@ -98,6 +97,8 @@ interface Incoming {
   at: number;
   group: boolean;
   fromMe: boolean;
+  /** Sent by the bot itself (MAAI's replies): neither kept nor taken as the user answering. */
+  byMaai: boolean;
 }
 
 /** One delivered message, checked field by field; null for something that cannot be used. */
@@ -125,6 +126,7 @@ function parse(raw: unknown, now: number): Incoming | null {
     at: Number.isFinite(at) ? Math.min(at, now) : now,
     group: m.group === true,
     fromMe: m.fromMe === true,
+    byMaai: m.byMaai === true,
   };
 }
 
@@ -149,7 +151,7 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
 
   // The user's own messages are not kept; they only show which chats are already answered.
   const answeredAt = new Map<string, number>();
-  for (const m of incoming) if (m.fromMe && m.phone) answeredAt.set(m.phone, Math.max(m.at, answeredAt.get(m.phone) ?? 0));
+  for (const m of incoming) if (m.fromMe && !m.byMaai && m.phone) answeredAt.set(m.phone, Math.max(m.at, answeredAt.get(m.phone) ?? 0));
   for (const m of state.inbox) {
     const answered = m.phone ? answeredAt.get(m.phone) : undefined;
     if (answered && Date.parse(m.receivedAt) <= answered) m.replied = true;
@@ -183,7 +185,16 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
     result.stored += 1;
   }
 
-  for (const message of fresh) if (noteFor(message, now)) result.noted += 1;
+  // The newest message from each person gets MAAI's first reply (written in the background) and an alert.
+  const newest = new Map<string, InboxMessage>();
+  for (const message of fresh) if (message.channel === 'whatsapp' && !message.group && message.phone) newest.set(message.phone, message);
+  for (const message of newest.values()) {
+    if (now - Date.parse(message.receivedAt) > ACK_RECENT_MS || message.replied) continue;
+    void tell(message, {}, now);
+    if (!shouldAnswer(message, now)) continue;
+    result.noted += 1;
+    void answer(message, (text) => queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text, automatic: true })).catch((error: Error) => console.error('First reply failed:', error.message));
+  }
 
   pruneBotMessages(now);
   state.bot.lastSync = new Date(now).toISOString();
@@ -209,21 +220,6 @@ export const canSendByBot = (m: InboxMessage | undefined): boolean => Boolean(m 
 export function botReplyTarget(phone: string): InboxMessage | undefined {
   const latest = state.inbox.filter((m) => m.via === 'bot' && m.channel === 'whatsapp' && m.phone === phone && !m.group).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
   return canSendByBot(latest) ? latest : undefined;
-}
-
-// ---------- The fixed note ----------
-
-/** Queues the fixed WhatsApp note for a new message, if this person should get it. Never for groups, email, old or answered messages. */
-function noteFor(message: InboxMessage, now: number): boolean {
-  if (!ackEnabled || message.channel !== 'whatsapp' || message.group || message.replied || !message.phone) return false;
-  if (!agentEnabled('messaging')) return false;
-  if (now - Date.parse(message.receivedAt) > ACK_RECENT_MS) return false;
-  const hourAgo = now - 3_600_000;
-  if (state.bot.commands.filter((c) => c.automatic && Date.parse(c.createdAt) > hourAgo).length >= ACKS_PER_HOUR) return false;
-  if (!claimAck(message.phone, now)) return false;
-  queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text: fixedReply(message.from), automatic: true }, now);
-  audit(`Queued the fixed WhatsApp note to ${message.from}`, 'MAAI', 'done');
-  return true;
 }
 
 // ---------- Commands ----------

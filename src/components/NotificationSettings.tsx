@@ -53,7 +53,7 @@ export function NotificationSettings() {
       setNote(t.notifyTestSent);
     });
 
-  const flip = (key: keyof Pick<NotifyPrefs, 'reminders' | 'leave' | 'events' | 'prayers' | 'briefing'>) =>
+  const flip = (key: keyof Pick<NotifyPrefs, 'reminders' | 'leave' | 'events' | 'prayers' | 'briefing' | 'messages'>) =>
     run(async () => {
       if (!status) return;
       const prefs = await api.setNotifyPrefs({ [key]: !status.prefs[key] });

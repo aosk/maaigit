@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import type { Lang, StatusInfo } from '../../shared/types';
+import type { Lang, ReplyMode, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { dayTime } from '../format';
 import { useSettings, type Look, type ToggleId } from '../settings';
@@ -130,6 +130,8 @@ export function SettingsScreen() {
         </div>
       </section>
 
+      {status?.bot?.connected && <ReplyModeCard mode={status.bot.replyMode} onChanged={() => void loadStatus()} />}
+
       <CalendarFeed googleDirect={Boolean(status?.calendar?.write?.working)} />
 
       <FaceId />
@@ -163,6 +165,34 @@ export function SettingsScreen() {
       <VoiceSettings />
 
     </div>
+  );
+}
+
+/** How MAAI answers new WhatsApp messages by itself, chosen here. */
+function ReplyModeCard({ mode, onChanged }: { mode: ReplyMode; onChanged: () => void }) {
+  const { t } = useSettings();
+  const [current, setCurrent] = useState(mode);
+  const [error, setError] = useState('');
+  const modes: ReplyMode[] = ['smart', 'fixed', 'off'];
+  const pick = (next: ReplyMode) => {
+    setCurrent(next);
+    setError('');
+    api.setReplyMode(next).then(onChanged).catch((e: Error) => {
+      setCurrent(mode);
+      setError(e.message);
+    });
+  };
+  return (
+    <section className="card" aria-labelledby="reply-mode-label">
+      <span className="section-label" id="reply-mode-label" style={{ padding: 0 }}>{t.replyModeTitle}</span>
+      <div className="seg" role="radiogroup" aria-labelledby="reply-mode-label">
+        {modes.map((m) => (
+          <button key={m} role="radio" aria-checked={current === m} onClick={() => pick(m)}>{t.replyModes[m]}</button>
+        ))}
+      </div>
+      <p className="sub">{t.replyModeHint[current]}</p>
+      {error && <div className="error" role="alert">{error}</div>}
+    </section>
   );
 }
 

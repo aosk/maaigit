@@ -9,7 +9,8 @@ import { sendMail } from '../mail.js';
 import { createTask, updateTask, validateNewTask } from '../asana.js';
 import { mirrorToGoogle } from '../gwrite.js';
 import { canAnswer, sendWhatsApp, whatsappConfigured } from '../whatsapp.js';
-import { botReplyTarget, queueCommand } from '../bot.js';
+import { botConnected, botReplyTarget, queueCommand } from '../bot.js';
+import { signed } from '../intake.js';
 import { markHandled, markReplyTo } from '../mail-handled.js';
 import { agentEnabled, audit, id, save, state, type Conversation } from '../store.js';
 import { HttpError, explain, find, lang, text, wrap } from './http.js';
@@ -94,8 +95,8 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
       const reply = text(body.body, 1500) || p.body;
       if (!reply) throw new HttpError(400, 'The reply is empty');
       // Someone who wrote to the user's own number is answered from it, through the device bot.
-      if (botReplyTarget(p.phone)) {
-        queueCommand({ kind: 'reply', phone: p.phone, toName: p.toName, text: reply });
+      if (botReplyTarget(p.phone) || (botConnected() && !canAnswer(p.phone))) {
+        queueCommand({ kind: 'reply', phone: p.phone, toName: p.toName, text: signed(reply, botReplyTarget(p.phone)?.text) });
         for (const m of state.inbox) if (m.phone === p.phone) m.replied = true;
         Object.assign(p, { body: reply });
         return `Sent a WhatsApp reply to ${p.toName} through the device bot`;

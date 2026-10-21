@@ -23,6 +23,7 @@ import type {
   NotifyPrefs,
   NotifyStatus,
   InboxFeed,
+  ReplyMode,
   BotOverview,
   Proposal,
   Reminder,
@@ -214,4 +215,5 @@ export const api = {
   bot: (background = false) => call<BotOverview>('GET', '/admin/bot', undefined, background),
   botKey: () => call<BotOverview & { key: string }>('POST', '/admin/bot/key', {}),
   botDisconnect: () => call<BotOverview>('DELETE', '/admin/bot/key'),
+  setReplyMode: (mode: ReplyMode) => call<BotOverview>('PATCH', '/admin/bot/mode', { mode }),
 };

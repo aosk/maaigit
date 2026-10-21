@@ -209,9 +209,9 @@ export function dueAlerts(
 // ---------- Sending ----------
 
 /** A small picture at the front of each title, so an alert reads as a reminder at a glance. */
-const ICONS: Record<AppAlert['kind'], string> = { reminder: '⏰', leave: '🚗', event: '📅', prayer: '🕌', briefing: '🗓️', test: '🔔' };
+const ICONS: Record<AppAlert['kind'], string> = { reminder: '⏰', leave: '🚗', event: '📅', prayer: '🕌', briefing: '🗓️', message: '💬', test: '🔔' };
 
-async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>) {
+async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>, url = '/#/today') {
   // Written once per language, even with several devices (a briefing costs an AI call).
   const written = new Map<Lang, Promise<Text>>();
   const textFor = (lang: Lang) => written.get(lang) ?? written.set(lang, Promise.resolve(due.text(lang))).get(lang)!;
@@ -227,7 +227,7 @@ async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>) {
       try {
         const { title, body } = await textFor(s.lang);
         // Urgency "high" asks the phone to show it straight away, even when it is saving power.
-        const payload = JSON.stringify({ title: `${ICONS[due.kind]} ${title}`, body, tag: due.key, kind: due.kind, lang: s.lang, url: '/#/today' });
+        const payload = JSON.stringify({ title: `${ICONS[due.kind]} ${title}`, body, tag: due.key, kind: due.kind, lang: s.lang, url });
         await webpush.sendNotification(s.subscription, payload, { TTL: 3600, urgency: 'high' });
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;
@@ -239,6 +239,12 @@ async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>) {
   );
   if (gone.length) state.subscriptions = state.subscriptions.filter((s) => !gone.includes(s.subscription.endpoint));
   save();
+}
+
+/** Tells the user's phones about a WhatsApp message (when they chose to be told); opens the Inbox when tapped. */
+export async function alertMessage(key: string, text: (lang: Lang) => Text): Promise<void> {
+  if (!state.notifyPrefs.messages) return;
+  await deliver({ key, kind: 'message', text }, '/#/inbox');
 }
 
 export async function sendTest() {

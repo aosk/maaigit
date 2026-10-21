@@ -11,6 +11,7 @@ import type {
   AppAlert,
   AuditEntry,
   BotCommand,
+  ReplyMode,
   CalendarEvent,
   UsageRow,
   ChatTurn,
@@ -23,6 +24,16 @@ import type {
   Proposal,
   Reminder,
 } from '../shared/types.js';
+
+export interface IntakeState {
+  /** When this round started (a new round starts a day later). */
+  since: string;
+  /** What MAAI sent, oldest first. */
+  sent: { text: string; at: string }[];
+  /** MAAI has the details it needs and stopped asking. */
+  done?: boolean;
+  summary?: string;
+}
 
 export interface Conversation {
   id: string;
@@ -71,9 +82,13 @@ interface State {
   profile: { enabled: boolean; facts: ProfileFact[] };
   /** The user's device bot: a hash of its key (never the key), when it was last heard from, and what MAAI asked it to do. */
   bot: { keyHash?: string; keyHint?: string; device?: string; lastSeen?: string; lastSync?: string; commands: BotCommand[] };
+  /** How MAAI answers new WhatsApp messages by itself (see server/intake.ts). */
+  replyMode: ReplyMode;
+  /** Per number: MAAI's own first replies to that person in the last day, and what it found out. */
+  intake: Record<string, IntakeState>;
 }
 
-export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10, briefing: false, briefingTime: '07:00' };
+export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10, briefing: false, briefingTime: '07:00', messages: true };
 
 const DATA_FILE = process.env.MAAI_DATA_FILE ?? path.join(config.dataDir, 'store.json');
 
@@ -144,6 +159,8 @@ function seed(): State {
     whatsappAcks: {},
     profile: { enabled: true, facts: [] },
     bot: { commands: [] },
+    replyMode: 'smart',
+    intake: {},
     sessionEpoch: 0,
   };
 }
@@ -182,6 +199,8 @@ function load(): State {
   saved.sessionEpoch = Number.isInteger(saved.sessionEpoch) && saved.sessionEpoch > 0 ? saved.sessionEpoch : 0;
   saved.profile = { enabled: saved.profile?.enabled !== false, facts: saved.profile?.facts ?? [] };
   saved.bot = { ...saved.bot, commands: saved.bot?.commands ?? [] };
+  saved.replyMode = saved.replyMode === 'fixed' || saved.replyMode === 'off' ? saved.replyMode : 'smart';
+  saved.intake = saved.intake ?? {};
   // Agents added after the file was saved appear in the admin list, switched on.
   for (const agent of seed().agents) if (!saved.agents.some((a) => a.id === agent.id)) saved.agents.push(agent);
   return saved;

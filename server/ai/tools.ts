@@ -77,28 +77,35 @@ const read_whatsapp: ToolSpec<{ phone: string }> = {
   detail: ({ phone }) => lastFrom(phone.replace(/\D/g, ''))?.from,
 };
 
-const propose_whatsapp: ToolSpec<{ phone: string; body: string }> = {
+const propose_whatsapp: ToolSpec<{ phone: string; name: string; body: string }> = {
   definition: {
-    description: "Show the user an editable approval card with a WhatsApp reply to someone who wrote to the user (on the WhatsApp Business number or, through the device bot, the user's own number). Nothing is sent until the user taps Send.",
+    description:
+      "Show the user an editable approval card with a WhatsApp message. To someone who wrote to the user, or (when the device bot is connected) to any number the user gives you, sent from the user's own number. Nothing is sent until the user taps Send.",
     input_schema: {
       type: 'object',
       properties: {
-        phone: { type: 'string', description: "The person's number as listed in the context, digits only." },
-        body: { type: 'string', description: 'The reply, written as the user in first person, in the language the person used. Short, as a WhatsApp message.' },
+        phone: { type: 'string', description: "The person's number in international form, digits only (e.g. 9665XXXXXXXX), as listed in the context or as the user gave it." },
+        name: { type: 'string', description: 'Who it is, as the user calls them (empty if they wrote and the context names them).' },
+        body: { type: 'string', description: 'The message, written as the user in first person, in the language the person uses. Short, as a WhatsApp message.' },
       },
-      required: ['phone', 'body'],
+      required: ['phone', 'name', 'body'],
       additionalProperties: false,
     },
   },
   run(input, created) {
     requireAgent('messaging', 'Messaging is switched off by the admin.');
-    const phone = input.phone.replace(/\D/g, '');
+    let phone = input.phone.replace(/\D/g, '');
+    // A Saudi mobile written the local way (05XXXXXXXX) becomes 9665XXXXXXXX.
+    if (/^05\d{8}$/.test(phone)) phone = `966${phone.slice(1)}`;
+    if (!input.body.trim()) throw new ToolError('The reply is empty.');
     const byBot = botReplyTarget(phone);
     const last = byBot ?? lastFrom(phone);
-    if (!last) throw new ToolError(`Nobody with the number ${input.phone || '(empty)'} wrote to the user on WhatsApp lately (or only in a group). Use a number from the context.`);
-    if (!input.body.trim()) throw new ToolError('The reply is empty.');
-    const canSend = Boolean(byBot) || (whatsappConfigured && canAnswer(phone));
-    created.push({ id: id(), kind: 'whatsapp', status: 'pending', title: `WhatsApp to ${last.from}`, toName: last.from, phone, body: input.body.trim(), canSend });
+    if (!last && !(botConnected() && /^\d{8,15}$/.test(phone))) {
+      throw new ToolError(botConnected() ? 'That is not a valid number. Ask the user for the number in international form, e.g. 9665XXXXXXXX.' : `Nobody with the number ${input.phone || '(empty)'} wrote to the user lately, and the device bot (needed to message someone new) is not connected.`);
+    }
+    const toName = last?.from ?? ((input.name ?? '').trim().slice(0, 80) || `+${phone}`);
+    const canSend = Boolean(byBot) || (whatsappConfigured && canAnswer(phone)) || botConnected();
+    created.push({ id: id(), kind: 'whatsapp', status: 'pending', title: `WhatsApp to ${toName}`, toName, phone, body: input.body.trim(), canSend });
     return canSend
       ? 'WhatsApp card shown. Not sent yet; waiting for the user to tap Send.'
       : 'WhatsApp card shown. MAAI cannot send this one itself (more than 24 hours since they wrote), so the user can open it in WhatsApp instead. Not sent.';

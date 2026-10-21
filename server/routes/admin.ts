@@ -56,3 +56,12 @@ admin.delete('/admin/bot/key', (_req, res) => {
   revokeKey();
   res.json(botOverview());
 });
+
+/** How MAAI answers new WhatsApp messages by itself: smart (an AI first reply), fixed (the fixed note), or off. */
+admin.patch('/admin/bot/mode', (req, res) => {
+  const mode = req.body?.mode;
+  if (mode !== 'smart' && mode !== 'fixed' && mode !== 'off') throw new HttpError(400, 'Choose smart, fixed or off.');
+  state.replyMode = mode;
+  audit(`Automatic WhatsApp replies set to ${mode}`, 'User', 'done');
+  res.json(botOverview());
+});

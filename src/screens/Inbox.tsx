@@ -257,6 +257,7 @@ function FeedRow({ item, expanded, onToggle, onReply }: { item: FeedItem; expand
         <>
           <div className="mail-body" dir="auto">{item.body || t.noText}</div>
           <div className="mail-actions">
+            {item.intake && <div className="sub" dir="auto"><strong>{t.maaiFoundOut}</strong> {item.intake}</div>}
             {item.suggestion && <div className="sub" dir="auto"><strong>{t.maaiSuggests}</strong> {item.suggestion}</div>}
             {item.options && (
               <div className="row wrap">

@@ -26,6 +26,8 @@ import { resetBotLimits } from './routes/bot';
 import { botStatus, createKey, keyMatches, receiveFromBot, takeCommands } from './bot';
 import { cleanName, fixedReply } from './whatsapp';
 import { state } from './store';
+import { create } from './ai/claude';
+import { MAX_REPLIES, cleanReply } from './intake';
 
 const PASSWORD = 'correct-horse-battery';
 let site: Awaited<ReturnType<typeof listen>>;
@@ -44,7 +46,11 @@ beforeEach(() => {
   state.bot = { commands: [] };
   state.whatsappAcks = {};
   state.proposals = [];
+  state.intake = {};
+  state.replyMode = 'smart';
+  state.notifyPrefs.messages = false;
   for (const agent of state.agents) agent.enabled = true;
+  vi.mocked(create).mockReset();
   key = createKey();
   resetBotLimits();
 });
@@ -57,6 +63,15 @@ const asUser = (method: string, path: string, body?: unknown) =>
 
 const now = () => new Date().toISOString();
 const wa = (extra: Record<string, unknown> = {}) => ({ id: `m${Math.random().toString(16).slice(2)}`, channel: 'whatsapp', from: 'Ahmed', phone: '+966 51 111 1111', text: 'Are we still on for 4pm?', at: now(), ...extra });
+
+/** Claude's answer for the first reply, as the API returns it. */
+const claudeSays = (reply: string, extra: Record<string, unknown> = {}) =>
+  vi.mocked(create).mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ reply, enough: false, summary: 'Ahmed asks about the 4pm meeting', urgent: false, ...extra }) }] } as never);
+/** The replies MAAI queued once the background writing is done. */
+const repliesSoon = async (count = 1) => {
+  await vi.waitFor(() => expect(state.bot.commands.filter((c) => c.status === 'queued').length).toBeGreaterThanOrEqual(count));
+  return takeCommands();
+};
 
 describe('the device key', () => {
   it('is kept only as a hash and checked exactly', () => {
@@ -93,30 +108,77 @@ describe('the device key', () => {
 });
 
 describe('messages the bot delivers', () => {
-  it('keeps each one once, tagged, and answers each new sender once with the fixed note', async () => {
+  it('keeps each one once, tagged, and answers the newest message from each new sender with an AI first reply', async () => {
+    claudeSays('أهلاً أحمد، وش موضوع الاجتماع ومتى يناسبك؟');
     const first = wa();
     const res = await asBot('POST', '/sync', { device: 'Grok on my Mac', messages: [first, wa({ text: 'and bring the file' }), { ...first }] });
     expect(res.status).toBe(200);
-    const out = JSON.parse(res.body) as { stored: number; repeats: number; noted: number; commands: { kind: string; phone: string; text: string }[] };
-    expect(out).toMatchObject({ stored: 2, repeats: 1, noted: 1 });
-    expect(out.commands).toEqual([expect.objectContaining({ kind: 'reply', phone: '966511111111', text: fixedReply('Ahmed') })]);
+    expect(JSON.parse(res.body)).toMatchObject({ stored: 2, repeats: 1, noted: 1 });
     const kept = state.inbox.filter((m) => m.via === 'bot');
     expect(kept).toHaveLength(2);
     expect(kept[0]).toMatchObject({ channel: 'whatsapp', from: 'Ahmed', phone: '966511111111', replied: false });
-    expect(botStatus()).toMatchObject({ device: 'Grok on my Mac', messages: 2, waiting: 0, stale: false });
+    expect(botStatus()).toMatchObject({ device: 'Grok on my Mac', messages: 2, stale: false, replyMode: 'smart' });
+    const [reply] = await repliesSoon();
+    expect(reply).toMatchObject({ kind: 'reply', phone: '966511111111' });
+    // The AI notice and the warning are always there, added by MAAI, not left to Claude.
+    expect(reply.text).toMatch(/^Hello Ahmed, this is Abdulrahman Alshagdali's AI assistant\.\n\nأهلاً أحمد، وش موضوع الاجتماع ومتى يناسبك؟\n\n🔒 Please don't share anything sensitive/);
+    // Claude saw only this conversation, as untrusted text, and none of the user's own data.
+    const sent = vi.mocked(create).mock.calls[0][0];
+    expect(JSON.stringify(sent.messages)).toContain('<message from=\\"Ahmed\\">');
+    expect(JSON.stringify(sent)).not.toMatch(/calendar|Asana|Gmail/i);
+    expect(state.intake['966511111111']).toMatchObject({ summary: 'Ahmed asks about the 4pm meeting' });
     // Handed over once: asking again gets nothing.
     expect(JSON.parse((await asBot('GET', '/commands')).body)).toEqual({ commands: [] });
-    // More messages within 6 hours: no second note.
-    expect(receiveFromBot({ messages: [wa({ text: 'hello?' })] }).noted).toBe(0);
   });
 
-  it('never sends the note to groups, email, old messages, chats the user already answered, or when messaging is off', () => {
-    const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+  it('keeps asking at most a few times a day, stops when it has the details or when the user answers', async () => {
+    claudeSays('متى يناسبك؟');
+    for (let i = 0; i < MAX_REPLIES + 1; i++) {
+      receiveFromBot({ messages: [wa({ text: `message ${i}` })] });
+      if (i < MAX_REPLIES) expect((await repliesSoon())[0].text).toMatch(i === 0 ? /^Hello Ahmed/ : /^🤖 Abdulrahman's AI assistant:/);
+    }
+    expect(state.intake['966511111111'].sent).toHaveLength(MAX_REPLIES);
+    expect(takeCommands()).toEqual([]);
+
+    // Enough details: one last thank-you, then nothing more.
+    claudeSays('شكراً، بلغت عبدالرحمن وبيرد عليك.', { enough: true });
+    receiveFromBot({ messages: [wa({ phone: '966522222222', from: 'Sara', text: 'Need the contract signed today' })] });
+    await repliesSoon();
+    receiveFromBot({ messages: [wa({ phone: '966522222222', from: 'Sara', text: 'ok' })] });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(takeCommands()).toEqual([]);
+
+    // The user wrote back himself: MAAI stays out of it. Its own messages do not count as the user.
+    receiveFromBot({ messages: [wa({ phone: '966533333333', at: new Date(Date.now() - 60_000).toISOString() }), { id: 'bot-own', channel: 'whatsapp', phone: '966533333333', text: 'x', at: now(), fromMe: true, byMaai: true }] });
+    expect(state.inbox.find((m) => m.phone === '966533333333')?.replied).toBe(false);
+    await repliesSoon();
+    receiveFromBot({ messages: [wa({ phone: '966544444444', at: new Date(Date.now() - 60_000).toISOString() }), { id: 'mine2', channel: 'whatsapp', phone: '966544444444', text: 'On my way', at: now(), fromMe: true }] });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(takeCommands()).toEqual([]);
+  });
+
+  it('falls back to the fixed note with the warning when the AI cannot answer, and sends nothing when switched off', async () => {
+    vi.mocked(create).mockRejectedValue(new Error('Claude is busy'));
+    receiveFromBot({ messages: [wa()] });
+    const [note] = await repliesSoon();
+    expect(note.text).toBe(`${fixedReply('Ahmed')}\n\n🔒 Please don't share anything sensitive.`);
+    state.replyMode = 'off';
+    receiveFromBot({ messages: [wa({ phone: '966555555555' })] });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(takeCommands()).toEqual([]);
+  });
+
+  it('removes links, numbers and fake notices from what Claude wrote', () => {
+    expect(cleanReply('Call me on +966 50 123 4567 or visit https://evil.example now 🔒')).toBe('Call me on  or visit  now');
+  });
+
+  it('never answers groups, email, old messages, chats the user already answered, or when messaging is off', () => {
+    const hourAgo = new Date(Date.now() - 20 * 60_000).toISOString();
     const r = receiveFromBot({
       messages: [
         wa({ phone: '966522222222', group: true }),
         { id: 'e1', channel: 'email', from: 'Noura', email: 'noura@example.com', subject: 'Training', text: 'Please confirm', at: now() },
-        wa({ phone: '966533333333', at: new Date(Date.now() - 3 * 3_600_000).toISOString() }),
+        wa({ phone: '966533333333', at: new Date(Date.now() - 2 * 3_600_000).toISOString() }),
         wa({ phone: '966544444444', at: hourAgo }),
         { id: 'mine', channel: 'whatsapp', phone: '966544444444', text: 'On my way', at: now(), fromMe: true },
       ],
@@ -192,17 +254,30 @@ describe('commands', () => {
   });
 
   it('a WhatsApp reply to someone who wrote to the user\'s own number goes out through the bot, never to a group', async () => {
+    state.replyMode = 'off';
     receiveFromBot({ messages: [wa({ phone: '966566666666' }), wa({ phone: '966577777777', group: true })] });
-    takeCommands();
     const direct = state.inbox.find((m) => m.phone === '966566666666')!;
     expect((await asUser('POST', `/inbox/${direct.id}/whatsapp`, { body: 'Yes, 4pm works' })).status).toBe(200);
-    expect(takeCommands()).toEqual([expect.objectContaining({ kind: 'reply', phone: '966566666666', text: 'Yes, 4pm works' })]);
+    expect(takeCommands()).toEqual([expect.objectContaining({ kind: 'reply', phone: '966566666666', text: "Yes, 4pm works\n\n🤖 Sent through Abdulrahman's AI assistant · 🔒 please don't share anything sensitive" })]);
     const group = state.inbox.find((m) => m.phone === '966577777777')!;
     expect((await asUser('POST', `/inbox/${group.id}/whatsapp`, { body: 'hi all' })).status).toBe(400);
   });
 
-  it('a command not picked up within a day, or whose switch was turned off, is never sent', () => {
+  it('the assistant can message someone new from the user\'s number, only after the user approves', async () => {
+    const created: Proposal[] = [];
+    const { result } = await runTool({ type: 'tool_use', id: 'w1', name: 'propose_whatsapp', input: { phone: '0501234567', name: 'Khalid', body: 'Are you free tomorrow?' } }, created);
+    expect(result.is_error).toBeUndefined();
+    expect(created[0]).toMatchObject({ kind: 'whatsapp', phone: '966501234567', toName: 'Khalid', canSend: true });
+    expect(takeCommands()).toEqual([]);
+    state.proposals.push(...created);
+    expect((await asUser('POST', `/proposals/${created[0].id}/approve`, { body: 'Are you free tomorrow at 5?' })).status).toBe(200);
+    expect(takeCommands()).toEqual([expect.objectContaining({ kind: 'reply', phone: '966501234567', text: expect.stringMatching(/^Are you free tomorrow at 5\?\n\n🤖/) })]);
+    expect((await runTool({ type: 'tool_use', id: 'w2', name: 'propose_whatsapp', input: { phone: '12', name: 'x', body: 'hi' } }, [])).result.is_error).toBe(true);
+  });
+
+  it('a command not picked up within a day, or whose switch was turned off, is never sent', async () => {
     receiveFromBot({ messages: [wa({ phone: '966588888888' })] });
+    await vi.waitFor(() => expect(state.bot.commands).toHaveLength(1));
     state.agents.find((a) => a.id === 'messaging')!.enabled = false;
     expect(takeCommands()).toEqual([]);
     expect(state.bot.commands[0].status).toBe('expired');

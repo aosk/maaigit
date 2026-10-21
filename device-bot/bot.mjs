@@ -117,6 +117,15 @@ const keepChats = () => fs.writeFileSync(CHATS_FILE, JSON.stringify(chatOf));
 const tryGet = (fn) => Promise.race([Promise.resolve().then(fn), new Promise((r) => setTimeout(r, 5000))]).catch(() => undefined);
 
 const MEDIA = new Set(['ptt', 'audio', 'image', 'video', 'document', 'sticker']);
+
+/** What this bot itself sent lately, so its own messages are not taken for the user answering. */
+const sentByBot = [];
+const norm = (text) => String(text ?? '').replace(/\s+/g, ' ').trim();
+function rememberSent(chatId, text) {
+  sentByBot.push({ chatId, text: norm(text), at: Date.now() });
+  while (sentByBot.length && Date.now() - sentByBot[0].at > 10 * 60_000) sentByBot.shift();
+}
+const isOurs = (chatId, text) => sentByBot.some((s) => s.chatId === chatId && s.text === norm(text));
 const queued = new Set(queue.map((m) => m.id));
 
 /** One WhatsApp message in the shape MAAI expects, or null for statuses, broadcasts and system notices. */
@@ -146,6 +155,7 @@ async function toItem(msg, knownChat) {
   }
   return {
     id: msg.id._serialized,
+    byMaai: (msg.fromMe && isOurs(chatId, msg.body)) || undefined,
     channel: 'whatsapp',
     from: from || undefined,
     phone: phone || undefined,
@@ -185,6 +195,7 @@ wa.on('message_create', async (msg) => {
     const item = await toItem(msg);
     if (!add(item)) return;
     keepQueue();
+    if (item.byMaai) return;
     if (!item.fromMe) log(`New message from ${item.from ?? `+${item.phone}`}${item.group ? ' (group)' : ''}: sending to MAAI in a minute.`);
     deliverSoon();
   } catch (error) {
@@ -237,7 +248,9 @@ async function handle(commands) {
       if (c.kind === 'reply') {
         if (!c.phone) throw new Error('No number');
         // MAAI's text is sent exactly as given; only one person, never a group.
-        await wa.sendMessage(chatOf[c.phone] ?? `${c.phone}@c.us`, c.text);
+        const target = chatOf[c.phone] ?? `${c.phone}@c.us`;
+        rememberSent(target, c.text);
+        await wa.sendMessage(target, c.text);
         log(`Sent to ${c.toName ?? `+${c.phone}`}`);
         result = { ok: true };
       } else if (c.kind === 'task') {
@@ -255,6 +268,8 @@ async function handle(commands) {
 
 // ---------- The loops ----------
 
+const pollCommands = () => maai('GET', `/commands?device=${encodeURIComponent(DEVICE)}`).then((r) => handle(r.commands)).catch((e) => log(e.message));
+
 let syncing = false;
 async function sync() {
   if (syncing) return;
@@ -266,8 +281,10 @@ async function sync() {
       queue = queue.slice(batch.length);
       for (const m of batch) queued.delete(m.id);
       keepQueue();
-      log(`Delivered ${out.stored} new message(s); ${out.noted} fixed note(s) to send.`);
+      log(`Delivered ${out.stored} new message(s)${out.noted ? `; MAAI is writing ${out.noted} reply(ies)` : ''}.`);
       await handle(out.commands);
+      // MAAI writes its first replies in the background: collect them in a few seconds, not a minute.
+      if (out.noted) setTimeout(() => void pollCommands(), 15_000);
     } while (queue.length);
   } catch (error) {
     log('Delivery failed, trying again later:', error.message);
@@ -281,7 +298,7 @@ wa.on('ready', async () => {
   await backfill().catch((error) => log('Could not read recent chats:', error.message));
   await sync();
   setInterval(sync, SYNC_MS);
-  setInterval(() => maai('GET', `/commands?device=${encodeURIComponent(DEVICE)}`).then((r) => handle(r.commands)).catch((e) => log(e.message)), 60_000);
+  setInterval(() => void pollCommands(), 60_000);
   log(`Running: new messages reach MAAI within about a minute (and everything again every ${SYNC_MS / 60_000} minutes); commands are checked every minute. Leave this window open.`);
 });
 
