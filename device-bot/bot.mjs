@@ -59,7 +59,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-21k';
+const VERSION = '2026-10-22a';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -335,8 +335,13 @@ async function checkGrok() {
     log(`⚠ Grok: model "${grokModel}" is not offered to this key; using another.`);
     grokModel = '';
   }
-  // Newest first by the version in the name (grok-4 before grok-3…).
-  if (!grokModel) grokModel = chat.sort((a, b) => b.localeCompare(a, 'en', { numeric: true }))[0] ?? '';
+  // The main models are numbered (grok-4, grok-4.1…): the newest of those, a full one before a "mini" or
+  // "fast" one; special-purpose models (code, build…) only if there is nothing else.
+  const version = (id) => Number(/^grok-(\d+(?:\.\d+)?)/i.exec(id)?.[1] ?? -1);
+  const lighter = (id) => /mini|fast|lite/i.test(id);
+  const numbered = chat.filter((id) => version(id) >= 0 && !/code|build/i.test(id));
+  const ranked = numbered.sort((a, b) => version(b) - version(a) || Number(lighter(a)) - Number(lighter(b)) || a.length - b.length);
+  if (!grokModel) grokModel = ranked[0] ?? chat[0] ?? '';
   log(grokModel ? `Grok ready: key accepted, model ${grokModel}.` : `⚠ Grok: the key works but offers no chat model (${ids.length} models).`);
 }
 
