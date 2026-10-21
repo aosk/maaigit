@@ -140,6 +140,15 @@ describe('messages the bot delivers', () => {
     expect(state.intake['966511111111'].sent).toHaveLength(MAX_REPLIES);
     expect(takeCommands()).toEqual([]);
 
+    // Two quiet hours later the same person, writing in another language, starts a new conversation.
+    const round = state.intake['966511111111'];
+    const earlier = new Date(Date.now() - 3 * 3_600_000).toISOString();
+    round.since = earlier;
+    for (const sent of round.sent) sent.at = earlier;
+    claudeSays('Bonjour, de quoi avez-vous besoin ?');
+    receiveFromBot({ messages: [wa({ text: 'Bonjour, je voudrais un rendez-vous' })] });
+    expect((await repliesSoon())[0].text).toMatch(/^Hello Ahmed, this is Abdulrahman Alshagdali's AI assistant\.\n\nBonjour/);
+
     // Enough details: one last thank-you, then nothing more.
     claudeSays('شكراً، بلغت عبدالرحمن وبيرد عليك.', { enough: true });
     receiveFromBot({ messages: [wa({ phone: '966522222222', from: 'Sara', text: 'Need the contract signed today' })] });

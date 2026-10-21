@@ -4,7 +4,7 @@ import type { BotCommand, BotStatus, InboxMessage } from '../shared/types.js';
 import { config } from './config.js';
 import { isEmail } from './mail.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
-import { answer, shouldAnswer, tell } from './intake.js';
+import { answer, tell, whyNot } from './intake.js';
 
 /**
  * The user's own device bot (for example a Grok bot on their computer or phone). It connects to MAAI,
@@ -203,10 +203,13 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
   // The newest message from each person gets MAAI's first reply (written in the background) and an alert.
   const newest = new Map<string, InboxMessage>();
   for (const message of fresh) if (message.channel === 'whatsapp' && !message.group && message.phone) newest.set(message.phone, message);
+  const notAnswered: Record<string, number> = {};
   for (const message of newest.values()) {
+    const reason = whyNot(message, now);
+    if (reason) notAnswered[reason] = (notAnswered[reason] ?? 0) + 1;
     if (now - Date.parse(message.receivedAt) > ACK_RECENT_MS || message.replied) continue;
     void tell(message, {}, now);
-    if (!shouldAnswer(message, now)) continue;
+    if (reason) continue;
     result.noted += 1;
     void answer(message, (text) => queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text, automatic: true })).catch((error: Error) => console.error('First reply failed:', error.message));
   }
@@ -215,7 +218,7 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
   state.bot.lastSync = new Date(now).toISOString();
   // Counts only (never names or text), so a delivery that keeps nothing can be explained from the server log.
   const version = str((body as { version?: unknown }).version, 40);
-  console.log(`Device bot${version ? ` ${version}` : ''} delivered ${list.length}: ${result.stored} new, ${result.repeats} repeats, ${result.own} own, ${result.skipped} unusable${result.skipped ? ` (${Object.entries(reasons).map(([r, n]) => `${r}: ${n}`).join(', ')})` : ''}, ${result.noted} to answer`);
+  console.log(`Device bot${version ? ` ${version}` : ''} delivered ${list.length}: ${result.stored} new, ${result.repeats} repeats, ${result.own} own, ${result.skipped} unusable${result.skipped ? ` (${Object.entries(reasons).map(([r, n]) => `${r}: ${n}`).join(', ')})` : ''}, ${result.noted} to answer${Object.keys(notAnswered).length ? ` (not answered: ${Object.entries(notAnswered).map(([r, n]) => `${r} ×${n}`).join('; ')})` : ''}`);
   save();
   return result;
 }

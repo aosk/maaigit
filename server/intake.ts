@@ -103,9 +103,20 @@ function history(phone: string, round: IntakeState): { role: 'them' | 'maai'; te
   return [...theirs, ...ours].sort((a, b) => a.at.localeCompare(b.at)).slice(-14);
 }
 
+/** A person who goes quiet this long after MAAI's last reply starts a new conversation (new replies allowed). */
+const QUIET_MS = 2 * 3_600_000;
+
+/** This person's conversation with MAAI, if it is still going: started within a day and active within two hours. */
+function currentRound(phone: string, now: number): IntakeState | undefined {
+  const round = state.intake[phone];
+  if (!round || now - Date.parse(round.since) >= ROUND_MS) return undefined;
+  const last = Date.parse(round.sent.at(-1)?.at ?? round.since);
+  return now - last < QUIET_MS ? round : undefined;
+}
+
 function roundFor(phone: string, now: number): IntakeState {
-  const current = state.intake[phone];
-  if (current && now - Date.parse(current.since) < ROUND_MS) return current;
+  const current = currentRound(phone, now);
+  if (current) return current;
   const fresh: IntakeState = { since: new Date(now).toISOString(), sent: [] };
   state.intake[phone] = fresh;
   // Old rounds are let go.
@@ -113,17 +124,24 @@ function roundFor(phone: string, now: number): IntakeState {
   return fresh;
 }
 
-/** Whether MAAI should answer this person by itself now, and why not if it should not. */
-export function shouldAnswer(message: InboxMessage, now = Date.now()): boolean {
-  if (state.replyMode === 'off' || !agentEnabled('messaging')) return false;
-  if (message.channel !== 'whatsapp' || message.via !== 'bot' || message.group || message.replied || !message.phone) return false;
-  if (now - Date.parse(message.receivedAt) > FRESH_MS) return false;
-  const round = state.intake[message.phone];
-  if (round && now - Date.parse(round.since) < ROUND_MS && (round.done || round.sent.length >= MAX_REPLIES)) return false;
+/** Why MAAI will not answer this message by itself (for the server log), or null when it will. */
+export function whyNot(message: InboxMessage, now = Date.now()): string | null {
+  if (state.replyMode === 'off') return 'automatic replies are off';
+  if (!agentEnabled('messaging')) return 'messaging is switched off';
+  if (message.channel !== 'whatsapp' || message.via !== 'bot' || !message.phone) return 'not a WhatsApp message with a number';
+  if (message.group) return 'group';
+  if (message.replied) return 'you already answered';
+  if (now - Date.parse(message.receivedAt) > FRESH_MS) return 'older than 30 minutes';
+  const round = currentRound(message.phone, now);
+  if (round?.done) return 'already has the details (new conversation after 2 quiet hours)';
+  if (round && round.sent.length >= MAX_REPLIES) return `already replied ${MAX_REPLIES} times (new conversation after 2 quiet hours)`;
   const hourAgo = new Date(now - 3_600_000).toISOString();
-  const lastHour = Object.values(state.intake).reduce((n, r) => n + r.sent.filter((s) => s.at > hourAgo).length, 0);
-  return lastHour < PER_HOUR;
+  const lastHour = Object.values(state.intake).reduce((n, r) => n + r.sent.filter((x) => x.at > hourAgo).length, 0);
+  return lastHour >= PER_HOUR ? `${PER_HOUR} replies in the last hour` : null;
 }
+
+/** Whether MAAI should answer this person by itself now. */
+const shouldAnswer = (message: InboxMessage, now = Date.now()): boolean => whyNot(message, now) === null;
 
 /** People being answered right now: a second delivery while Claude is writing must not start another reply. */
 const busy = new Set<string>();
