@@ -27,7 +27,7 @@ import { botStatus, createKey, keyMatches, queueCommand, receiveFromBot, takeCom
 import { cleanName, fixedReply } from './whatsapp';
 import { state } from './store';
 import { create } from './ai/claude';
-import { MAX_REPLIES, cleanReply } from './intake';
+import { PER_PERSON_HOUR, cleanReply } from './intake';
 
 const PASSWORD = 'correct-horse-battery';
 let site: Awaited<ReturnType<typeof listen>>;
@@ -47,6 +47,7 @@ beforeEach(() => {
   state.whatsappAcks = {};
   state.proposals = [];
   state.intake = {};
+  state.youWrote = {};
   state.replyMode = 'smart';
   state.notifyPrefs.messages = false;
   for (const agent of state.agents) agent.enabled = true;
@@ -131,37 +132,36 @@ describe('messages the bot delivers', () => {
     expect(JSON.parse((await asBot('GET', '/commands')).body)).toEqual({ commands: [] });
   });
 
-  it('keeps asking at most a few times a day, stops when it has the details or when the user answers', async () => {
+  it('answers every message, marked as AI, and stays out while the user is writing or after 10 an hour', async () => {
     claudeSays('متى يناسبك؟');
-    for (let i = 0; i < MAX_REPLIES + 1; i++) {
+    expect((await (receiveFromBot({ messages: [wa({ text: 'message 0' })] }), repliesSoon()))[0].text).toMatch(/^Hello Ahmed/);
+    for (let i = 1; i < 4; i++) {
       receiveFromBot({ messages: [wa({ text: `message ${i}` })] });
-      if (i < MAX_REPLIES) expect((await repliesSoon())[0].text).toMatch(i === 0 ? /^Hello Ahmed/ : /^🤖 Abdulrahman's AI assistant:/);
+      expect((await repliesSoon())[0].text).toMatch(/^🤖 Abdulrahman's AI assistant:\nمتى يناسبك؟\n\n🔒/);
     }
-    expect(state.intake['966511111111'].sent).toHaveLength(MAX_REPLIES);
-    expect(takeCommands()).toEqual([]);
+    // Nothing more to ask: a short "received", still marked as AI, in their language.
+    claudeSays('', { enough: true });
+    receiveFromBot({ messages: [wa({ text: 'شكراً' })] });
+    expect((await repliesSoon())[0].text).toBe('🤖 المساعد الذكي لعبدالرحمن (ذكاء اصطناعي):\nوصلت رسالتك، وبلّغت عبدالرحمن وبيرد عليك بأقرب وقت.\n\n🔒 فضلاً لا تشارك أي بيانات حساسة.');
 
-    // Two quiet hours later the same person, writing in another language, starts a new conversation.
-    const round = state.intake['966511111111'];
-    const earlier = new Date(Date.now() - 3 * 3_600_000).toISOString();
-    round.since = earlier;
-    for (const sent of round.sent) sent.at = earlier;
-    claudeSays('Bonjour, de quoi avez-vous besoin ?');
-    receiveFromBot({ messages: [wa({ text: 'Bonjour, je voudrais un rendez-vous' })] });
-    expect((await repliesSoon())[0].text).toMatch(/^Hello Ahmed, this is Abdulrahman Alshagdali's AI assistant\.\n\nBonjour/);
+    // Several messages in one delivery get one reply.
+    claudeSays('تمام');
+    receiveFromBot({ messages: [wa({ phone: '966522222222', from: 'Sara', text: 'hi' }), wa({ phone: '966522222222', from: 'Sara', text: 'are you there?' })] });
+    expect(await repliesSoon()).toHaveLength(1);
 
-    // Enough details: one last thank-you, then nothing more.
-    claudeSays('شكراً، بلغت عبدالرحمن وبيرد عليك.', { enough: true });
-    receiveFromBot({ messages: [wa({ phone: '966522222222', from: 'Sara', text: 'Need the contract signed today' })] });
-    await repliesSoon();
-    receiveFromBot({ messages: [wa({ phone: '966522222222', from: 'Sara', text: 'ok' })] });
+    // At most 10 an hour to one person.
+    const round = state.intake['966522222222'];
+    round.sent = Array.from({ length: PER_PERSON_HOUR }, () => ({ text: 'x', at: new Date().toISOString() }));
+    receiveFromBot({ messages: [wa({ phone: '966522222222', from: 'Sara', text: 'again' })] });
     await new Promise((r) => setTimeout(r, 50));
     expect(takeCommands()).toEqual([]);
 
-    // The user wrote back himself: MAAI stays out of it. Its own messages do not count as the user.
+    // The user wrote back himself: MAAI stays out, even of the next message. Its own messages do not count as the user.
     receiveFromBot({ messages: [wa({ phone: '966533333333', at: new Date(Date.now() - 60_000).toISOString() }), { id: 'bot-own', channel: 'whatsapp', phone: '966533333333', text: 'x', at: now(), fromMe: true, byMaai: true }] });
     expect(state.inbox.find((m) => m.phone === '966533333333')?.replied).toBe(false);
     await repliesSoon();
     receiveFromBot({ messages: [wa({ phone: '966544444444', at: new Date(Date.now() - 60_000).toISOString() }), { id: 'mine2', channel: 'whatsapp', phone: '966544444444', text: 'On my way', at: now(), fromMe: true }] });
+    receiveFromBot({ messages: [wa({ phone: '966544444444', text: 'ok see you' })] });
     await new Promise((r) => setTimeout(r, 50));
     expect(takeCommands()).toEqual([]);
   });

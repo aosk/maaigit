@@ -14,14 +14,16 @@ import { claimAck, cleanName, fixedReply } from './whatsapp.js';
  * the "do not share sensitive data" warning, added here, not left to the model.
  */
 
-/** At most this many AI replies to one person in a day; then the user takes over. */
-export const MAX_REPLIES = 3;
+/** At most this many replies to one person in an hour (stops two automatic responders answering each other for ever). */
+export const PER_PERSON_HOUR = 10;
+/** While the user is writing in a conversation themself, MAAI stays out of it for this long. */
+const YOU_ACTIVE_MS = 30 * 60_000;
 /** A new round with the same person starts after this long. */
 const ROUND_MS = 24 * 3_600_000;
 /** Only messages this fresh are answered (not ones read from older chats). */
 const FRESH_MS = 30 * 60_000;
-/** At most this many AI replies an hour, whoever writes. */
-const PER_HOUR = 30;
+/** At most this many replies an hour, whoever writes. */
+const PER_HOUR = 60;
 /** The user is told about the same person at most this often (plus once when MAAI has the details). */
 const ALERT_EVERY_MS = 15 * 60_000;
 
@@ -42,6 +44,12 @@ const NOTICE = {
     warnShort: "🔒 Please don't share anything sensitive.",
     signed: "🤖 Sent through Abdulrahman's AI assistant · 🔒 please don't share anything sensitive",
   },
+};
+
+/** The short answer when there is nothing more to ask. */
+const RECEIVED = {
+  ar: 'وصلت رسالتك، وبلّغت عبدالرحمن وبيرد عليك بأقرب وقت.',
+  en: "Got your message; I've passed it to Abdulrahman and he will reply as soon as he can.",
 };
 
 /** A reply the user approved, sent from their number through the bot: marked as sent by the assistant. */
@@ -133,9 +141,10 @@ export function whyNot(message: InboxMessage, now = Date.now()): string | null {
   if (message.group) return 'group';
   if (message.replied) return 'you already answered';
   if (now - Date.parse(message.receivedAt) > FRESH_MS) return 'older than 30 minutes';
-  const round = currentRound(message.phone, now);
-  if (round?.done) return 'already has the details (new conversation after 2 quiet hours)';
-  if (round && round.sent.length >= MAX_REPLIES) return `already replied ${MAX_REPLIES} times (new conversation after 2 quiet hours)`;
+  const youAt = Date.parse(state.youWrote[message.phone] ?? '');
+  if (Number.isFinite(youAt) && now - youAt < YOU_ACTIVE_MS) return 'you are writing in this conversation';
+  const hourAgoIso = new Date(now - 3_600_000).toISOString();
+  if ((state.intake[message.phone]?.sent ?? []).filter((x) => x.at > hourAgoIso).length >= PER_PERSON_HOUR) return `${PER_PERSON_HOUR} replies to this person in the last hour`;
   const hourAgo = new Date(now - 3_600_000).toISOString();
   const lastHour = Object.values(state.intake).reduce((n, r) => n + r.sent.filter((x) => x.at > hourAgo).length, 0);
   return lastHour >= PER_HOUR ? `${PER_HOUR} replies in the last hour` : null;
@@ -170,23 +179,20 @@ export async function answer(message: InboxMessage, send: (text: string) => void
       });
     }
     const reply = result ? cleanReply(result.reply) : '';
-    if (result && !reply && !first) {
-      // Nothing more to ask: MAAI has what it needs.
-      round.done = true;
-    }
     if (reply) {
       text = compose(reply, message.from, first, lang);
-    } else if (first) {
-      // No AI (none set up, it failed, or the fixed note was chosen): the fixed note, once every 6 hours.
-      if (!claimAck(phone, now)) return;
+    } else if (first && claimAck(phone, now)) {
+      // No AI reply (none set up, it failed, or the fixed note was chosen): the fixed note, once every 6 hours.
       text = fixedNote(message.from, message.text);
     } else {
-      text = '';
+      // Every message is answered: when there is nothing new to say, a short "received", still marked as AI.
+      text = compose(RECEIVED[lang], message.from, false, lang);
     }
 
     if (text) {
       send(text);
       round.sent.push({ text, at: new Date(now).toISOString() });
+      round.sent = round.sent.slice(-20);
       audit(`${result ? 'AI first reply' : 'Fixed note'} queued to ${message.from}`, 'MAAI', 'done');
       if (result) ok('replies');
     }
@@ -206,14 +212,13 @@ async function write(phone: string, round: IntakeState, name: string) {
   const turns = history(phone, round)
     .map((t) => (t.role === 'them' ? `<message from="${neutralize(name)}">\n${neutralize(t.text)}\n</message>` : `[You replied earlier]: ${neutralize(t.text)}`))
     .join('\n');
-  const left = MAX_REPLIES - round.sent.length;
   const response = await create({
     purpose: 'whatsapp',
     system: SYSTEM,
     effort: 'low',
     maxTokens: 1500,
     format: SCHEMA,
-    messages: [{ role: 'user', content: `The WhatsApp conversation so far (you may send ${left} more message${left === 1 ? '' : 's'} in total; on the last one, thank them and say Abdulrahman will reply):\n${turns}` }],
+    messages: [{ role: 'user', content: `The WhatsApp conversation so far. Answer their newest message. If you already have what Abdulrahman needs, just confirm briefly that you passed it on and he will reply; do not repeat questions you already asked:\n${turns}` }],
   });
   const parsed = JSON.parse(textOf(response.content)) as { reply?: unknown; enough?: unknown; summary?: unknown; urgent?: unknown };
   return {

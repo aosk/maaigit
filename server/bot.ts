@@ -164,6 +164,9 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
   // The user's own messages are not kept; they only show which chats are already answered.
   const answeredAt = new Map<string, number>();
   for (const m of incoming) if (m.fromMe && !m.byMaai && m.phone) answeredAt.set(m.phone, Math.max(m.at, answeredAt.get(m.phone) ?? 0));
+  // When the user last wrote in each conversation themself, kept a day.
+  for (const [phone, at] of answeredAt) if (at > Date.parse(state.youWrote[phone] ?? '') || !state.youWrote[phone]) state.youWrote[phone] = new Date(at).toISOString();
+  for (const [phone, at] of Object.entries(state.youWrote)) if (now - Date.parse(at) > 86_400_000) delete state.youWrote[phone];
   for (const m of state.inbox) {
     const answered = m.phone ? answeredAt.get(m.phone) : undefined;
     if (answered && Date.parse(m.receivedAt) <= answered) m.replied = true;
