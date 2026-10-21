@@ -146,6 +146,9 @@ describe('messages the bot delivers', () => {
     expect(context).toContain('[WhatsApp, own number] Ahmed [+966511111111]');
     expect(context).toContain('[Email "Training"] Noura');
     expect(context).toMatch(/Device bot: connected, last delivered messages/);
+    // Conversations already answered still show, so "what messages do I have?" has an answer.
+    for (const m of state.inbox) if (m.via === 'bot') m.replied = true;
+    expect(contextNote()).toMatch(/already answered:\n- \[WhatsApp, own number\] Ahmed/);
   });
 });
 

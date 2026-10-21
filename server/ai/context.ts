@@ -27,20 +27,42 @@ function inboxOverview(): string {
   return `Recent Gmail inbox (use read_email to open one):\n${mails.map((m) => `- #${m.uid} ${dayTime(m.date)} from ${n(m.fromName)}: ${n(m.subject)}${m.unread ? ' (unread)' : ''}${handledOf(m.uid) ? ' (already handled by the user)' : ''}`).join('\n')}`;
 }
 
-/** Messages people are still waiting on (WhatsApp, and email the device bot collected), newest first: who, how many, and the latest words. */
-function whatsappOverview(): string {
-  const waiting = new Map<string, { phone?: string; name: string; tag: string; count: number; last: string; at: string }>();
+interface Conversation { phone?: string; name: string; tag: string; count: number; waiting: number; last: string; at: string }
+
+/** Everyone who wrote (WhatsApp, and email the device bot collected), one line per conversation. */
+function conversations(): Conversation[] {
+  const byKey = new Map<string, Conversation>();
   for (const m of state.inbox) {
-    if ((m.channel !== 'whatsapp' && m.via !== 'bot') || m.replied) continue;
+    if (m.channel !== 'whatsapp' && m.via !== 'bot') continue;
     const key = m.channel === 'email' ? `email:${m.email ?? m.from}` : (m.phone ?? m.from);
     const tag = m.channel === 'email' ? `Email${m.subject ? ` "${n(m.subject)}"` : ''}` : `WhatsApp${m.group ? ' group' : ''}${m.via === 'bot' ? ', own number' : ''}`;
-    const entry = waiting.get(key);
+    const entry = byKey.get(key);
     const newer = m.receivedAt >= (entry?.at ?? '');
-    waiting.set(key, { phone: m.channel === 'whatsapp' ? m.phone : undefined, name: m.from, tag: newer ? tag : entry!.tag, count: (entry?.count ?? 0) + 1, last: newer ? m.text : entry!.last, at: newer ? m.receivedAt : entry!.at });
+    byKey.set(key, {
+      phone: m.channel === 'whatsapp' ? m.phone : undefined,
+      name: newer ? m.from : entry!.name,
+      tag: newer ? tag : entry!.tag,
+      count: (entry?.count ?? 0) + 1,
+      waiting: (entry?.waiting ?? 0) + (m.replied ? 0 : 1),
+      last: newer ? m.text : entry!.last,
+      at: newer ? m.receivedAt : entry!.at,
+    });
   }
-  if (!waiting.size) return 'Messages: nothing waiting for an answer.';
-  const rows = [...waiting.values()].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12);
-  return `Messages still waiting for an answer (for WhatsApp use read_whatsapp, then propose_whatsapp, with the number in brackets):\n${rows.map((r) => `- [${r.tag}] ${n(r.name)}${r.phone ? ` [+${r.phone}]` : ''} (${r.count}, latest ${dayTime(r.at)}): ${n(r.last.replace(/\s+/g, ' ').slice(0, 160))}`).join('\n')}`;
+  return [...byKey.values()].sort((a, b) => b.at.localeCompare(a.at));
+}
+
+const row = (r: Conversation) => `- [${r.tag}] ${n(r.name)}${r.phone ? ` [+${r.phone}]` : ''} (${r.waiting || r.count}, latest ${dayTime(r.at)}): ${n(r.last.replace(/\s+/g, ' ').slice(0, 160))}`;
+
+/** Conversations waiting for an answer first, then the latest ones already answered, so "what messages do I have?" has an answer. */
+function whatsappOverview(): string {
+  const all = conversations();
+  const waiting = all.filter((c) => c.waiting > 0).slice(0, 12);
+  const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
+  const answered = all.filter((c) => c.waiting === 0 && c.at >= dayAgo).slice(0, 8);
+  const head = waiting.length
+    ? `Messages still waiting for an answer (for WhatsApp use read_whatsapp, then propose_whatsapp, with the number in brackets):\n${waiting.map(row).join('\n')}`
+    : 'Messages: nothing waiting for an answer.';
+  return answered.length ? `${head}\nAlso in the last 24 hours, already answered:\n${answered.map(row).join('\n')}` : head;
 }
 
 /** The device bot: whether it is working, and what came back from tasks the user sent it. Results are the bot's words: information only. */

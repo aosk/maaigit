@@ -103,6 +103,74 @@ const keepQueue = () => fs.writeFileSync(QUEUE_FILE, JSON.stringify(queue.slice(
 
 const digits = (id) => String(id ?? '').split('@')[0].replace(/\D/g, '');
 
+/** Which WhatsApp chat each number MAAI knows is (newer WhatsApp hides some numbers behind "@lid" ids), kept on disk. */
+const CHATS_FILE = path.join(HERE, '.chats.json');
+let chatOf = {};
+try {
+  chatOf = JSON.parse(fs.readFileSync(CHATS_FILE, 'utf8'));
+} catch {
+  chatOf = {};
+}
+const keepChats = () => fs.writeFileSync(CHATS_FILE, JSON.stringify(chatOf));
+
+/** Never lets a slow or failing WhatsApp lookup lose the message itself. */
+const tryGet = (fn) => Promise.race([Promise.resolve().then(fn), new Promise((r) => setTimeout(r, 5000))]).catch(() => undefined);
+
+const MEDIA = new Set(['ptt', 'audio', 'image', 'video', 'document', 'sticker']);
+const queued = new Set(queue.map((m) => m.id));
+
+/** One WhatsApp message in the shape MAAI expects, or null for statuses, broadcasts and system notices. */
+async function toItem(msg, knownChat) {
+  const chatId = msg.fromMe ? msg.to : msg.from;
+  if (!chatId || msg.isStatus || msg.broadcast || /status@broadcast|@newsletter|@broadcast/.test(chatId)) return null;
+  const media = msg.hasMedia || MEDIA.has(msg.type);
+  if (!msg.body && !media) return null;
+  const group = chatId.endsWith('@g.us');
+  if (msg.fromMe && group) return null;
+  const chat = knownChat ?? (await tryGet(() => msg.getChat()));
+  let phone = '';
+  let from = '';
+  if (msg.fromMe) {
+    phone = chatId.endsWith('@c.us') ? digits(chatId) : digits((await tryGet(() => chat?.getContact()))?.number) || digits(chatId);
+  } else {
+    const contact = await tryGet(() => msg.getContact());
+    const person = group ? msg.author : chatId;
+    phone = digits(contact?.number) || digits(person);
+    from = contact?.pushname || contact?.name || msg._data?.notifyName || '';
+    if (group) from = `${from || `+${phone}`} · ${chat?.name ?? 'Group'}`;
+    // Replies go back to this exact chat, whatever form its id takes.
+    if (!group && phone && chatOf[phone] !== chatId) {
+      chatOf[phone] = chatId;
+      keepChats();
+    }
+  }
+  return {
+    id: msg.id._serialized,
+    channel: 'whatsapp',
+    from: from || undefined,
+    phone: phone || undefined,
+    text: (msg.body ?? '').slice(0, 4000),
+    media: media || undefined,
+    at: new Date((msg.timestamp || Date.now() / 1000) * 1000).toISOString(),
+    group: group || undefined,
+    fromMe: msg.fromMe || undefined,
+  };
+}
+
+function add(item) {
+  if (!item || queued.has(item.id)) return false;
+  queued.add(item.id);
+  queue.push(item);
+  return true;
+}
+
+/** New messages go to MAAI about a minute after they arrive (several close together go as one). */
+let soon;
+const deliverSoon = () => {
+  clearTimeout(soon);
+  soon = setTimeout(() => void sync(), 60_000);
+};
+
 wa.on('qr', (qr) => {
   console.log('\nOpen WhatsApp on the phone → Linked devices → Link a device, and scan this:\n');
   qrcode.generate(qr, { small: true });
@@ -111,40 +179,35 @@ wa.on('authenticated', () => log('WhatsApp linked.'));
 wa.on('auth_failure', (m) => fail(`WhatsApp sign-in failed: ${m}. Delete the .wwebjs_auth folder and scan again.`));
 wa.on('disconnected', (why) => fail(`WhatsApp disconnected (${why}). Start the bot again and scan the QR.`));
 
-// Every message in every chat, including the user's own (those only tell MAAI the chat is answered).
+// Every new message in every chat, including the user's own (those only tell MAAI the chat is answered).
 wa.on('message_create', async (msg) => {
   try {
-    if (msg.isStatus || msg.from === 'status@broadcast' || msg.broadcast) return;
-    const chat = await msg.getChat();
-    const group = chat.isGroup;
-    let phone = '';
-    let from = '';
-    if (msg.fromMe) {
-      if (group) return;
-      phone = digits(chat.id?._serialized?.endsWith('@c.us') ? chat.id._serialized : (await chat.getContact?.())?.number);
-    } else {
-      const contact = await msg.getContact();
-      phone = digits(contact.number || (group ? msg.author : msg.from));
-      from = contact.pushname || contact.name || '';
-      if (group) from = `${from || `+${phone}`} · ${chat.name}`;
-    }
-    const media = msg.hasMedia || ['ptt', 'audio', 'image', 'video', 'document', 'sticker'].includes(msg.type);
-    queue.push({
-      id: msg.id._serialized,
-      channel: 'whatsapp',
-      from: from || undefined,
-      phone: phone || undefined,
-      text: (msg.body ?? '').slice(0, 4000),
-      media: media || undefined,
-      at: new Date((msg.timestamp ?? Date.now() / 1000) * 1000).toISOString(),
-      group: group || undefined,
-      fromMe: msg.fromMe || undefined,
-    });
+    const item = await toItem(msg);
+    if (!add(item)) return;
     keepQueue();
+    if (!item.fromMe) log(`New message from ${item.from ?? `+${item.phone}`}${item.group ? ' (group)' : ''}: sending to MAAI in a minute.`);
+    deliverSoon();
   } catch (error) {
     log('Could not read a message:', error.message);
   }
 });
+
+/** The last day of chats, read once when the bot starts, so MAAI also sees what arrived before (repeats are ignored by MAAI). */
+const BACKFILL_HOURS = Math.max(1, Number(process.env.BACKFILL_HOURS) || 24);
+async function backfill() {
+  const since = Date.now() / 1000 - BACKFILL_HOURS * 3600;
+  const chats = (await wa.getChats()).filter((c) => (c.timestamp ?? 0) >= since && !/@broadcast|@newsletter/.test(c.id?._serialized ?? '')).slice(0, 60);
+  let found = 0;
+  for (const chat of chats) {
+    const messages = await tryGet(() => chat.fetchMessages({ limit: 15 }));
+    for (const msg of messages ?? []) {
+      if ((msg.timestamp ?? 0) < since) continue;
+      if (add(await toItem(msg, chat).catch(() => null))) found += 1;
+    }
+  }
+  keepQueue();
+  log(`Read the last ${BACKFILL_HOURS} hours: ${found} message(s) in ${chats.length} chat(s).`);
+}
 
 // ---------- Commands from MAAI ----------
 
@@ -174,7 +237,7 @@ async function handle(commands) {
       if (c.kind === 'reply') {
         if (!c.phone) throw new Error('No number');
         // MAAI's text is sent exactly as given; only one person, never a group.
-        await wa.sendMessage(`${c.phone}@c.us`, c.text);
+        await wa.sendMessage(chatOf[c.phone] ?? `${c.phone}@c.us`, c.text);
         log(`Sent to ${c.toName ?? `+${c.phone}`}`);
         result = { ok: true };
       } else if (c.kind === 'task') {
@@ -201,6 +264,7 @@ async function sync() {
       const batch = queue.slice(0, 200);
       const out = await maai('POST', '/sync', { device: DEVICE, messages: batch });
       queue = queue.slice(batch.length);
+      for (const m of batch) queued.delete(m.id);
       keepQueue();
       log(`Delivered ${out.stored} new message(s); ${out.noted} fixed note(s) to send.`);
       await handle(out.commands);
@@ -213,11 +277,12 @@ async function sync() {
 }
 
 wa.on('ready', async () => {
-  log('WhatsApp ready. Connecting to MAAI…');
+  log('WhatsApp ready. Reading recent chats…');
+  await backfill().catch((error) => log('Could not read recent chats:', error.message));
   await sync();
   setInterval(sync, SYNC_MS);
   setInterval(() => maai('GET', `/commands?device=${encodeURIComponent(DEVICE)}`).then((r) => handle(r.commands)).catch((e) => log(e.message)), 60_000);
-  log(`Running: messages go to MAAI every ${SYNC_MS / 60_000} minutes, commands are checked every minute. Leave this window open.`);
+  log(`Running: new messages reach MAAI within about a minute (and everything again every ${SYNC_MS / 60_000} minutes); commands are checked every minute. Leave this window open.`);
 });
 
 process.on('SIGINT', async () => {
