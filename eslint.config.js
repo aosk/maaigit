@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 
 /** One set of rules for the server, the shared code and the app. Type-aware rules catch forgotten awaits and unhandled promises. */
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'archive', 'data', '*.zip', 'public', 'scripts', 'eslint.config.js'] },
+  { ignores: ['dist', 'node_modules', 'archive', 'data', '*.zip', 'public', 'scripts', 'device-bot', 'eslint.config.js'] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {

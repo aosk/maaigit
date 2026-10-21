@@ -80,4 +80,4 @@ The output (up to 4000 characters) appears in the admin page and the assistant r
 4. **A spare WhatsApp number or WhatsApp Business** is safer: automated sending from a personal number can get it banned by WhatsApp.
 5. **HTTPS only** (`https://your-maai.onrender.com/bot/v1`).
 
-A runnable outline is in `scripts/device-bot-example.mjs`.
+A ready WhatsApp bot is in `device-bot/` (Arabic setup guide in `device-bot/README.md`); a bare outline is in `scripts/device-bot-example.mjs`.
