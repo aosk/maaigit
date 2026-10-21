@@ -11,10 +11,14 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // ---------- Settings (from .env next to this file) ----------
 
 const envFile = path.join(HERE, '.env');
-if (fs.existsSync(envFile)) {
-  for (const line of fs.readFileSync(envFile, 'utf8').split(/\r?\n/)) {
-    const m = /^\s*([A-Z_]+)\s*=\s*(.*?)\s*$/.exec(line);
-    if (m && !line.trim().startsWith('#') && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+// Text editors often save ".env" as ".env.txt" (Notepad) or ".env.rtf" (TextEdit): accept those too.
+const envUsed = [envFile, `${envFile}.txt`].find((f) => fs.existsSync(f));
+if (envUsed) {
+  const text = fs.readFileSync(envUsed, 'utf8').replace(/^\uFEFF/, '');
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*([A-Z_]+)\s*=\s*["']?(.*?)["']?\s*$/.exec(line);
+    // A value left empty in the terminal must not hide the one in the file.
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
   }
 }
 const BASE = `${(process.env.MAAI_URL ?? '').replace(/\/+$/, '')}/bot/v1`;
@@ -23,7 +27,13 @@ const XAI_KEY = process.env.XAI_API_KEY ?? '';
 const GROK_MODEL = process.env.GROK_MODEL || 'grok-4';
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
-if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) fail('MAAI_URL is missing in .env (your MAAI address, starting with https://).');
+if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
+  const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
+  const where = !envUsed
+    ? `No .env file in ${HERE} (found: ${found.join(', ') || 'none'}). ${found.some((f) => f.endsWith('.rtf')) ? 'TextEdit saved it as rich text: create it with the terminal command in README.md. ' : ''}`
+    : `Read ${path.basename(envUsed)}, but its MAAI_URL line is missing or does not start with https:// (it must look like MAAI_URL=https://your-app.onrender.com, no spaces, no <>). `;
+  fail(`MAAI_URL is missing. ${where}`);
+}
 if (!KEY.startsWith('maai_')) fail('MAAI_BOT_KEY is missing in .env (the key from MAAI → Admin portal → Device bot).');
 
 function fail(message) {
@@ -190,5 +200,7 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-await maai('GET', '/status').then(() => log('MAAI reachable, key accepted.'));
+await maai('GET', '/status')
+  .then(() => log('MAAI reachable, key accepted.'))
+  .catch((error) => fail(`Could not reach MAAI at ${BASE} (${error.cause?.code ?? error.message}). Check MAAI_URL and the internet connection.`));
 wa.initialize();

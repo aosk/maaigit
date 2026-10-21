@@ -31,6 +31,17 @@
 
 المسح مرة وحدة بس. بعدها البوت يتذكر الربط في مجلد `.wwebjs_auth`.
 
+## إذا طلع `MAAI_URL is missing`
+اكتب ملف `.env` من Terminal مباشرة بدل محرر النصوص (وبدّل العنوان والمفتاح):
+- ماك:
+  ```
+  printf 'MAAI_URL=https://maaigit-xxxx.onrender.com\nMAAI_BOT_KEY=maai_المفتاح\n' > .env
+  ```
+- ويندوز (PowerShell):
+  ```
+  Set-Content .env "MAAI_URL=https://maaigit-xxxx.onrender.com`nMAAI_BOT_KEY=maai_المفتاح"
+  ```
+
 ## يشتغل دايماً
 ```
 npm i -g pm2
