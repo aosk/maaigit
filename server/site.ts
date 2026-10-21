@@ -2,6 +2,7 @@ import express from 'express';
 import { createGuard } from './auth.js';
 import { feedRoutes } from './feed.js';
 import { api } from './routes/index.js';
+import { deviceApi } from './routes/bot.js';
 import { whatsappWebhook } from './whatsapp.js';
 import { passkeyLogin } from './passkeys.js';
 import { config } from './config.js';
@@ -22,6 +23,8 @@ export function createApp(): express.Express {
 export function createInnerApp(): express.Express {
   const app = createApp();
   app.use(express.json({ limit: '1mb' }));
+  // The user's device bot signs in with its own key, not the password (see routes/bot.ts).
+  app.use('/bot/v1', noStore, deviceApi);
   app.use('/api', noStore, api);
   app.use(bodyErrors, lastResort);
   return app;

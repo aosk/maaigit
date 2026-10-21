@@ -265,6 +265,8 @@ a { color: var(--tint-text); }
 .mail-item .msg-item { border-bottom: none; }
 .mail-actions { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 14px; }
 .mail-body { margin: 0 16px 14px; padding: 12px; border-radius: 12px; background: var(--raised); font-size: 0.85em; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; }
+.tag-chip { font-size: 0.7em; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--tint-soft); color: var(--tint-text); flex: none; }
+.tag-chip.whatsapp { background: var(--success-soft); color: var(--success); }
 .badge-high { font-size: 0.7em; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--danger-soft); color: var(--danger); }
 
 /* ---------- Live progress while MAAI works ---------- */

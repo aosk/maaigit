@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import type { AdminOverview } from '../../shared/types.js';
+import type { AdminOverview, BotOverview } from '../../shared/types.js';
+import { botStatus, createKey, revokeKey } from '../bot.js';
 import { allEvents, audit, state } from '../store.js';
 import { status } from '../status.js';
 import { recentUsage } from '../usage.js';
@@ -40,4 +41,18 @@ admin.patch('/admin/agents/:id', (req, res) => {
   agent.enabled = req.body.enabled;
   audit(`${agent.name} agent turned ${agent.enabled ? 'on' : 'off'}`, 'Admin', 'done');
   res.json(agent);
+});
+
+// ---------- The device bot ----------
+
+const botOverview = (): BotOverview => ({ status: botStatus(), commands: [...state.bot.commands].reverse().slice(0, 30) });
+
+admin.get('/admin/bot', (_req, res) => res.json(botOverview()));
+
+/** A new device key, shown this once. Any older key stops working. */
+admin.post('/admin/bot/key', (_req, res) => res.status(201).json({ key: createKey(), ...botOverview() }));
+
+admin.delete('/admin/bot/key', (_req, res) => {
+  revokeKey();
+  res.json(botOverview());
 });

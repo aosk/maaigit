@@ -10,6 +10,7 @@ import type {
   AgentSetting,
   AppAlert,
   AuditEntry,
+  BotCommand,
   CalendarEvent,
   UsageRow,
   ChatTurn,
@@ -68,6 +69,8 @@ interface State {
   sessionEpoch: number;
   /** What MAAI knows about the user: short facts the user wrote or approved. */
   profile: { enabled: boolean; facts: ProfileFact[] };
+  /** The user's device bot: a hash of its key (never the key), when it was last heard from, and what MAAI asked it to do. */
+  bot: { keyHash?: string; keyHint?: string; device?: string; lastSeen?: string; lastSync?: string; commands: BotCommand[] };
 }
 
 export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10, briefing: false, briefingTime: '07:00' };
@@ -124,6 +127,7 @@ function seed(): State {
       { id: 'reminders', name: 'Reminders', needsApprovalFor: 'Every new reminder', enabled: true },
       { id: 'messaging', name: 'Messaging', needsApprovalFor: 'Every message and email (you tap Send)', enabled: true },
       { id: 'planner', name: 'Day planner', needsApprovalFor: 'Adding suggested blocks', enabled: true },
+      { id: 'device', name: 'Device bot', needsApprovalFor: 'Every task sent to your device', enabled: true },
     ],
     drafts: 0,
     usage: { inputTokens: 0, outputTokens: 0, requests: 0 },
@@ -139,6 +143,7 @@ function seed(): State {
     alerts: [],
     whatsappAcks: {},
     profile: { enabled: true, facts: [] },
+    bot: { commands: [] },
     sessionEpoch: 0,
   };
 }
@@ -176,6 +181,9 @@ function load(): State {
   saved.notifyPrefs = { ...DEFAULT_PREFS, ...saved.notifyPrefs };
   saved.sessionEpoch = Number.isInteger(saved.sessionEpoch) && saved.sessionEpoch > 0 ? saved.sessionEpoch : 0;
   saved.profile = { enabled: saved.profile?.enabled !== false, facts: saved.profile?.facts ?? [] };
+  saved.bot = { ...saved.bot, commands: saved.bot?.commands ?? [] };
+  // Agents added after the file was saved appear in the admin list, switched on.
+  for (const agent of seed().agents) if (!saved.agents.some((a) => a.id === agent.id)) saved.agents.push(agent);
   return saved;
 }
 

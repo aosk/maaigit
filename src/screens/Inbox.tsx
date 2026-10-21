@@ -1,19 +1,17 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import type { InboxMessage, StatusInfo, Tone } from '../../shared/types';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import type { FeedItem, InboxFeed, InboxMessage, StatusInfo, Tone } from '../../shared/types';
 import { api } from '../api';
-import { time } from '../format';
+import { dayTime, time } from '../format';
+import { askAssistant } from '../nav';
 import { useSettings } from '../settings';
 import { useAction } from '../useAction';
 import { useOnRefresh } from '../refresh';
-import { Back, Chat, Send, Trash } from '../components/Icons';
+import { Back, Chat, Send, Sun, Trash } from '../components/Icons';
 import { mailtoLink } from '../components/EmailCard';
-import { MailDigest } from './MailDigest';
-import { WhatsAppDigest } from './WhatsAppDigest';
-import { CountBadge } from '../components/CountBadge';
 
 const TONES: Tone[] = ['short', 'friendly', 'formal', 'arabic'];
 
-function Reply({ message, gmail, whatsapp, onBack, onChanged }: { message: InboxMessage; gmail: boolean; whatsapp: boolean; onBack: () => void; onChanged: () => void }) {
+function Reply({ message, gmail, whatsapp, device, onBack, onChanged }: { message: InboxMessage; gmail: boolean; whatsapp: boolean; device: boolean; onBack: () => void; onChanged: () => void }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   const [tone, setTone] = useState<Tone>(lang === 'ar' ? 'arabic' : 'friendly');
@@ -27,7 +25,8 @@ function Reply({ message, gmail, whatsapp, onBack, onChanged }: { message: Inbox
   const busy = drafting.busy;
   const error = drafting.error || emailing.error || texting.error;
   // WhatsApp only lets MAAI answer within 24 hours of their last message; the server checks it too.
-  const canSend = whatsapp && message.via === 'twilio' && Date.now() - Date.parse(message.receivedAt) < 24 * 3_600_000;
+  const byDevice = device && message.via === 'bot' && message.channel === 'whatsapp' && !message.group && Boolean(message.phone);
+  const canSend = byDevice || (whatsapp && message.via === 'twilio' && Date.now() - Date.parse(message.receivedAt) < 24 * 3_600_000);
   const sendIt = () =>
     texting.run(async () => {
       await api.sendWhatsApp(message.id, draft);
@@ -135,16 +134,16 @@ function Reply({ message, gmail, whatsapp, onBack, onChanged }: { message: Inbox
       )}
 
       <section className="card">
-        {message.via === 'twilio' && (
+        {(message.via === 'twilio' || byDevice) && (
           canSend ? (
             <button className="btn primary big" onClick={sendIt} disabled={busy || !draft || texting.busy || textSent}>
-              <Send size={20} />{texting.busy ? t.sending : textSent ? t.sentOnWhatsApp : t.sendOnWhatsApp}
+              <Send size={20} />{texting.busy ? t.sending : textSent ? (byDevice ? t.queuedOnDevice : t.sentOnWhatsApp) : byDevice ? t.sendFromMyNumber : t.sendOnWhatsApp}
             </button>
           ) : (
             <div className="sub" role="note">{t.whatsappWindowClosed}</div>
           )
         )}
-        <a className={`btn ${message.via === 'twilio' && canSend ? 'secondary' : 'primary'} big`} href={waLink} target="_blank" rel="noreferrer" onClick={(e) => (busy || !draft ? e.preventDefault() : void sent())} aria-disabled={busy || !draft} style={{ textDecoration: 'none' }}>
+        <a className={`btn ${canSend ? 'secondary' : 'primary'} big`} href={waLink} target="_blank" rel="noreferrer" onClick={(e) => (busy || !draft ? e.preventDefault() : void sent())} aria-disabled={busy || !draft} style={{ textDecoration: 'none' }}>
           <Send size={20} />{t.openWhatsApp}
         </a>
         <div className="row">
@@ -157,82 +156,129 @@ function Reply({ message, gmail, whatsapp, onBack, onChanged }: { message: Inbox
   );
 }
 
-type View = 'email' | 'whatsapp' | 'messages';
-const VIEW_KEY = 'maai.inboxView';
+/** How often the open Inbox looks again: the device bot delivers about once an hour. */
+const RELOAD_MS = 10 * 60_000;
 
-/** Two inboxes: Gmail, read and sorted by MAAI, and messages the user pasted in from WhatsApp. */
+/** One list: Gmail and every message people sent, newest first, each tagged Email or WhatsApp. */
 export function Inbox() {
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
+  const lang = settings.lang;
   const [status, setStatus] = useState<StatusInfo | null>(null);
+  const [feed, setFeed] = useState<InboxFeed | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
   const [replying, setReplying] = useState<InboxMessage | null>(null);
-  // How much is waiting in each tab, shown on the tab itself.
-  const [counts, setCounts] = useState({ email: 0, whatsapp: 0, messages: 0 });
-  const lang = useSettings().settings.lang;
-  const loadCounts = useCallback(() => {
-    void Promise.all([api.briefingFacts(lang, true), api.inbox()])
-      .then(([facts, messages]) =>
-        setCounts({
-          email: facts.email.toDecide + facts.email.toReply || facts.email.unread,
-          whatsapp: facts.whatsapp.waiting,
-          messages: messages.filter((m) => !m.replied && m.via !== 'twilio').length,
-        }),
-      )
-      .catch(() => {});
-  }, [lang]);
-  useEffect(loadCounts, [loadCounts, replying]);
-  useOnRefresh(loadCounts);
-  // Email first; the choice is remembered for this visit.
-  // Some browsers refuse storage (private mode, blocked site data): the choice is then just not remembered.
-  const [view, setView] = useState<View>(() => {
-    try {
-      return (sessionStorage.getItem(VIEW_KEY) as View | null) ?? 'email';
-    } catch {
-      return 'email';
-    }
-  });
-  const pickView = (v: View) => {
-    setView(v);
-    try {
-      sessionStorage.setItem(VIEW_KEY, v);
-    } catch {
-      /* not remembered */
-    }
-  };
+  const [adding, setAdding] = useState(false);
+
+  const load = useCallback(
+    (refresh: boolean) => {
+      setBusy(true);
+      setError('');
+      api
+        .inboxFeed(lang, refresh)
+        .then(setFeed)
+        .catch((e: Error) => setError(e.message))
+        .finally(() => setBusy(false));
+    },
+    [lang],
+  );
+  useEffect(() => {
+    load(false);
+    const timer = setInterval(() => load(false), RELOAD_MS);
+    return () => clearInterval(timer);
+  }, [load]);
+  useOnRefresh(() => load(false));
   useEffect(() => {
     api.status().then(setStatus).catch(() => {});
   }, []);
 
-  const header = (
-    <>
-      <h1 className="title">{t.inboxTitle}</h1>
-      <div className="seg" role="radiogroup" aria-label={t.inboxTitle}>
-        <button role="radio" aria-checked={view === 'email'} onClick={() => pickView('email')}>{t.emailTab}<CountBadge kind="mail" n={counts.email} /></button>
-        <button role="radio" aria-checked={view === 'whatsapp'} onClick={() => pickView('whatsapp')}>{t.whatsappTab}<CountBadge kind="chat" n={counts.whatsapp} /></button>
-        <button role="radio" aria-checked={view === 'messages'} onClick={() => pickView('messages')}>{t.messagesTab}<CountBadge kind="reminder" n={counts.messages} /></button>
-      </div>
-    </>
-  );
+  const gmail = Boolean(status?.mail?.configured);
   const whatsapp = Boolean(status?.whatsapp?.configured);
-  if (replying) return <Reply message={replying} gmail={Boolean(status?.mail?.configured)} whatsapp={whatsapp} onBack={() => setReplying(null)} onChanged={() => {}} />;
-  if (view === 'messages') return <Messages header={header} gmail={Boolean(status?.mail?.configured)} whatsapp={whatsapp} />;
-  if (view === 'whatsapp') {
-    return (
-      <div className="screen">
-        {header}
-        <WhatsAppDigest connected={whatsapp} onReply={setReplying} />
-      </div>
-    );
-  }
+  if (replying) return <Reply message={replying} gmail={gmail} whatsapp={whatsapp} device={Boolean(feed?.bot.connected)} onBack={() => setReplying(null)} onChanged={() => load(false)} />;
+  if (adding) return <Messages onBack={() => { setAdding(false); load(false); }} gmail={gmail} whatsapp={whatsapp} device={Boolean(feed?.bot.connected)} />;
+
+  const bot = feed?.bot;
+  const botLine = !bot ? '' : !bot.connected ? t.botOffLine : bot.lastSync ? t.botLine(dayTime(bot.lastSync, lang)) : t.botNoSync;
+
   return (
     <div className="screen">
-      {header}
-      <MailDigest gmail={Boolean(status?.mail?.inbox)} />
+      <h1 className="title">{t.inboxTitle}</h1>
+
+      <section className="card" aria-label={t.feedSummary}>
+        <div className="between">
+          <div className="card-label"><Sun size={20} />{t.feedSummary}</div>
+          <button className="btn ghost" onClick={() => load(true)} disabled={busy}>{busy ? t.reading : t.refresh}</button>
+        </div>
+        <p aria-live="polite" dir="auto">{busy && !feed ? t.readingInbox : feed?.summary || '…'}</p>
+        {feed && <div className="sub">{t.lastChecked(dayTime(feed.fetchedAt, lang))}{botLine ? ` · ${botLine}` : ''}</div>}
+      </section>
+
+      {bot?.stale && <div className="banner" role="status">{t.botStale}</div>}
+      {error && <div className="error" role="alert">{error}</div>}
+
+      <section className="card flush" aria-label={t.inboxTitle}>
+        {feed && feed.items.length === 0 && <div className="msg-item sub">{t.feedEmpty}</div>}
+        {feed?.items.map((item) => (
+          <FeedRow key={item.key} item={item} expanded={open === item.key} onToggle={() => setOpen(open === item.key ? null : item.key)} onReply={setReplying} />
+        ))}
+      </section>
+
+      <button className="btn ghost" onClick={() => setAdding(true)}>{t.addByHand}</button>
     </div>
   );
 }
 
-/** Messages pasted in from WhatsApp or email, each with a reply MAAI drafts (which takes over the screen). */
-function Messages({ header, gmail, whatsapp }: { header: ReactNode; gmail: boolean; whatsapp: boolean }) {
+/** One email or conversation: tagged with where it came from; tap to read it with MAAI's suggestion. */
+function FeedRow({ item, expanded, onToggle, onReply }: { item: FeedItem; expanded: boolean; onToggle: () => void; onReply: (m: InboxMessage) => void }) {
+  const { t, settings } = useSettings();
+  const email = item.channel === 'email';
+  const decide = (choice: string) =>
+    askAssistant(item.uid !== undefined ? t.decidePrompt(item.uid, item.from, item.subject ?? '', choice) : t.msgDecidePrompt(item.from, choice));
+  return (
+    <div className="mail-item" style={item.handled && !item.waiting ? { opacity: 0.75 } : undefined}>
+      <button className="msg-item" onClick={onToggle} aria-expanded={expanded}>
+        <span className="between" style={{ width: '100%' }}>
+          <span className="row" style={{ fontWeight: 600, minWidth: 0 }}>
+            {item.waiting && <span className="dot" aria-hidden="true" />}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} dir="auto">{item.from}</span>
+          </span>
+          <span className="row" style={{ flex: 'none' }}>
+            {item.priority === 'high' && <span className="badge-high">{t.highPriority}</span>}
+            <span className={`tag-chip${email ? '' : ' whatsapp'}`}>{email ? t.tagEmail : t.tagWhatsApp}{item.message?.group ? ` · ${t.tagGroup}` : ''}</span>
+            <span className="sub">{dayTime(item.at, settings.lang)}</span>
+          </span>
+        </span>
+        {item.subject && <span style={{ fontSize: '0.88em' }} dir="auto">{item.subject}</span>}
+        <span className="sub" dir="auto">{item.text}{item.source === 'bot' ? ` · ${t.viaDevice}` : ''}</span>
+      </button>
+
+      {expanded && (
+        <>
+          <div className="mail-body" dir="auto">{item.body || t.noText}</div>
+          <div className="mail-actions">
+            {item.suggestion && <div className="sub" dir="auto"><strong>{t.maaiSuggests}</strong> {item.suggestion}</div>}
+            {item.options && (
+              <div className="row wrap">
+                {item.options.map((o, i) => (
+                  <button key={o} className={`btn round ${i === 0 ? 'primary' : 'secondary'}`} onClick={() => decide(o)}>{i === 0 ? `✓ ${o}` : o}</button>
+                ))}
+              </div>
+            )}
+            {item.message ? (
+              <button className="btn secondary round" onClick={() => onReply(item.message!)}><Chat size={16} />{t.replyToThread}</button>
+            ) : item.uid !== undefined ? (
+              <button className="btn secondary round" onClick={() => askAssistant(t.replyPrompt(item.uid!, item.from, item.subject ?? ''))}><Chat size={16} />{t.draftReplyWithMaai}</button>
+            ) : null}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Messages pasted in by hand from WhatsApp or email, each with a reply MAAI drafts (which takes over the screen). */
+function Messages({ onBack, gmail, whatsapp, device }: { onBack: () => void; gmail: boolean; whatsapp: boolean; device: boolean }) {
   const { t, settings } = useSettings();
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [open, setOpen] = useState<string | null>(null);
@@ -240,13 +286,14 @@ function Messages({ header, gmail, whatsapp }: { header: ReactNode; gmail: boole
   const { error, setError, run } = useAction();
 
   const load = useCallback(() => {
-    api.inbox().then(setMessages).catch((e: Error) => setError(e.message));
+    // Only those added by hand: delivered messages are in the main list.
+    api.inbox().then((all) => setMessages(all.filter((m) => !m.via))).catch((e: Error) => setError(e.message));
   }, [setError]);
   useEffect(load, [load]);
   useOnRefresh(load);
 
   const current = messages.find((m) => m.id === open);
-  if (current) return <Reply message={current} gmail={gmail} whatsapp={whatsapp} onBack={() => setOpen(null)} onChanged={load} />;
+  if (current) return <Reply message={current} gmail={gmail} whatsapp={whatsapp} device={device} onBack={() => setOpen(null)} onChanged={load} />;
 
   const add = (e: FormEvent) => {
     e.preventDefault();
@@ -266,7 +313,10 @@ function Messages({ header, gmail, whatsapp }: { header: ReactNode; gmail: boole
 
   return (
     <div className="screen">
-      {header}
+      <button className="btn ghost" onClick={onBack} style={{ paddingInline: 0, alignSelf: 'flex-start' }}>
+        <span style={{ display: 'inline-flex', transform: settings.lang === 'ar' ? 'scaleX(-1)' : undefined }}><Back size={20} /></span>{t.inboxTitle}
+      </button>
+      <h1 className="title">{t.addByHand}</h1>
       {error && <div className="error" role="alert">{error}</div>}
       <section className="card flush">
         {messages.length === 0 && <div className="msg-item sub">{t.inboxEmpty}</div>}

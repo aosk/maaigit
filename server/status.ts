@@ -6,6 +6,7 @@ import { calendarStatus } from './gcal.js';
 import { asanaStatus } from './asana.js';
 import { googleWriteStatus } from './gwrite.js';
 import { whatsappStatus } from './whatsapp.js';
+import { botStatus } from './bot.js';
 import { newsStatus } from './news/index.js';
 import { config } from './config.js';
 import { dataIsPersistent } from './storage.js';
@@ -19,6 +20,7 @@ export function status(): StatusInfo {
     calendar: { ...calendarStatus(), write: googleWriteStatus() },
     asana: asanaStatus(),
     whatsapp: whatsappStatus(),
+    bot: botStatus(),
     news: newsStatus(),
     // Only online: on a computer at home the data folder is the computer's own disk.
     storage: config.production ? { persistent: dataIsPersistent(config.dataDir), dir: config.dataDir } : undefined,

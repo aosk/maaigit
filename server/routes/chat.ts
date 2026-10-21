@@ -9,6 +9,7 @@ import { sendMail } from '../mail.js';
 import { createTask, updateTask, validateNewTask } from '../asana.js';
 import { mirrorToGoogle } from '../gwrite.js';
 import { canAnswer, sendWhatsApp, whatsappConfigured } from '../whatsapp.js';
+import { botReplyTarget, queueCommand } from '../bot.js';
 import { markHandled, markReplyTo } from '../mail-handled.js';
 import { agentEnabled, audit, id, save, state, type Conversation } from '../store.js';
 import { HttpError, explain, find, lang, text, wrap } from './http.js';
@@ -92,6 +93,13 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
       if (!agentEnabled('messaging')) throw new HttpError(403, 'Messaging is switched off by the admin.');
       const reply = text(body.body, 1500) || p.body;
       if (!reply) throw new HttpError(400, 'The reply is empty');
+      // Someone who wrote to the user's own number is answered from it, through the device bot.
+      if (botReplyTarget(p.phone)) {
+        queueCommand({ kind: 'reply', phone: p.phone, toName: p.toName, text: reply });
+        for (const m of state.inbox) if (m.phone === p.phone) m.replied = true;
+        Object.assign(p, { body: reply });
+        return `Sent a WhatsApp reply to ${p.toName} through the device bot`;
+      }
       if (!whatsappConfigured) throw new HttpError(400, 'WhatsApp is not connected yet.');
       if (!canAnswer(p.phone)) throw new HttpError(409, 'WhatsApp only allows a reply within 24 hours of their last message. Open WhatsApp and write to them yourself.');
       await sendWhatsApp(p.phone, reply);
@@ -125,6 +133,15 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
       const created = await createTask(task);
       Object.assign(p, { title: task.name, notes: task.notes, dueOn: task.dueOn, projectGid: task.projectGid, taskUrl: created.url });
       return `Created Asana task: ${task.name}`;
+    }
+    case 'device': {
+      if (!agentEnabled('device')) throw new HttpError(403, 'Tasks on the device are switched off by the admin.');
+      // The card is editable: send exactly what the user approved.
+      const task = text(body.task, 1000) || p.task;
+      if (!task) throw new HttpError(400, 'The task is empty');
+      const command = queueCommand({ kind: 'task', text: task });
+      Object.assign(p, { task, commandId: command.id });
+      return `Sent to the device bot: ${p.title}`;
     }
     case 'remember': {
       // The card is editable: keep exactly what the user approved.

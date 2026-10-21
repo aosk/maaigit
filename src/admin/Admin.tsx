@@ -5,6 +5,7 @@ import { useSettings } from '../settings';
 import { Moon } from '../components/Icons';
 import { TokenUsage } from './TokenUsage';
 import { CloudUsage } from './CloudUsage';
+import { DeviceBot } from './DeviceBot';
 import { Logo } from '../components/Logo';
 
 const when = (iso: string) =>
@@ -29,6 +30,7 @@ const SECTIONS = [
   { id: 'usage', label: 'Token usage' },
   { id: 'cloud', label: 'Anthropic account' },
   { id: 'agents', label: 'Agents' },
+  { id: 'device', label: 'Device bot' },
   { id: 'integrations', label: 'Integrations' },
   { id: 'audit', label: 'Safety & audit' },
 ];
@@ -136,6 +138,8 @@ export function Admin() {
 
         {data && <TokenUsage rows={data.usageLog} timeZone={data.status.location.timezone} allTime={data.usage} />}
         {data && <CloudUsage maaiThirtyDayTokens={data.usageLog.reduce((a, r) => a + r.input + r.cached + r.output, 0)} />}
+
+        <DeviceBot />
 
         <div className="row wrap" style={{ alignItems: 'stretch', gap: 24 }}>
           <section id="agents" aria-label="Agents" className="admin-card" style={{ flex: '999 1 520px', minWidth: 0 }}>

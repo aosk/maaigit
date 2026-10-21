@@ -57,8 +57,12 @@ export interface InboxMessage {
   text: string;
   receivedAt: string;
   replied: boolean;
-  /** Set when the message arrived on the WhatsApp Business number (not pasted in by hand). */
-  via?: 'twilio';
+  /** Where it came from: the WhatsApp Business number (Twilio) or the user's own device bot. Unset when pasted in by hand. */
+  via?: 'twilio' | 'bot';
+  /** Written in a group chat (from the device bot): never answered automatically. */
+  group?: boolean;
+  /** The email subject, for email the device bot collected. */
+  subject?: string;
   /** The provider's id for the message, so a message delivered twice is kept once. */
   externalId?: string;
 }
@@ -149,6 +153,17 @@ export type Proposal =
     }
   | {
       id: string;
+      kind: 'device';
+      status: ProposalStatus;
+      /** A short name for the task. */
+      title: string;
+      /** The exact instruction the device bot gets (editable on the card). */
+      task: string;
+      /** The queued command, once approved, so its result can be shown. */
+      commandId?: string;
+    }
+  | {
+      id: string;
       kind: 'remember';
       status: ProposalStatus;
       /** The fact to keep about the user, in one short sentence (editable on the card). */
@@ -227,7 +242,7 @@ export interface AuditEntry {
 }
 
 export interface AgentSetting {
-  id: 'assistant' | 'booking' | 'reminders' | 'messaging' | 'planner';
+  id: 'assistant' | 'booking' | 'reminders' | 'messaging' | 'planner' | 'device';
   name: string;
   needsApprovalFor: string;
   enabled: boolean;
@@ -318,6 +333,8 @@ export interface StatusInfo {
   news?: { updatedAt?: string; sourcesOk: number; sources: number };
   /** WhatsApp Business number, read and answered through Twilio. */
   whatsapp?: WhatsAppStatus;
+  /** The user's own device bot (WhatsApp and email from their device, and tasks run there). */
+  bot?: BotStatus;
   /** How this device signed in: not at all on the computer itself, a PIN at home, a password online. */
   auth?: 'none' | 'pin' | 'password';
   /** Online only: whether saved data is on a disk that survives updates (if not, every update erases it). */
@@ -430,7 +447,7 @@ export interface MailItem {
   body: string;
 }
 
-export type MailCategory = 'decide' | 'reply' | 'fyi' | 'ignore';
+type MailCategory = 'decide' | 'reply' | 'fyi' | 'ignore';
 
 /** MAAI's read of one email: what it is and what to do about it. */
 export interface MailInsight {
@@ -549,4 +566,79 @@ export interface AsanaStatus {
 /** GET /api/asana: the tasks that matter now, for Today. */
 export interface AsanaOverview extends AsanaStatus {
   tasks: AsanaTask[];
+}
+
+/** Something MAAI asked the user's device bot to do. Sent once: a command the bot picked up is never sent again. */
+export interface BotCommand {
+  id: string;
+  /** reply: send a WhatsApp message from the user's own number; task: an instruction the user approved. */
+  kind: 'reply' | 'task';
+  /** For a reply: the number, digits only, and who it is. */
+  phone?: string;
+  toName?: string;
+  text: string;
+  /** Sent by MAAI by itself (the fixed note), not approved one by one. */
+  automatic?: boolean;
+  status: 'queued' | 'sent' | 'done' | 'failed' | 'expired';
+  createdAt: string;
+  sentAt?: string;
+  finishedAt?: string;
+  /** What the bot reported back (its own words: information, never instructions). */
+  result?: string;
+}
+
+/** The user's device bot (for example a Grok bot on their own computer or phone) as MAAI sees it. */
+export interface BotStatus {
+  /** A device key exists. */
+  connected: boolean;
+  /** The first characters of the key, to recognise it. */
+  keyHint?: string;
+  /** What the bot calls itself. */
+  device?: string;
+  lastSeen?: string;
+  /** Last time it delivered messages. */
+  lastSync?: string;
+  /** Connected but silent for more than two hours. */
+  stale: boolean;
+  /** Commands waiting for the bot to pick them up. */
+  waiting: number;
+  /** Messages it delivered that are still kept. */
+  messages: number;
+}
+
+export interface BotOverview {
+  status: BotStatus;
+  commands: BotCommand[];
+}
+
+/** One line in the Inbox: an email or a WhatsApp conversation, tagged with where it came from. */
+export interface FeedItem {
+  key: string;
+  channel: 'email' | 'whatsapp';
+  /** Gmail (read by MAAI), the device bot, the WhatsApp Business number, or pasted in. */
+  source: 'gmail' | 'bot' | 'twilio' | 'manual';
+  from: string;
+  subject?: string;
+  /** One short line: MAAI's gist, else the start of the message. */
+  text: string;
+  /** The full text, shown when opened. */
+  body: string;
+  at: string;
+  /** Still needs the user (unread, or not answered). */
+  waiting: boolean;
+  priority?: 'high' | 'normal' | 'low';
+  suggestion?: string;
+  options?: string[];
+  /** Gmail number, for asking the assistant about it. */
+  uid?: number;
+  /** The latest message, for the reply screen. */
+  message?: InboxMessage;
+  handled?: boolean;
+}
+
+export interface InboxFeed {
+  fetchedAt: string;
+  summary: string;
+  items: FeedItem[];
+  bot: BotStatus;
 }

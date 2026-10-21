@@ -6,6 +6,8 @@ import { ANSWER_WINDOW_MS, canAnswer, pruneWhatsApp, sendWhatsApp, whatsappConfi
 import { isEmail, sendMail } from '../mail.js';
 import { fetchInbox, inboxConfigured } from '../gmail-inbox.js';
 import { agentEnabled, audit, id, save, state } from '../store.js';
+import { canSendByBot, pruneBotMessages, queueCommand } from '../bot.js';
+import { inboxFeed } from '../inbox-feed.js';
 import { HttpError, find, lang, text, wrap } from './http.js';
 
 export const inbox = Router();
@@ -16,6 +18,7 @@ const TONES: Tone[] = ['short', 'friendly', 'formal', 'arabic'];
 
 inbox.get('/inbox', (_req, res) => {
   pruneWhatsApp();
+  pruneBotMessages();
   res.json([...state.inbox].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)));
 });
 
@@ -52,11 +55,21 @@ inbox.post('/inbox/:id/email', wrap(async (req, res) => {
   res.json(message);
 }));
 
-// Sends the reply through the WhatsApp Business number. Only when the user taps Send, and only
-// while WhatsApp still allows a free answer (24 hours after the person's last message).
+// Sends the reply, only when the user taps Send: from the user's own number through the device bot for a
+// message the bot delivered, else through the WhatsApp Business number while WhatsApp still allows a free
+// answer (24 hours after the person's last message).
 inbox.post('/inbox/:id/whatsapp', wrap(async (req, res) => {
   const message = find(state.inbox, req.params.id);
   if (!agentEnabled('messaging')) throw new HttpError(403, 'Messaging is switched off by the admin.');
+  if (message.via === 'bot') {
+    if (!canSendByBot(message)) throw new HttpError(400, message.group ? 'MAAI does not answer in groups. Open WhatsApp and write there yourself.' : 'The device bot is not connected, so MAAI cannot send this reply. Use "Open WhatsApp" instead.');
+    const body = text(req.body.body, 1500);
+    if (!body) throw new HttpError(400, 'The reply is empty');
+    queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text: body });
+    for (const m of state.inbox) if (m.phone === message.phone && m.receivedAt <= message.receivedAt) m.replied = true;
+    audit(`Sent a WhatsApp reply to ${message.from} through the device bot`, 'User', 'approved');
+    return res.json(message);
+  }
   if (!whatsappConfigured) throw new HttpError(400, 'WhatsApp is not connected yet.');
   if (message.via !== 'twilio' || !message.phone) throw new HttpError(400, 'This message did not arrive on the WhatsApp Business number, so MAAI cannot send the reply. Use "Open WhatsApp" instead.');
   const body = text(req.body.body, 1500);
@@ -82,6 +95,10 @@ inbox.delete('/inbox/:id', (req, res) => {
   save();
   res.status(204).end();
 });
+
+// ---------- Everything in one list ----------
+
+inbox.get('/inbox/feed', wrap(async (req, res) => res.json(await inboxFeed(lang(req.query.lang), req.query.refresh === '1'))));
 
 // ---------- Gmail inbox (read-only) ----------
 

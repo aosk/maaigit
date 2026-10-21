@@ -56,24 +56,41 @@ export function pruneWhatsApp(now = Date.now()): void {
 // ---------- The automatic "received" note ----------
 
 /** Set MAAI_WHATSAPP_ACK=off to stop it. */
-const ackEnabled = (process.env.MAAI_WHATSAPP_ACK ?? 'on').trim().toLowerCase() !== 'off';
+export const ackEnabled = (process.env.MAAI_WHATSAPP_ACK ?? 'on').trim().toLowerCase() !== 'off';
 /** Someone who keeps writing gets the note once, not after every message (and two auto-replying bots cannot loop). */
 export const ACK_EVERY_MS = 6 * 3_600_000;
 
-const ACK = {
-  en: 'Hello! This is MAAI, the AI assistant of Abdulrahman. Your message was received and he will get back to you as soon as possible.',
-  ar: 'مرحباً! أنا MAAI، المساعد الذكي لعبدالرحمن. وصلتني رسالتك وسيتواصل معك في أقرب وقت ممكن.',
-};
+/**
+ * A sender's display name as it may appear in the note: letters, digits and spaces only, a few words.
+ * The name is chosen by the sender, so links, symbols and anything long are dropped; a bare number is no name.
+ */
+export function cleanName(name: string): string {
+  const plain = name.normalize('NFKC').replace(/[^\p{L}\p{M}\p{N} ]/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (!/\p{L}/u.test(plain)) return '';
+  return plain.split(' ').slice(0, 3).join(' ').slice(0, 30).trim();
+}
 
-/** The note for this person, in the language they wrote in, or null if they already got one lately. Fixed text: nothing a sender writes can change it. */
+/** The fixed note, in the user's own words, with the sender's name. Nothing a sender writes can change the rest of it. */
+export function fixedReply(name: string): string {
+  const who = cleanName(name);
+  return `الله يحييك${who ? ` ${who}` : ''} انا ذكاء اصطناعي خاص ب عبدالرحمن الشغدلي، ارسلت تفاصيل رسالتك ل عبدالرحمن وبرد عليك باسرع وقت. للاسف لحد الان فقط اقدر اقرا ما اقدر اسمع تسجيل او اشوف الصور او مرفقات. فضلا اكتب تفاصيل رسالتك كتابيا`;
+}
+
+/** Records that this number gets the note now; false if it already got one in the last 6 hours (from either the business number or the device bot). */
+export function claimAck(phone: string, now = Date.now()): boolean {
+  const last = Date.parse(state.whatsappAcks[phone] ?? '');
+  if (Number.isFinite(last) && now - last < ACK_EVERY_MS) return false;
+  state.whatsappAcks[phone] = new Date(now).toISOString();
+  for (const [number, at] of Object.entries(state.whatsappAcks)) if (now - Date.parse(at) > 2 * ACK_EVERY_MS) delete state.whatsappAcks[number];
+  return true;
+}
+
+/** The note for this person, or null if they already got one lately. Fixed text: nothing a sender writes can change it. */
 function acknowledgement(message: InboxMessage, now = Date.now()): string | null {
   if (!ackEnabled || !message.phone || !agentEnabled('messaging')) return null;
-  const last = Date.parse(state.whatsappAcks[message.phone] ?? '');
-  if (Number.isFinite(last) && now - last < ACK_EVERY_MS) return null;
-  state.whatsappAcks[message.phone] = new Date(now).toISOString();
-  for (const [phone, at] of Object.entries(state.whatsappAcks)) if (now - Date.parse(at) > 2 * ACK_EVERY_MS) delete state.whatsappAcks[phone];
+  if (!claimAck(message.phone, now)) return null;
   audit(`Sent the automatic "received" note to ${message.from}`, 'MAAI', 'done');
-  return /[\u0600-\u06FF]/.test(message.text) ? ACK.ar : ACK.en;
+  return fixedReply(message.from);
 }
 
 const xml = (text: string) => text.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);

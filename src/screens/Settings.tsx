@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import type { Lang, StatusInfo } from '../../shared/types';
 import { api } from '../api';
+import { dayTime } from '../format';
 import { useSettings, type Look, type ToggleId } from '../settings';
 import type { LayoutChoice } from '../layout';
 import { useOnRefresh } from '../refresh';
@@ -111,6 +112,9 @@ export function SettingsScreen() {
                 {status.storage.persistent ? t.storageOk : t.storageLost}
               </Conn>
             )}
+            <Conn state={status.bot?.stale ? 'bad' : status.bot?.connected ? 'on' : 'off'} name={t.botConn}>
+              {status.bot?.connected ? (status.bot.stale ? t.botStale : t.botConnected(status.bot.device ?? '', status.bot.lastSync ? dayTime(status.bot.lastSync, settings.lang) : '')) : t.botOff}
+            </Conn>
             <Conn state={status.whatsapp?.configured ? 'on' : 'off'} name={t.whatsappConn}>
               {status.whatsapp?.configured ? t.whatsappConnected(status.whatsapp.number ?? '', status.whatsapp.keepDays) : t.whatsappOff}
             </Conn>
