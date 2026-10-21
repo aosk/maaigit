@@ -23,7 +23,7 @@ import { contextNote } from './ai/context';
 import { createInnerApp, createOnlineSite } from './site';
 import { listen, raw } from './security/helpers';
 import { resetBotLimits } from './routes/bot';
-import { botStatus, createKey, keyMatches, receiveFromBot, takeCommands } from './bot';
+import { botStatus, createKey, keyMatches, queueCommand, receiveFromBot, takeCommands } from './bot';
 import { cleanName, fixedReply } from './whatsapp';
 import { state } from './store';
 import { create } from './ai/claude';
@@ -319,6 +319,20 @@ describe('commands', () => {
     expect((await asUser('POST', `/proposals/${created[0].id}/approve`, { body: 'Are you free tomorrow at 5?' })).status).toBe(200);
     expect(takeCommands()).toEqual([expect.objectContaining({ kind: 'reply', phone: '966501234567', text: expect.stringMatching(/^Are you free tomorrow at 5\?\n\n🤖/) })]);
     expect((await runTool({ type: 'tool_use', id: 'w2', name: 'propose_whatsapp', input: { phone: '12', name: 'x', body: 'hi' } }, [])).result.is_error).toBe(true);
+  });
+
+  it('a bot waiting for commands gets a reply the moment it is queued, and one that hangs up loses nothing', async () => {
+    state.replyMode = 'off';
+    const started = Date.now();
+    const waiting = asBot('GET', '/commands?wait=5');
+    await new Promise((r) => setTimeout(r, 300));
+    queueCommand({ kind: 'reply', phone: '966500000009', text: 'hello' });
+    const got = JSON.parse((await waiting).body) as { commands: { text: string }[] };
+    expect(got.commands).toEqual([expect.objectContaining({ text: 'hello' })]);
+    expect(Date.now() - started).toBeLessThan(2000);
+    // Nothing ready: the wait ends empty after the time asked for.
+    const empty = await asBot('GET', '/commands?wait=1');
+    expect(JSON.parse(empty.body)).toEqual({ commands: [] });
   });
 
   it('a command not picked up within a day, or whose switch was turned off, is never sent', async () => {

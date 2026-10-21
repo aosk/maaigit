@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import type { BotCommand, BotStatus, InboxMessage } from '../shared/types.js';
 import { config } from './config.js';
 import { isEmail } from './mail.js';
@@ -241,10 +242,39 @@ export function botReplyTarget(phone: string): InboxMessage | undefined {
 
 // ---------- Commands ----------
 
+/** Tells a bot that is waiting for commands that one is ready (see waitForCommands). */
+const queuedSignal = new EventEmitter();
+queuedSignal.setMaxListeners(20);
+
+/**
+ * Commands for the bot, waiting up to `ms` for one to be queued if there are none yet, so a reply MAAI writes
+ * reaches the bot the moment it is ready instead of at the bot's next check. `onGone` registers a callback for
+ * when the bot hangs up: then nothing is taken, so no command is marked sent without reaching it.
+ */
+export function waitForCommands(ms: number, onGone: (gone: () => void) => void): Promise<ReturnType<typeof takeCommands>> {
+  const ready = takeCommands();
+  if (ready.length || ms <= 0) return Promise.resolve(ready);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (take: boolean) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      queuedSignal.off('queued', onQueued);
+      resolve(take ? takeCommands() : []);
+    };
+    const onQueued = () => finish(true);
+    const timer = setTimeout(onQueued, ms);
+    queuedSignal.on('queued', onQueued);
+    onGone(() => finish(false));
+  });
+}
+
 export function queueCommand(command: Pick<BotCommand, 'kind' | 'text' | 'phone' | 'toName' | 'automatic'>, now = Date.now()): BotCommand {
   if (!botConnected()) throw new BotInputError('The device bot is not connected. Make a device key in the admin page first.');
   const queued: BotCommand = { id: id(), ...command, status: 'queued', createdAt: new Date(now).toISOString() };
   state.bot.commands.push(queued);
+  queuedSignal.emit('queued');
   const finished = state.bot.commands.filter((c) => c.status !== 'queued');
   if (finished.length > MAX_COMMANDS) {
     const drop = new Set(finished.slice(0, finished.length - MAX_COMMANDS));

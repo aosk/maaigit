@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, seen, takeCommands } from '../bot.js';
+import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, seen, takeCommands, waitForCommands } from '../bot.js';
 import { state } from '../store.js';
 
 /**
@@ -66,10 +66,14 @@ deviceApi.post('/contacts', (req, res) => {
   res.json({ kept: receiveContacts(req.body) });
 });
 
-/** Waiting commands (ask every minute or so). Each command is handed over once. */
-deviceApi.get('/commands', (req, res) => {
+/** Waiting commands. Each command is handed over once. */
+// With ?wait=25 the answer is held open (up to 25 s) until a command is ready: replies go out the moment MAAI writes them.
+deviceApi.get('/commands', async (req, res) => {
   seen(deviceName(req.query.device));
-  res.json({ commands: takeCommands() });
+  const wait = Math.min(Math.max(Number(req.query.wait) || 0, 0), 25) * 1000;
+  // The response (not the request) closing early means the bot hung up.
+  const commands = await waitForCommands(wait, (gone) => res.on('close', gone));
+  if (!res.headersSent && !res.writableEnded) res.json({ commands });
 });
 
 /** What happened with one command: {"ok": true|false, "output": "..."}. */

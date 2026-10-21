@@ -32,7 +32,7 @@ const GROK_MODEL = process.env.GROK_MODEL || 'grok-4';
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-21h';
+const VERSION = '2026-10-21i';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -60,7 +60,8 @@ async function maai(method, route, body) {
     method,
     headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
+    // Waiting for commands holds the request open up to 25 s.
+    signal: AbortSignal.timeout(45_000),
   });
   const text = await res.text();
   if (res.status === 401) fail(`MAAI refused the key ${KEY.slice(0, 9)}… It is not the newest one: only the last key made in the admin page works. Make a new key, then put it in .env.`);
@@ -185,11 +186,21 @@ function add(item) {
   return true;
 }
 
-/** New messages go to MAAI about a minute after they arrive (several close together go as one). */
+/**
+ * When to deliver: a private message within a few seconds (several close together still go as one), anything
+ * else (groups, your own messages) within two minutes. A later message never pushes an earlier delivery back.
+ */
 let soon;
-const deliverSoon = () => {
+let soonAt = Infinity;
+const deliverSoon = (ms) => {
+  const at = Date.now() + ms;
+  if (at >= soonAt) return;
   clearTimeout(soon);
-  soon = setTimeout(() => void sync(), 60_000);
+  soonAt = at;
+  soon = setTimeout(() => {
+    soonAt = Infinity;
+    void sync();
+  }, ms);
 };
 
 wa.on('qr', (qr) => {
@@ -214,8 +225,8 @@ async function onMessage(msg) {
     if (!add(item)) return;
     keepQueue();
     if (item.byMaai) return;
-    if (!item.fromMe) log(`New message from ${item.from ?? `+${item.phone}`}${item.group ? ' (group)' : ''}: sending to MAAI in a minute.`);
-    deliverSoon();
+    if (!item.fromMe && !item.group) log(`New message from ${item.from ?? `+${item.phone}`}: sending to MAAI now.`);
+    deliverSoon(!item.fromMe && !item.group ? 3000 : 120_000);
   } catch (error) {
     log('⚠ Could not read a message:', why(error));
   }
@@ -310,7 +321,21 @@ async function handle(commands) {
 
 // ---------- The loops ----------
 
-const pollCommands = () => maai('GET', `/commands?device=${encodeURIComponent(DEVICE)}`).then((r) => handle(r.commands)).catch((e) => log(e.message));
+/**
+ * Always waiting for MAAI: each request is held open by MAAI until a command is ready (or 25 s pass), so a
+ * reply goes out the moment it is written. After an error, wait a little before asking again.
+ */
+async function listenForCommands() {
+  for (;;) {
+    try {
+      const r = await maai('GET', `/commands?wait=25&device=${encodeURIComponent(DEVICE)}`);
+      await handle(r.commands);
+    } catch (error) {
+      log('Waiting for commands failed, trying again in 10 s:', why(error));
+      await pause(10_000);
+    }
+  }
+}
 
 let syncing = false;
 async function sync() {
@@ -327,8 +352,6 @@ async function sync() {
       if (out.skipped) log(`⚠ MAAI could not use ${out.skipped}. First one looked like: ${JSON.stringify(Object.fromEntries(Object.entries(batch[0] ?? {}).map(([k, v]) => [k, typeof v])))}`);
       if (batch.length || out.stored) log(`Sent ${batch.length} → MAAI kept ${out.stored} new (${out.repeats} it already had, ${out.own ?? 0} yours, ${out.skipped} unusable)${out.noted ? `; MAAI is writing ${out.noted} reply(ies)` : ''}.`);
       await handle(out.commands);
-      // MAAI writes its first replies in the background: collect them in a few seconds, not a minute.
-      if (out.noted) setTimeout(() => void pollCommands(), 15_000);
     } while (queue.length);
   } catch (error) {
     log('Delivery failed, trying again later:', error.message);
@@ -347,8 +370,8 @@ wa.on('ready', async () => {
   setInterval(() => void shareContacts().catch(() => {}), 24 * 3_600_000);
   await sync();
   setInterval(sync, SYNC_MS);
-  setInterval(() => void pollCommands(), 60_000);
-  log(`Running: new messages reach MAAI within about a minute (and everything again every ${SYNC_MS / 60_000} minutes); commands are checked every minute. Leave this window open.`);
+  void listenForCommands();
+  log(`Running: private messages reach MAAI within seconds and replies go out as soon as they are written. Leave this window open.`);
 });
 
 process.on('SIGINT', async () => {
