@@ -64,7 +64,7 @@ export function Admin() {
   const [query, setQuery] = useState('');
 
   const load = useCallback((background = false) => {
-    api.admin(background).then(setData).catch((e: Error) => setError(e.message));
+    api.admin(background).then((d) => { setData(d); setError(''); }).catch((e: Error) => setError(e.message));
   }, []);
 
   useEffect(() => {

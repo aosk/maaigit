@@ -13,7 +13,7 @@ export function DeviceBot() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback((background = false) => {
-    api.bot(background).then(setData).catch((e: Error) => setError(e.message));
+    api.bot(background).then((d) => { setData(d); setError(''); }).catch((e: Error) => setError(e.message));
   }, []);
   useEffect(() => {
     load();
