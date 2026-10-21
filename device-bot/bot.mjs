@@ -65,9 +65,30 @@ async function maai(method, route, body) {
 
 // ---------- WhatsApp ----------
 
+/** A browser already on this computer (Chrome, then Edge), so nothing has to be downloaded. CHROME_PATH in .env wins. */
+function findBrowser() {
+  const local = process.env.LOCALAPPDATA ?? '';
+  const candidates = [
+    process.env.CHROME_PATH,
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    local && path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+  ];
+  return candidates.find((p) => p && fs.existsSync(p));
+}
+const browser = findBrowser();
+if (browser) log(`Using the browser at ${browser}`);
+
 const wa = new Client({
   authStrategy: new LocalAuth({ dataPath: path.join(HERE, '.wwebjs_auth') }),
-  puppeteer: { headless: true, args: ['--no-sandbox'] },
+  puppeteer: { headless: true, args: ['--no-sandbox'], ...(browser ? { executablePath: browser } : {}) },
 });
 
 /** Messages waiting to be delivered (kept on disk so a restart loses nothing). */
@@ -208,4 +229,9 @@ process.on('SIGINT', async () => {
 await maai('GET', '/status')
   .then(() => log('MAAI reachable, key accepted.'))
   .catch((error) => fail(`Could not reach MAAI at ${BASE} (${error.cause?.code ?? error.message}). Check MAAI_URL and the internet connection.`));
-wa.initialize();
+wa.initialize().catch((error) => {
+  if (/Could not find Chrome|Failed to launch/i.test(error.message)) {
+    fail('No browser for WhatsApp. Install Google Chrome (google.com/chrome), or put its path in .env as CHROME_PATH=C:\\...\\chrome.exe, then run npm start again.');
+  }
+  fail(`WhatsApp could not start: ${error.message.split('\n')[0]}`);
+});
