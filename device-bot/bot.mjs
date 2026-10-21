@@ -32,7 +32,7 @@ const GROK_MODEL = process.env.GROK_MODEL || 'grok-4';
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-21f';
+const VERSION = '2026-10-21g';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -135,11 +135,16 @@ const isOurs = (chatId, text) => sentByBot.some((s) => s.chatId === chatId && s.
 const queued = new Set(queue.map((m) => m.id));
 
 /** One WhatsApp message in the shape MAAI expects, or null for statuses, broadcasts and system notices. */
+/** A WhatsApp id as text, whether WhatsApp Web gives a string or an id object. */
+const idText = (x) => (typeof x === 'string' ? x : x?._serialized ?? (x?.user && x?.server ? `${x.user}@${x.server}` : ''));
+
 async function toItem(msg, knownChat) {
-  const chatId = msg.fromMe ? msg.to : msg.from;
+  const chatId = idText(msg.fromMe ? msg.to : msg.from) || idText(msg.id?.remote);
+  const body = typeof msg.body === 'string' ? msg.body : typeof msg._data?.body === 'string' ? msg._data.body : String(msg.caption ?? '');
+  const messageId = idText(msg.id) || (msg.id?.id ? `${msg.fromMe ? 'true' : 'false'}_${chatId}_${msg.id.id}` : `${chatId}_${msg.timestamp ?? Date.now()}_${body.length}`);
   if (!chatId || msg.isStatus || msg.broadcast || /status@broadcast|@newsletter|@broadcast/.test(chatId)) return null;
   const media = msg.hasMedia || MEDIA.has(msg.type);
-  if (!msg.body && !media) return null;
+  if (!body && !media) return null;
   const group = chatId.endsWith('@g.us');
   if (msg.fromMe && group) return null;
   const chat = knownChat ?? (await tryGet(() => msg.getChat()));
@@ -149,7 +154,7 @@ async function toItem(msg, knownChat) {
     phone = chatId.endsWith('@c.us') ? digits(chatId) : digits((await tryGet(() => chat?.getContact()))?.number) || digits(chatId);
   } else {
     const contact = await tryGet(() => msg.getContact());
-    const person = group ? msg.author : chatId;
+    const person = group ? idText(msg.author) : chatId;
     phone = digits(contact?.number) || digits(person);
     from = contact?.pushname || contact?.name || msg._data?.notifyName || '';
     if (group) from = `${from || `+${phone}`} · ${chat?.name ?? 'Group'}`;
@@ -160,12 +165,12 @@ async function toItem(msg, knownChat) {
     }
   }
   return {
-    id: msg.id._serialized,
-    byMaai: (msg.fromMe && isOurs(chatId, msg.body)) || undefined,
+    id: messageId,
+    byMaai: (msg.fromMe && isOurs(chatId, body)) || undefined,
     channel: 'whatsapp',
     from: from || undefined,
     phone: phone || undefined,
-    text: (msg.body ?? '').slice(0, 4000),
+    text: body.slice(0, 4000),
     media: media || undefined,
     at: new Date((msg.timestamp || Date.now() / 1000) * 1000).toISOString(),
     group: group || undefined,
@@ -318,6 +323,8 @@ async function sync() {
       queue = queue.slice(batch.length);
       for (const m of batch) queued.delete(m.id);
       keepQueue();
+      // What MAAI could not use is described by its field types only (never the text), to find out why.
+      if (out.skipped) log(`⚠ MAAI could not use ${out.skipped}. First one looked like: ${JSON.stringify(Object.fromEntries(Object.entries(batch[0] ?? {}).map(([k, v]) => [k, typeof v])))}`);
       if (batch.length || out.stored) log(`Sent ${batch.length} → MAAI kept ${out.stored} new (${out.repeats} it already had, ${out.own ?? 0} yours, ${out.skipped} unusable)${out.noted ? `; MAAI is writing ${out.noted} reply(ies)` : ''}.`);
       await handle(out.commands);
       // MAAI writes its first replies in the background: collect them in a few seconds, not a minute.
@@ -388,7 +395,7 @@ async function update() {
 }
 
 await update().catch((error) => log('Could not check for an update:', why(error)));
-setInterval(() => void update().catch((error) => log('Could not check for an update:', why(error))), 6 * 3_600_000);
+setInterval(() => void update().catch((error) => log('Could not check for an update:', why(error))), 15 * 60_000);
 wa.initialize().catch((error) => {
   if (/Could not find Chrome|Failed to launch/i.test(error.message)) {
     fail('No browser for WhatsApp. Install Google Chrome (google.com/chrome), or put its path in .env as CHROME_PATH=C:\\...\\chrome.exe, then run npm start again.');

@@ -103,17 +103,24 @@ interface Incoming {
 }
 
 /** One delivered message, checked field by field; null for something that cannot be used. */
-function parse(raw: unknown, now: number): Incoming | null {
-  if (!raw || typeof raw !== 'object') return null;
+/** Why delivered messages could not be used, counted for the server log. */
+type Unusable = 'not an object' | 'no id' | 'no channel' | 'no text';
+
+/** A field as text: numbers are accepted too, since some WhatsApp Web versions give ids as numbers. */
+const field = (value: unknown, max: number) => (typeof value === 'number' && Number.isFinite(value) ? String(value) : str(value, max));
+
+function parse(raw: unknown, now: number, why?: (reason: Unusable) => void): Incoming | null {
+  if (!raw || typeof raw !== 'object') return why?.('not an object'), null;
   const m = raw as Record<string, unknown>;
-  const externalId = str(m.id, 128);
+  const externalId = field(m.id, 128);
   const channel = m.channel === 'email' ? 'email' : m.channel === 'whatsapp' ? 'whatsapp' : null;
-  if (!externalId || !channel) return null;
+  if (!externalId) return why?.('no id'), null;
+  if (!channel) return why?.('no channel'), null;
   const phone = digits(m.phone);
   const email = str(m.email, 320);
   const media = m.media === true;
-  const text = str(m.text, 4000) || (media ? '[A photo, voice note or file: MAAI cannot read these]' : '');
-  if (!text) return null;
+  const text = field(m.text, 4000) || (media ? '[A photo, voice note or file: MAAI cannot read these]' : '');
+  if (!text) return why?.('no text'), null;
   const at = Date.parse(str(m.at, 40));
   return {
     externalId: `bot:${externalId}`,
@@ -148,7 +155,8 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
   if (list.length > MAX_BATCH) throw new BotInputError(`At most ${MAX_BATCH} messages at a time.`);
 
   const known = new Set(state.inbox.map((m) => m.externalId).filter(Boolean));
-  const parsed = list.map((raw) => parse(raw, now));
+  const reasons: Partial<Record<Unusable, number>> = {};
+  const parsed = list.map((raw) => parse(raw, now, (reason) => (reasons[reason] = (reasons[reason] ?? 0) + 1)));
   const result: Delivery = { stored: 0, repeats: 0, skipped: parsed.filter((m) => !m).length, noted: 0, own: 0 };
   const incoming = parsed.filter((m): m is Incoming => m !== null).sort((a, b) => a.at - b.at);
 
@@ -206,7 +214,7 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
   state.bot.lastSync = new Date(now).toISOString();
   // Counts only (never names or text), so a delivery that keeps nothing can be explained from the server log.
   const version = str((body as { version?: unknown }).version, 40);
-  console.log(`Device bot${version ? ` ${version}` : ''} delivered ${list.length}: ${result.stored} new, ${result.repeats} repeats, ${result.own} own, ${result.skipped} unusable, ${result.noted} to answer`);
+  console.log(`Device bot${version ? ` ${version}` : ''} delivered ${list.length}: ${result.stored} new, ${result.repeats} repeats, ${result.own} own, ${result.skipped} unusable${result.skipped ? ` (${Object.entries(reasons).map(([r, n]) => `${r}: ${n}`).join(', ')})` : ''}, ${result.noted} to answer`);
   save();
   return result;
 }

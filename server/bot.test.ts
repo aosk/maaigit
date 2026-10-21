@@ -195,6 +195,8 @@ describe('messages the bot delivers', () => {
     expect((await asBot('POST', '/sync', { messages: Array.from({ length: 201 }, () => wa()) })).status).toBe(400);
     const r = receiveFromBot({ messages: [null, 'x', { id: 'a', channel: 'sms', text: 'hi' }, { id: 'b', channel: 'whatsapp', text: '' }, wa({ at: '2999-01-01T00:00:00Z' })] });
     expect(r).toMatchObject({ stored: 1, skipped: 4 });
+    // Ids and text given as numbers (some WhatsApp Web versions) are still used.
+    expect(receiveFromBot({ messages: [{ id: 12345, channel: 'whatsapp', phone: '966500000001', text: 42, at: now() }] })).toMatchObject({ stored: 1, skipped: 0 });
     // A clock in the future counts as now.
     expect(Date.parse(state.inbox.filter((m) => m.via === 'bot')[0].receivedAt)).toBeLessThanOrEqual(Date.now());
   });
