@@ -141,7 +141,8 @@ export interface Passkey {
 export const api = {
   status: () => call<StatusInfo>('GET', '/status'),
   unlock: (pin: string) => call<void>('POST', '/unlock', { pin }),
-  logout: () => call<void>('POST', '/logout'),
+  logout: (everywhere = false) => call<void>('POST', '/logout', { everywhere }),
+  setLockMinutes: (minutes: number) => call<{ minutes: number }>('PUT', '/security/lock', { minutes }),
   // Face ID: sign in without the password, and set it up or remove it once signed in.
   passkeyLoginOptions: () => call<PublicKeyCredentialRequestOptionsJSON>('POST', '/passkey/login/options', {}),
   passkeyLogin: (response: AuthenticationResponseJSON) => call<void>('POST', '/passkey/login', { response }),

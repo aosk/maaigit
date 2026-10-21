@@ -69,3 +69,13 @@ admin.patch('/admin/bot/mode', (req, res) => {
 
 /** How every part of MAAI is doing (reads what the server already knows; calls nothing outside). */
 admin.get('/admin/health', (_req, res) => res.json(healthReport()));
+
+/** How long a Face ID device stays open without being used before it asks for Face ID again. */
+const LOCK_CHOICES = [5, 15, 30, 60, 240, 1440];
+admin.put('/security/lock', (req, res) => {
+  const minutes = Number(req.body?.minutes);
+  if (!LOCK_CHOICES.includes(minutes)) throw new HttpError(400, `Choose one of ${LOCK_CHOICES.join(', ')} minutes.`);
+  state.lockMinutes = minutes;
+  audit(`Face ID lock set to ${minutes} minutes`, 'User', 'done');
+  res.json({ minutes });
+});

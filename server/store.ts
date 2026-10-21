@@ -78,6 +78,8 @@ interface State {
   alerts: AppAlert[];
   /** When each WhatsApp number was last sent the automatic "received" note. */
   whatsappAcks: Record<string, string>;
+  /** Sessions signed out on one device (an id, never the cookie), with when they would have expired anyway. */
+  revokedSessions: Record<string, number>;
   /** Raised by Sign out: sessions signed before it no longer work (see server/auth.ts). */
   sessionEpoch: number;
   /** What MAAI knows about the user: short facts the user wrote or approved. */
@@ -88,6 +90,8 @@ interface State {
   contacts: { name: string; phone: string }[];
   /** Contacts the user imported from a contacts file (iCloud, Google…): names, numbers, emails, companies. */
   addressBook: { cards: AddressCard[]; importedAt?: string };
+  /** Minutes MAAI stays open on a Face ID device without being used, as the user chose (else MAAI_LOCK_MINUTES). */
+  lockMinutes?: number;
   /** How MAAI answers new WhatsApp messages by itself (see server/intake.ts). */
   replyMode: ReplyMode;
   /** Per number: when the user last wrote to that person themself (MAAI stays out of a conversation the user is in). */
@@ -173,6 +177,7 @@ function seed(): State {
     contacts: [],
     addressBook: { cards: [] },
     sessionEpoch: 0,
+    revokedSessions: {},
   };
 }
 
@@ -214,6 +219,7 @@ function load(): State {
   saved.intake = saved.intake ?? {};
   saved.youWrote = saved.youWrote ?? {};
   saved.contacts = saved.contacts ?? [];
+  saved.revokedSessions = saved.revokedSessions ?? {};
   saved.addressBook = { cards: saved.addressBook?.cards ?? [], importedAt: saved.addressBook?.importedAt };
   // Agents added after the file was saved appear in the admin list, switched on.
   for (const agent of seed().agents) if (!saved.agents.some((a) => a.id === agent.id)) saved.agents.push(agent);

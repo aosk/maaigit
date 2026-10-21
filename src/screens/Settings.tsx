@@ -126,7 +126,10 @@ export function SettingsScreen() {
         <div className="row wrap">
           <a href="#/admin" className="btn secondary grow" style={{ textDecoration: 'none' }}>{t.adminPortal}</a>
           {status?.auth && status.auth !== 'none' && (
-            <button className="btn danger" onClick={() => api.logout().finally(() => window.location.reload())}>{t.signOut}</button>
+            <>
+              <button className="btn danger" onClick={() => api.logout().finally(() => window.location.reload())}>{t.signOut}</button>
+              <button className="btn ghost" onClick={() => window.confirm(t.signOutEverywhereConfirm) && api.logout(true).finally(() => window.location.reload())}>{t.signOutEverywhere}</button>
+            </>
           )}
         </div>
       </section>

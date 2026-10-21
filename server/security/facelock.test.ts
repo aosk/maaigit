@@ -40,9 +40,22 @@ beforeEach(() => {
 const cookies = (res: Reply) => ((res.headers['set-cookie'] ?? [])).map((c) => c.split(';')[0]);
 const named = (res: Reply, name: string) => ((res.headers['set-cookie'] ?? [])).find((c) => c.startsWith(`${name}=`));
 const unlock = async (s = site) => raw(s.port, 'POST', '/api/unlock', { body: JSON.stringify({ pin: PASSWORD }) });
-const ping = (jar: string[], s = site, background = false) => raw(s.port, 'GET', '/api/ping', { headers: { cookie: jar.join('; '), ...(background ? { 'x-maai-background': '1' } : {}) } });
+// A device that opens with Face ID carries the device mark (set when Face ID is set up or used on it).
+const ping = (jar: string[], s = site, background = false, faceDevice = true) =>
+  raw(s.port, 'GET', '/api/ping', { headers: { cookie: [...jar, ...(faceDevice ? ['maai_face_device=1'] : [])].join('; '), ...(background ? { 'x-maai-background': '1' } : {}) } });
 
 describe('the app locks itself once Face ID is set up', () => {
+  it('locks only devices that open with Face ID: a computer without it stays signed in', async () => {
+    const jar = cookies(await unlock());
+    faceSetUp = true;
+    clock += 60 * MINUTE;
+    expect((await ping([jar[0]], site, false, false)).status).toBe(200);
+    expect((await ping([jar[0]])).status).toBe(401);
+    // Signing in with Face ID marks the device.
+    const login = await raw(site.port, 'POST', '/api/face-login');
+    expect(String(login.headers['set-cookie'])).toContain('maai_face_device=1');
+  });
+
   it('asks for nothing extra until Face ID is set up', async () => {
     const res = await unlock();
     expect(cookies(res)).toHaveLength(2);

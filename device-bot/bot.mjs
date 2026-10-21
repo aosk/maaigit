@@ -1,5 +1,5 @@
 // MAAI device bot: WhatsApp (through WhatsApp Web on this device) ⇄ MAAI. See README.md.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,31 @@ import wweb from 'whatsapp-web.js';
 
 const { Client, LocalAuth } = wweb;
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+// ---------- Keeping itself running ----------
+
+// However it was started ("npm start", "node bot.mjs", a startup .bat file), the bot runs as a child of a small
+// watcher: when the bot updates itself it is started again on the new copy, and after a crash it starts again
+// in 30 seconds. A setup problem (exit code 1) or Ctrl+C stops both.
+if (!process.env.MAAI_LAUNCHER) {
+  const run = () => {
+    const bot = spawn(process.execPath, [path.join(HERE, 'bot.mjs')], { stdio: 'inherit', env: { ...process.env, MAAI_LAUNCHER: '1' } });
+    bot.on('exit', (code) => {
+      if (code === 75) {
+        console.log('\n↻ Starting the updated bot…\n');
+        run();
+      } else if (code === 0 || code === 1 || code === null) {
+        process.exit(code ?? 0);
+      } else {
+        console.log(`\n↻ The bot stopped (code ${code}). Starting it again in 30 seconds…\n`);
+        setTimeout(run, 30_000);
+      }
+    });
+  };
+  process.on('SIGINT', () => {}); // Ctrl+C reaches the bot too; it closes WhatsApp and exits, then so does this.
+  run();
+  await new Promise(() => {}); // the watcher does nothing else
+}
 
 // ---------- Settings (from .env next to this file) ----------
 
@@ -32,7 +57,7 @@ const GROK_MODEL = process.env.GROK_MODEL || 'grok-4';
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-21i';
+const VERSION = '2026-10-21j';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed

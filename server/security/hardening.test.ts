@@ -1,3 +1,4 @@
+import { createHash, createHmac } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -166,7 +167,20 @@ describe('sessions', () => {
     expect((await raw(s.port, 'GET', '/api/me', { headers: { cookie: c } })).headers['set-cookie']).toBeUndefined();
     clock.now += 16 * 86_400_000;
     const renewed = await raw(s.port, 'GET', '/api/me', { headers: { cookie: c } });
-    expect(String(renewed.headers['set-cookie'])).toMatch(/maai_session=\d+\.[0-9a-f]{64}/);
+    expect(String(renewed.headers['set-cookie'])).toMatch(/maai_session=\d+\.[0-9a-f]{16}\.[0-9a-f]{64}/);
+    await s.close();
+  });
+
+  it('keeps sessions from before sessions had their own id working, and swaps them for one that has it', async () => {
+    const clock = { now: 1_800_000_000_000 };
+    const s = await guarded(clock);
+    // The old cookie: "expiry.signature", signed without a random part.
+    const expires = Math.floor(clock.now / 1000) + 30 * 86_400;
+    const passcodeHash = createHash('sha256').update(`password:${PW}:the-secret`).digest('hex');
+    const old = `maai_session=${expires}.${createHmac('sha256', 'the-secret').update(`password|${expires}|${passcodeHash}`).digest('hex')}`;
+    const res = await raw(s.port, 'GET', '/api/me', { headers: { cookie: old } });
+    expect(res.status).toBe(200);
+    expect(String(res.headers['set-cookie'])).toMatch(/maai_session=\d+\.[0-9a-f]{16}\.[0-9a-f]{64}/);
     await s.close();
   });
 

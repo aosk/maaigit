@@ -57,8 +57,40 @@ export function FaceId() {
           </div>
         ))}
         <button className="btn primary big" onClick={setUp} disabled={busy || available === false}>{busy ? t.sending : keys.length ? t.faceIdAddAnother : t.faceIdSetUp}</button>
+        {keys.length > 0 && <LockAfter />}
         {error && <div className="error" role="alert">{error}</div>}
       </section>
     </>
+  );
+}
+
+const LOCK_CHOICES = [5, 15, 30, 60, 240, 1440];
+
+/** How long a Face ID device stays open without being used. Devices without Face ID never lock by themselves. */
+function LockAfter() {
+  const { t } = useSettings();
+  const [minutes, setMinutes] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api.status().then((s) => setMinutes(s.lockMinutes ?? 30)).catch(() => {});
+  }, []);
+  const pick = (next: number) => {
+    const before = minutes;
+    setMinutes(next);
+    setError('');
+    api.setLockMinutes(next).catch((e: Error) => {
+      setMinutes(before);
+      setError(e.message);
+    });
+  };
+  return (
+    <div className="field">
+      <label htmlFor="lock-after">{t.lockAfter}</label>
+      <select id="lock-after" value={minutes ?? ''} disabled={minutes === null} onChange={(e) => pick(Number(e.target.value))}>
+        {LOCK_CHOICES.map((m) => <option key={m} value={m}>{t.lockChoice(m)}</option>)}
+      </select>
+      <span className="sub">{t.lockHint}</span>
+      {error && <div className="error" role="alert">{error}</div>}
+    </div>
   );
 }

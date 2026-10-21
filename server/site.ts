@@ -52,7 +52,7 @@ export function createOnlineSite(inner: express.Express, options: { password: st
   // Twilio cannot sign in either; every request to this one proves itself with Twilio's signature.
   site.use(whatsappWebhook);
   site.use(express.json({ limit: '1mb' }));
-  const guard = createGuard('password', options.password, options.secret, Date.now, { lockActive: () => state.passkeys.length > 0, lockMinutes: config.lockMinutes, epoch: { get: () => state.sessionEpoch, bump: () => { state.sessionEpoch += 1; save(); } } });
+  const guard = createGuard('password', options.password, options.secret, Date.now, { lockActive: () => state.passkeys.length > 0, lockMinutes: () => state.lockMinutes ?? config.lockMinutes, epoch: { get: () => state.sessionEpoch, bump: () => { state.sessionEpoch += 1; save(); } }, revoked: { has: (id) => id in state.revokedSessions, add: (id, expires) => { const now = Date.now() / 1000; for (const [k, until] of Object.entries(state.revokedSessions)) if (until < now) delete state.revokedSessions[k]; state.revokedSessions[id] = expires; save(); } } });
   // Signing in with Face ID has to be reachable before there is a session; it proves itself with a signature.
   site.use('/api/passkey/login', noStore, passkeyLogin(guard.startSession));
   site.use('/api', sameOriginOnly, guard);

@@ -148,13 +148,20 @@ describe('penetration-test findings, kept fixed', () => {
     return (res.headers['set-cookie'] as unknown as string[]).map((c) => c.split(';')[0]).join('; ');
   };
 
-  it('Sign out ends the session for good: a copied cookie stops working', async () => {
+  it('Sign out on all devices ends every session for good: a copied cookie stops working', async () => {
     const { site } = await owner();
     try {
       const stolen = await signIn(site.port);
       const other = await signIn(site.port);
       expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie: stolen } })).status).toBe(200);
-      expect((await raw(site.port, 'POST', '/api/logout', { headers: { cookie: other } })).status).toBe(204);
+      // Signing out of one device leaves the others signed in.
+      const here = await raw(site.port, 'POST', '/api/logout', { headers: { cookie: other, 'content-type': 'application/json' }, body: '{}' });
+      expect(here.status).toBe(204);
+      expect(String(here.headers['set-cookie'])).toContain('maai_session=;');
+      expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie: other } })).status).toBe(401); // a copy of it stops working too
+      expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie: stolen } })).status).toBe(200);
+      const other2 = await signIn(site.port);
+      expect((await raw(site.port, 'POST', '/api/logout', { headers: { cookie: other2, 'content-type': 'application/json' }, body: '{"everywhere":true}' })).status).toBe(204);
       expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie: stolen } })).status).toBe(401);
       expect((await raw(site.port, 'GET', '/api/today', { headers: { cookie: other } })).status).toBe(401);
       // a new sign-in works, and its cookie is good

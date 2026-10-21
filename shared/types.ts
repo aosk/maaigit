@@ -341,6 +341,8 @@ export interface StatusInfo {
   storage?: { persistent: boolean; dir: string };
   /** Smart voice: a transcription service that understands Arabic and English in one sentence. */
   voice?: { smart: boolean };
+  /** Minutes a Face ID device stays open without being used. */
+  lockMinutes?: number;
   model: string;
   location: { latitude: number; longitude: number; timezone: string };
 }

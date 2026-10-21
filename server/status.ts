@@ -9,6 +9,7 @@ import { whatsappStatus } from './whatsapp.js';
 import { botStatus } from './bot.js';
 import { newsStatus } from './news/index.js';
 import { config } from './config.js';
+import { state } from './store.js';
 import { dataIsPersistent } from './storage.js';
 import { sttConfigured } from './stt.js';
 
@@ -25,6 +26,7 @@ export function status(): StatusInfo {
     // Only online: on a computer at home the data folder is the computer's own disk.
     storage: config.production ? { persistent: dataIsPersistent(config.dataDir), dir: config.dataDir } : undefined,
     voice: { smart: sttConfigured },
+    lockMinutes: state.lockMinutes ?? config.lockMinutes,
     model: MODEL,
     location: { latitude: config.latitude, longitude: config.longitude, timezone: config.timezone },
   };
