@@ -10,6 +10,7 @@ import { CalendarFeed } from '../components/CalendarFeed';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { FaceId } from '../components/FaceId';
 import { VoiceSettings } from '../components/VoiceSettings';
+import { ContactsImport } from '../components/ContactsImport';
 import { Chevron } from '../components/Icons';
 
 export function SettingsScreen() {
@@ -131,6 +132,8 @@ export function SettingsScreen() {
       </section>
 
       {status?.bot?.connected && <ReplyModeCard mode={status.bot.replyMode} onChanged={() => void loadStatus()} />}
+
+      <ContactsImport />
 
       <CalendarFeed googleDirect={Boolean(status?.calendar?.write?.working)} />
 

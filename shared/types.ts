@@ -652,3 +652,10 @@ export interface InboxFeed {
   items: FeedItem[];
   bot: BotStatus;
 }
+
+/** How many contacts MAAI has: imported from a contacts file, and read from WhatsApp by the device bot. */
+export interface ContactCount {
+  imported: number;
+  importedAt?: string;
+  fromWhatsApp: number;
+}

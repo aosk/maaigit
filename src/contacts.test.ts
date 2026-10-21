@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { phoneDigits } from './contacts';
+import { phoneDigits } from '../shared/vcard';
 
 describe('picked phone numbers', () => {
   it('become international digits', () => {

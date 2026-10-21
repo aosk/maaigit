@@ -1,4 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "project": ["server/**/*.ts", "shared/**/*.ts", "src/**/*.{ts,tsx}"]
+  "project": ["server/**/*.ts", "shared/**/*.ts", "src/**/*.{ts,tsx}"],
+  "ignore": ["device-bot/**"]
 }

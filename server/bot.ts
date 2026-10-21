@@ -323,26 +323,3 @@ export function receiveContacts(body: unknown): number {
   console.log(`Device bot sent ${contacts.length} contacts`);
   return contacts.length;
 }
-
-/** Arabic and English names compared loosely: no diacritics, one form of alef, taa marbuta and yaa, any case. */
-const fold = (text: string) =>
-  text
-    .normalize('NFKD')
-    .replace(/\p{M}|\u0640/gu, '')
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ة/g, 'ه')
-    .replace(/ى/g, 'ي')
-    .toLowerCase()
-    .trim();
-
-/** Contacts whose name contains every word of the query, best first. */
-export function findContacts(query: string, limit = 8): { name: string; phone: string }[] {
-  const words = fold(query).split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  return state.contacts
-    .map((c) => ({ c, name: fold(c.name) }))
-    .filter(({ name }) => words.every((w) => name.includes(w)))
-    .sort((a, b) => Number(b.name.startsWith(words[0])) - Number(a.name.startsWith(words[0])) || a.name.length - b.name.length)
-    .slice(0, limit)
-    .map(({ c }) => c);
-}

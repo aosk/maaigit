@@ -6,6 +6,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { config } from './config.js';
 import { calendarConfigured, googleEvents } from './gcal.js';
 import { dedupeEvents } from '../shared/schedule.js';
+import type { AddressCard } from '../shared/vcard.js';
 import type {
   AgentSetting,
   AppAlert,
@@ -84,6 +85,8 @@ interface State {
   bot: { keyHash?: string; keyHint?: string; device?: string; lastSeen?: string; lastSync?: string; commands: BotCommand[] };
   /** Names and numbers from the user's phone (saved contacts, as WhatsApp on the device sees them). */
   contacts: { name: string; phone: string }[];
+  /** Contacts the user imported from a contacts file (iCloud, Google…): names, numbers, emails, companies. */
+  addressBook: { cards: AddressCard[]; importedAt?: string };
   /** How MAAI answers new WhatsApp messages by itself (see server/intake.ts). */
   replyMode: ReplyMode;
   /** Per number: MAAI's own first replies to that person in the last day, and what it found out. */
@@ -164,6 +167,7 @@ function seed(): State {
     replyMode: 'smart',
     intake: {},
     contacts: [],
+    addressBook: { cards: [] },
     sessionEpoch: 0,
   };
 }
@@ -205,6 +209,7 @@ function load(): State {
   saved.replyMode = saved.replyMode === 'fixed' || saved.replyMode === 'off' ? saved.replyMode : 'smart';
   saved.intake = saved.intake ?? {};
   saved.contacts = saved.contacts ?? [];
+  saved.addressBook = { cards: saved.addressBook?.cards ?? [], importedAt: saved.addressBook?.importedAt };
   // Agents added after the file was saved appear in the admin list, switched on.
   for (const agent of seed().agents) if (!saved.agents.some((a) => a.id === agent.id)) saved.agents.push(agent);
   return saved;

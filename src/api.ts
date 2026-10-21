@@ -1,3 +1,4 @@
+import type { AddressCard } from '../shared/vcard';
 import type { AuthenticationResponseJSON, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
 import type {
   AdminOverview,
@@ -23,6 +24,7 @@ import type {
   NotifyPrefs,
   NotifyStatus,
   InboxFeed,
+  ContactCount,
   ReplyMode,
   BotOverview,
   Proposal,
@@ -162,6 +164,18 @@ export const api = {
     }
     return ((await res.json()) as { text: string }).text;
   },
+  contacts: () => call<ContactCount>('GET', '/contacts'),
+  /** The cards were read from the file in the browser; only names, numbers, emails and companies are sent. */
+  importContacts: async (cards: AddressCard[]): Promise<ContactCount> => {
+    const res = await fetch('/api/contacts/import', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(cards) });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string; kind?: string; face?: boolean };
+      if (res.status === 401 && data.error === 'locked') window.dispatchEvent(new CustomEvent(LOCKED_EVENT, { detail: { kind: data.kind, face: data.face === true } }));
+      throw new Error(data.error ?? `Import failed (${res.status})`);
+    }
+    return (await res.json()) as ContactCount;
+  },
+  clearContacts: () => call<ContactCount>('DELETE', '/contacts'),
   profile: () => call<ProfileInfo>('GET', '/profile'),
   addFact: (text: string, category: ProfileCategory) => call<ProfileFact>('POST', '/profile/facts', { text, category }),
   updateFact: (id: string, change: { text?: string; category?: ProfileCategory; pinned?: boolean }) => call<ProfileFact>('PATCH', `/profile/facts/${id}`, change),

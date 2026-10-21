@@ -237,6 +237,29 @@ describe('contacts', () => {
   });
 });
 
+describe('imported contacts', () => {
+  it('replace the last import, are searched with the WhatsApp ones, and give the assistant emails too', async () => {
+    state.contacts = [{ name: 'أحمد', phone: '966501111111' }];
+    const cards = [
+      { name: 'خالد العتيبي', phones: ['966501234567'], emails: ['khalid@example.com'], org: 'Ministry of Justice' },
+      { name: 'Ahmed Dup', phones: ['966501111111'], emails: [] },
+      { name: '<script>x', phones: ['12'], emails: ['not-an-email'] },
+    ];
+    const res = await raw(site.port, 'POST', '/api/contacts/import', { body: JSON.stringify(cards), headers: { cookie, origin: `http://127.0.0.1:${site.port}`, 'content-type': 'text/plain' } });
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({ imported: 2, fromWhatsApp: 1 });
+    const found = await runTool({ type: 'tool_use', id: 'i1', name: 'find_contact', input: { name: 'ministry' } }, []);
+    expect(found.result.content).toBe('Found:\n- خالد العتيبي (Ministry of Justice): 966501234567 · email khalid@example.com');
+    // The same number from WhatsApp is not listed twice.
+    const ahmed = await runTool({ type: 'tool_use', id: 'i2', name: 'find_contact', input: { name: 'ahmed' } }, []);
+    expect(ahmed.result.content).toBe('Found:\n- Ahmed Dup: 966501111111');
+    expect(contextNote()).toContain('Contacts: 2 imported and 1 from WhatsApp');
+    expect((await raw(site.port, 'POST', '/api/contacts/import', { body: '[]', headers: { cookie, origin: `http://127.0.0.1:${site.port}`, 'content-type': 'text/plain' } })).status).toBe(400);
+    expect((await raw(site.port, 'POST', '/api/contacts/import', { body: '[]', headers: { 'content-type': 'text/plain' } })).status).toBe(401);
+    expect(JSON.parse((await asUser('DELETE', '/contacts')).body)).toMatchObject({ imported: 0 });
+  });
+});
+
 describe('the fixed note', () => {
   it('is the user\'s text with a clean name', () => {
     expect(fixedReply('Ahmed')).toBe('الله يحييك Ahmed انا ذكاء اصطناعي خاص ب عبدالرحمن الشغدلي، ارسلت تفاصيل رسالتك ل عبدالرحمن وبرد عليك باسرع وقت. للاسف لحد الان فقط اقدر اقرا ما اقدر اسمع تسجيل او اشوف الصور او مرفقات. فضلا اكتب تفاصيل رسالتك كتابيا');

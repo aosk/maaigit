@@ -6,7 +6,8 @@ import { isEmail, mailConfigured } from '../mail.js';
 import { cachedInbox, getEmail } from '../gmail-inbox.js';
 import { AsanaError, asanaConfigured, cachedTasks, getTask, isGid, projects, validateNewTask } from '../asana.js';
 import { canAnswer, lastFrom, whatsappConfigured } from '../whatsapp.js';
-import { botConnected, botReplyTarget, findContacts } from '../bot.js';
+import { botConnected, botReplyTarget } from '../bot.js';
+import { findContacts } from '../contacts.js';
 import { emailForClaude, dayTime } from './context.js';
 import { neutralize } from './untrusted.js';
 import { category, cleanFact } from '../profile.js';
@@ -363,7 +364,7 @@ const propose_remember: ToolSpec<{ fact: string; category: ProfileCategory }> = 
 const find_contact: ToolSpec<{ name: string }> = {
   definition: {
     description:
-      "Find someone's WhatsApp number in the user's phone contacts by name (Arabic or English, part of the name is enough). Use it before propose_whatsapp when the user names a person instead of giving a number. Read-only.",
+      "Find someone in the user's contacts by name or company (Arabic or English, part of the name is enough): their numbers and email addresses. Use it before propose_whatsapp or propose_email when the user names a person instead of giving a number or address. Read-only.",
     input_schema: {
       type: 'object',
       properties: { name: { type: 'string', description: 'The name as the user said it, e.g. "خالد" or "Khalid Alotaibi".' } },
@@ -372,11 +373,13 @@ const find_contact: ToolSpec<{ name: string }> = {
     },
   },
   run({ name }) {
-    if (!state.contacts.length) throw new ToolError('No contacts yet: the device bot shares them once it runs the newest version. Ask the user for the number instead.');
+    if (!state.contacts.length && !state.addressBook.cards.length) throw new ToolError('No contacts yet (the user can import them in Settings → Contacts). Ask the user for the number or email instead.');
     const found = findContacts(name);
     if (!found.length) throw new ToolError(`No contact matches "${name}". Ask the user for the number, or try another spelling.`);
     // Several matches: the user picks; never guess between two people.
-    return `${found.length > 1 ? 'Several contacts match; ask the user which one before writing to anyone:' : 'Found:'}\n${found.map((c) => `- ${neutralize(c.name)}: ${c.phone}`).join('\n')}`;
+    const line = (c: (typeof found)[number]) =>
+      `- ${neutralize(c.name)}${c.org ? ` (${neutralize(c.org)})` : ''}: ${[c.phones.join(', '), c.emails.length ? `email ${c.emails.map(neutralize).join(', ')}` : ''].filter(Boolean).join(' · ')}`;
+    return `${found.length > 1 ? 'Several contacts match; ask the user which one before writing to anyone:' : 'Found:'}\n${found.map(line).join('\n')}`;
   },
   detail: ({ name }) => name,
 };
