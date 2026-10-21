@@ -15,11 +15,14 @@ const envFile = path.join(HERE, '.env');
 const envUsed = [envFile, `${envFile}.txt`].find((f) => fs.existsSync(f));
 if (envUsed) {
   const text = fs.readFileSync(envUsed, 'utf8').replace(/^\uFEFF/, '');
+  const fromFile = {};
   for (const line of text.split(/\r?\n/)) {
     const m = /^\s*([A-Z_]+)\s*=\s*["']?(.*?)["']?\s*$/.exec(line);
-    // A value left empty in the terminal must not hide the one in the file.
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+    // The last line for a name wins, so a key added below an old one is the one used.
+    if (m) fromFile[m[1]] = m[2];
   }
+  // A value left empty in the terminal must not hide the one in the file.
+  for (const [name, value] of Object.entries(fromFile)) if (!process.env[name]) process.env[name] = value;
 }
 const BASE = `${(process.env.MAAI_URL ?? '').replace(/\/+$/, '')}/bot/v1`;
 const KEY = process.env.MAAI_BOT_KEY ?? '';
@@ -35,6 +38,8 @@ if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   fail(`MAAI_URL is missing. ${where}`);
 }
 if (!KEY.startsWith('maai_')) fail('MAAI_BOT_KEY is missing in .env (the key from MAAI → Admin portal → Device bot).');
+// A full key is "maai_" and 43 more characters; the short "maai_xxxx…" in the status line is only a hint.
+if (!/^maai_[\w-]{43}$/.test(KEY)) fail(`MAAI_BOT_KEY looks incomplete (${KEY.length} characters; a full key has 48, with no "…" or spaces). Make a new key, press Copy in the yellow box, and paste the whole of it.`);
 
 function fail(message) {
   console.error(`\n✗ ${message}\n`);
@@ -52,7 +57,7 @@ async function maai(method, route, body) {
     signal: AbortSignal.timeout(30_000),
   });
   const text = await res.text();
-  if (res.status === 401) fail('MAAI refused the key. Make a new key in the admin page and put it in .env.');
+  if (res.status === 401) fail(`MAAI refused the key ${KEY.slice(0, 9)}… It is not the newest one: only the last key made in the admin page works. Make a new key, then put it in .env.`);
   if (res.status === 404) fail('MAAI has no device key now (it was disconnected, or erased because the Render disk is missing). Make a new key.');
   if (!res.ok) throw new Error(`MAAI ${res.status}: ${text.slice(0, 200)}`);
   return JSON.parse(text);
