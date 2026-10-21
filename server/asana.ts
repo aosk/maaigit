@@ -18,13 +18,25 @@ export class AsanaError extends Error {}
 
 async function callFull<T>(method: string, path: string, body?: unknown): Promise<{ data: T; next_page?: { offset?: string } | null }> {
   if (!TOKEN) throw new AsanaError('Asana is not connected. Add ASANA_TOKEN on Render → Environment.');
-  const res = await fetch(`${API}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
-    body: body ? JSON.stringify({ data: body }) : undefined,
-  }).catch(() => {
-    throw new AsanaError('Could not reach Asana. Check the internet connection and try again.');
-  });
+  const send = () =>
+    fetch(`${API}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      body: body ? JSON.stringify({ data: body }) : undefined,
+      signal: AbortSignal.timeout(20_000),
+    }).catch(() => {
+      throw new AsanaError('Could not reach Asana. Check the internet connection and try again.');
+    });
+  let res = await send();
+  // Asana's own advice for its passing errors: wait, then try once more. Only for reading, so nothing is done twice.
+  if (res.status >= 500 && method === 'GET') {
+    await new Promise((r) => setTimeout(r, 1500));
+    res = await send();
+  }
+  if (res.status >= 500) {
+    const said = ((await res.json().catch(() => ({}))) as { errors?: { message?: string }[] }).errors?.[0]?.message;
+    throw new AsanaError(`Asana itself is having a problem right now, not MAAI${said ? ` (Asana said: ${said.split('. ')[0]})` : ''}. Your tasks show again when it recovers.`);
+  }
   if (res.status === 401) throw new AsanaError('Asana did not accept the token. Create a new personal access token and update ASANA_TOKEN.');
   if (res.status === 404) throw new AsanaError('Asana could not find that task.');
   if (res.status === 429) throw new AsanaError('Asana is busy. Try again in a minute.');

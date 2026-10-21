@@ -47,13 +47,25 @@ export interface NewAsanaTask {
 export const LOCKED_EVENT = 'maai:locked';
 
 /** `background` marks the app's own automatic refreshes, which must not count as someone using it (see the Face ID lock). */
+/** The host answers these while MAAI restarts after an update (about a minute). */
+const RESTARTING = new Set([502, 503, 504]);
+
 async function request(method: string, url: string, body?: unknown, background = false, signal?: AbortSignal): Promise<Response> {
-  const res = await fetch(`/api${url}`, {
-    method,
-    signal,
-    headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(background ? { 'X-Maai-Background': '1' } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const send = () =>
+    fetch(`/api${url}`, {
+      method,
+      signal,
+      headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(background ? { 'X-Maai-Background': '1' } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  let res = await send();
+  // Reading is safe to repeat: while MAAI restarts, wait and try again (up to about 40 seconds) instead of showing an error.
+  for (const wait of [3000, 7000, 12_000, 18_000]) {
+    if (method !== 'GET' || !RESTARTING.has(res.status) || signal?.aborted) break;
+    await new Promise((r) => setTimeout(r, wait));
+    res = await send();
+  }
+  if (RESTARTING.has(res.status)) throw new Error(restartingMessage());
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string; kind?: string; face?: boolean };
     // Not signed in yet: show the PIN or password screen instead of an error.
@@ -62,6 +74,10 @@ async function request(method: string, url: string, body?: unknown, background =
   }
   return res;
 }
+
+/** In the app's language: MAAI is restarting (an update), not broken. */
+const restartingMessage = () =>
+  document.documentElement.lang === 'ar' ? 'مساعد يُعاد تشغيله بعد تحديث. جرّب بعد دقيقة.' : 'MAAI is restarting after an update. Try again in a minute.';
 
 async function call<T>(method: string, url: string, body?: unknown, background = false): Promise<T> {
   const res = await request(method, url, body, background);
