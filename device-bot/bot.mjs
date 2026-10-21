@@ -31,7 +31,7 @@ const GROK_MODEL = process.env.GROK_MODEL || 'grok-4';
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-21d';
+const VERSION = '2026-10-21e';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -48,6 +48,9 @@ function fail(message) {
   process.exit(1);
 }
 const log = (...args) => console.log(new Date().toLocaleTimeString(), ...args);
+/** An error in one line, even when WhatsApp Web throws one with no message. */
+const why = (error) => (error?.message || String(error ?? 'unknown')).split('\n')[0].slice(0, 200) || error?.name || 'unknown error';
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- MAAI ----------
 
@@ -192,7 +195,10 @@ wa.on('auth_failure', (m) => fail(`WhatsApp sign-in failed: ${m}. Delete the .ww
 wa.on('disconnected', (why) => fail(`WhatsApp disconnected (${why}). Start the bot again and scan the QR.`));
 
 // Every new message in every chat, including the user's own (those only tell MAAI the chat is answered).
-wa.on('message_create', async (msg) => {
+// "message" (incoming only) is listened to as well: some WhatsApp Web versions fire only one of the two.
+wa.on('message', (msg) => void onMessage(msg));
+wa.on('message_create', (msg) => void onMessage(msg));
+async function onMessage(msg) {
   try {
     const item = await toItem(msg);
     if (!item) {
@@ -205,9 +211,9 @@ wa.on('message_create', async (msg) => {
     if (!item.fromMe) log(`New message from ${item.from ?? `+${item.phone}`}${item.group ? ' (group)' : ''}: sending to MAAI in a minute.`);
     deliverSoon();
   } catch (error) {
-    log('⚠ Could not read a message:', error.message);
+    log('⚠ Could not read a message:', why(error));
   }
-});
+}
 
 /** The phone's saved contacts (names and numbers only), so the assistant can find people by name. Once a day. */
 async function shareContacts() {
@@ -224,8 +230,20 @@ async function shareContacts() {
 /** The last day of chats, read once when the bot starts, so MAAI also sees what arrived before (repeats are ignored by MAAI). */
 const BACKFILL_HOURS = Math.max(1, Number(process.env.BACKFILL_HOURS) || 24);
 async function backfill() {
+  // Right after linking, WhatsApp Web is still loading the chats: wait, and try again a few times.
+  let all;
+  for (const wait of [10_000, 30_000, 60_000, 120_000]) {
+    await pause(wait);
+    try {
+      all = await Promise.race([wa.getChats(), pause(60_000).then(() => Promise.reject(new Error('took too long')))]);
+      break;
+    } catch (error) {
+      log(`Recent chats not ready yet (${why(error)}); trying again…`);
+    }
+  }
+  if (!all) throw new Error('WhatsApp Web did not give the chat list. New messages still come through.');
   const since = Date.now() / 1000 - BACKFILL_HOURS * 3600;
-  const chats = (await wa.getChats()).filter((c) => (c.timestamp ?? 0) >= since && !/@broadcast|@newsletter/.test(c.id?._serialized ?? '')).slice(0, 60);
+  const chats = all.filter((c) => (c.timestamp ?? 0) >= since && !/@broadcast|@newsletter/.test(c.id?._serialized ?? '')).slice(0, 60);
   let found = 0;
   for (const chat of chats) {
     const messages = await tryGet(() => chat.fetchMessages({ limit: 15 }));
@@ -313,8 +331,11 @@ async function sync() {
 
 wa.on('ready', async () => {
   log('WhatsApp ready. Reading recent chats…');
-  await backfill().catch((error) => log('⚠ Could not read recent chats:', error.message));
-  await shareContacts().catch((error) => log('⚠ Could not share contacts:', error.message));
+  await shareContacts().catch((error) => log('⚠ Could not share contacts:', why(error)));
+  log('Listening for new messages. Reading the last day of chats in the background…');
+  void backfill()
+    .then(() => sync())
+    .catch((error) => log('⚠ Could not read recent chats:', why(error)));
   setInterval(() => void shareContacts().catch(() => {}), 24 * 3_600_000);
   await sync();
   setInterval(sync, SYNC_MS);
