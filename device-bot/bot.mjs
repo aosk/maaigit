@@ -32,7 +32,7 @@ const GROK_MODEL = process.env.GROK_MODEL || 'grok-4';
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-21g';
+const VERSION = '2026-10-21h';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -372,6 +372,7 @@ const UPDATED = 75;
  */
 async function update() {
   const { version, code } = await maai('GET', '/script');
+  if (version && version !== VERSION) log(`A newer bot is available (${version}); updating…`);
   if (!version || version === VERSION || typeof code !== 'string' || !code.includes("const VERSION = '")) return;
   const self = path.join(HERE, 'bot.mjs');
   const next = path.join(HERE, 'bot.next.mjs');
@@ -384,7 +385,17 @@ async function update() {
     return;
   }
   fs.copyFileSync(self, `${self}.bak`);
-  fs.renameSync(next, self);
+  // Writing over the running file can be refused for a moment (an antivirus checking the new file): try a few times.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      fs.copyFileSync(next, self);
+      fs.rmSync(next, { force: true });
+      break;
+    } catch (error) {
+      if (attempt >= 5) throw new Error(`could not replace bot.mjs (${why(error)}); download it again from GitHub`);
+      await pause(3000);
+    }
+  }
   if (!process.env.MAAI_LAUNCHER) {
     log(`Updated to ${version}. Start the bot again with "npm start" to use it.`);
     return;
