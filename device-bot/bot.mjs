@@ -60,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-22e';
+const VERSION = '2026-10-22f';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -378,6 +378,8 @@ async function shareContacts() {
     .map((c) => ({ name: c.name || c.pushname || '', phone: digits(c.number || c.id.user) }))
     .filter((c) => c.name && c.phone.length >= 8)
     .slice(0, 5000);
+  // Right after linking WhatsApp Web may not have loaded the contacts yet: an empty list would replace the saved one.
+  if (!contacts.length) return log('Contacts not loaded yet; keeping the list MAAI has.');
   const out = await maai('POST', '/contacts', { contacts });
   log(`Shared ${out.kept} contacts with MAAI (names and numbers only).`);
 }
@@ -666,7 +668,12 @@ async function sync() {
   }
 }
 
+// WhatsApp fires "ready" again whenever WhatsApp Web reloads its page. The loops below must start only once:
+// a second set would ask MAAI for commands twice and could carry one out twice.
+let started = false;
 wa.on('ready', async () => {
+  if (started) return log('WhatsApp ready again (WhatsApp Web reloaded). Still listening.');
+  started = true;
   log('WhatsApp ready. Reading recent chats…');
   const me = idText(wa.info?.wid).split('@')[0].replace(/\D/g, '');
   if (me && me !== myPhone) fs.writeFileSync(ME_FILE, me);
