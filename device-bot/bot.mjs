@@ -60,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-22d';
+const VERSION = '2026-10-22e';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -755,5 +755,8 @@ wa.initialize().catch((error) => {
   if (/Could not find Chrome|Failed to launch/i.test(error.message)) {
     fail('No browser for WhatsApp. Install Google Chrome (google.com/chrome), or put its path in .env as CHROME_PATH=C:\\...\\chrome.exe, then run npm start again.');
   }
-  fail(`WhatsApp could not start: ${error.message.split('\n')[0]}`);
+  // Anything else (WhatsApp Web reloading while the bot connects: "Execution context was destroyed", a slow
+  // page, a network blip) usually works on the next try: close the browser and let the watcher start again.
+  log(`⚠ WhatsApp could not start (${why(error)}). Trying again in 30 seconds…`);
+  void closeWhatsApp().finally(() => process.exit(2));
 });
