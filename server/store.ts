@@ -94,8 +94,6 @@ interface State {
   lockMinutes?: number;
   /** How MAAI answers new WhatsApp messages by itself (see server/intake.ts). */
   replyMode: ReplyMode;
-  /** Per number: when the user last wrote to that person themself (MAAI stays out of a conversation the user is in). */
-  youWrote: Record<string, string>;
   /** Per number: MAAI's own first replies to that person in the last day, and what it found out. */
   intake: Record<string, IntakeState>;
 }
@@ -173,7 +171,6 @@ function seed(): State {
     bot: { commands: [] },
     replyMode: 'smart',
     intake: {},
-    youWrote: {},
     contacts: [],
     addressBook: { cards: [] },
     sessionEpoch: 0,
@@ -217,7 +214,8 @@ function load(): State {
   saved.bot = { ...saved.bot, commands: saved.bot?.commands ?? [] };
   saved.replyMode = saved.replyMode === 'fixed' || saved.replyMode === 'off' ? saved.replyMode : 'smart';
   saved.intake = saved.intake ?? {};
-  saved.youWrote = saved.youWrote ?? {};
+  // No longer kept: MAAI now answers every new message, even in a conversation the user is writing in.
+  delete (saved as { youWrote?: unknown }).youWrote;
   saved.contacts = saved.contacts ?? [];
   saved.revokedSessions = saved.revokedSessions ?? {};
   saved.addressBook = { cards: saved.addressBook?.cards ?? [], importedAt: saved.addressBook?.importedAt };

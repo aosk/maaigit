@@ -16,8 +16,6 @@ import { claimAck, cleanName, fixedReply } from './whatsapp.js';
 
 /** At most this many replies to one person in an hour (stops two automatic responders answering each other for ever). */
 export const PER_PERSON_HOUR = 10;
-/** While the user is writing in a conversation themself, MAAI stays out of it for this long. */
-const YOU_ACTIVE_MS = 30 * 60_000;
 /** A new round with the same person starts after this long. */
 const ROUND_MS = 24 * 3_600_000;
 /** Only messages this fresh are answered (not ones read from older chats). */
@@ -141,8 +139,6 @@ export function whyNot(message: InboxMessage, now = Date.now()): string | null {
   if (message.group) return 'group';
   if (message.replied) return 'you already answered';
   if (now - Date.parse(message.receivedAt) > FRESH_MS) return 'older than 30 minutes';
-  const youAt = Date.parse(state.youWrote[message.phone] ?? '');
-  if (Number.isFinite(youAt) && now - youAt < YOU_ACTIVE_MS) return 'you are writing in this conversation';
   const hourAgoIso = new Date(now - 3_600_000).toISOString();
   if ((state.intake[message.phone]?.sent ?? []).filter((x) => x.at > hourAgoIso).length >= PER_PERSON_HOUR) return `${PER_PERSON_HOUR} replies to this person in the last hour`;
   const hourAgo = new Date(now - 3_600_000).toISOString();

@@ -244,7 +244,7 @@ const en = {
   replyModeTitle: 'Automatic WhatsApp replies',
   replyModes: { smart: 'Smart', fixed: 'Fixed note', off: 'Off' } as Record<'smart' | 'fixed' | 'off', string>,
   replyModeHint: {
-    smart: 'MAAI answers every private message itself: says it is your AI assistant, asks what it needs to understand the request, and warns them not to share sensitive data. Several messages sent together get one reply. It stays out for 30 minutes after you write in a conversation yourself, and sends at most 10 replies an hour to one person. Never in groups.',
+    smart: 'MAAI answers every private message itself: says it is your AI assistant, asks what it needs to understand the request, and warns them not to share sensitive data. Several messages sent together get one reply. It answers even when you are writing in the conversation yourself, and sends at most 10 replies an hour to one person. Never in groups.',
     fixed: 'Your fixed note, once per person every 6 hours, with the warning about sensitive data. Never in groups.',
     off: 'MAAI does not answer anyone by itself. You are still told about new messages.',
   } as Record<'smart' | 'fixed' | 'off', string>,
@@ -718,7 +718,7 @@ const ar: Strings = {
   replyModeTitle: 'الرد الآلي على الواتساب',
   replyModes: { smart: 'ذكي', fixed: 'رد ثابت', off: 'إيقاف' },
   replyModeHint: {
-    smart: 'المساعد يرد على كل رسالة خاصة بنفسه: يعرّف أنه مساعدك الذكي، ويسأل عن اللي يحتاجه ليفهم الطلب، وينبّه ألا يشاركوا بيانات حساسة. الرسائل المتتالية يرد عليها رداً واحداً. يبتعد ٣٠ دقيقة عن أي محادثة تكتب فيها أنت، وحده الأقصى ١٠ ردود في الساعة لكل شخص. لا يرد في القروبات.',
+    smart: 'المساعد يرد على كل رسالة خاصة بنفسه: يعرّف أنه مساعدك الذكي، ويسأل عن اللي يحتاجه ليفهم الطلب، وينبّه ألا يشاركوا بيانات حساسة. الرسائل المتتالية يرد عليها رداً واحداً. يرد حتى لو كنت تكتب في المحادثة بنفسك، وحده الأقصى ١٠ ردود في الساعة لكل شخص. لا يرد في القروبات.',
     fixed: 'ردك الثابت، مرة لكل شخص كل ٦ ساعات، مع تنبيه البيانات الحساسة. لا يرد في القروبات.',
     off: 'المساعد لا يرد على أحد بنفسه. تبقى التنبيهات بالرسائل الجديدة.',
   },

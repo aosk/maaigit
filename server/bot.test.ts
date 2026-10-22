@@ -47,7 +47,6 @@ beforeEach(() => {
   state.whatsappAcks = {};
   state.proposals = [];
   state.intake = {};
-  state.youWrote = {};
   state.replyMode = 'smart';
   state.notifyPrefs.messages = false;
   for (const agent of state.agents) agent.enabled = true;
@@ -133,7 +132,7 @@ describe('messages the bot delivers', () => {
     expect(JSON.parse((await asBot('GET', '/commands')).body)).toEqual({ commands: [] });
   });
 
-  it('answers every message, marked as AI, and stays out while the user is writing or after 10 an hour', async () => {
+  it('answers every message, marked as AI, even while the user is writing, and stops after 10 an hour', async () => {
     claudeSays('متى يناسبك؟');
     expect((await (receiveFromBot({ messages: [wa({ text: 'message 0' })] }), repliesSoon()))[0].text).toMatch(/^Hello Ahmed/);
     for (let i = 1; i < 4; i++) {
@@ -157,14 +156,15 @@ describe('messages the bot delivers', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(takeCommands()).toEqual([]);
 
-    // The user wrote back himself: MAAI stays out, even of the next message. Its own messages do not count as the user.
+    // The user answered a message himself: that one is not answered again, but the next one is. Its own messages do not count as the user.
     receiveFromBot({ messages: [wa({ phone: '966533333333', at: new Date(Date.now() - 60_000).toISOString() }), { id: 'bot-own', channel: 'whatsapp', phone: '966533333333', text: 'x', at: now(), fromMe: true, byMaai: true }] });
     expect(state.inbox.find((m) => m.phone === '966533333333')?.replied).toBe(false);
     await repliesSoon();
     receiveFromBot({ messages: [wa({ phone: '966544444444', at: new Date(Date.now() - 60_000).toISOString() }), { id: 'mine2', channel: 'whatsapp', phone: '966544444444', text: 'On my way', at: now(), fromMe: true }] });
-    receiveFromBot({ messages: [wa({ phone: '966544444444', text: 'ok see you' })] });
     await new Promise((r) => setTimeout(r, 50));
     expect(takeCommands()).toEqual([]);
+    receiveFromBot({ messages: [wa({ phone: '966544444444', text: 'ok see you' })] });
+    expect(await repliesSoon()).toHaveLength(1);
   });
 
   it('falls back to the fixed note with the warning when the AI cannot answer, and sends nothing when switched off', async () => {
