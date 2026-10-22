@@ -60,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-22c';
+const VERSION = '2026-10-22d';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -187,10 +187,37 @@ function findBrowser() {
 const browser = findBrowser();
 if (browser) log(`Using the browser at ${browser}`);
 
+// The user's own WhatsApp number (MY_PHONE in .env, else remembered from the last time it was linked). With it,
+// linking needs no QR: WhatsApp gives an 8-letter code that MAAI shows on the phone, typed in under
+// WhatsApp → Linked devices → Link with phone number instead.
+const ME_FILE = path.join(HERE, '.me');
+const myPhone = (process.env.MY_PHONE || (fs.existsSync(ME_FILE) ? fs.readFileSync(ME_FILE, 'utf8') : '')).replace(/\D/g, '').replace(/^00/, '').replace(/^0(5\d{8})$/, '966$1');
 const wa = new Client({
   authStrategy: new LocalAuth({ dataPath: path.join(HERE, '.wwebjs_auth') }),
   puppeteer: { headless: true, args: ['--no-sandbox'], ...(browser ? { executablePath: browser } : {}) },
+  ...(myPhone.length >= 10 ? { pairWithPhoneNumber: { phoneNumber: myPhone, showNotification: true, intervalMs: 180_000 } } : {}),
 });
+/** Closes WhatsApp's hidden browser (at most 10 s), so the next start can open the same session. */
+const closeWhatsApp = () => Promise.race([wa.destroy().catch(() => {}), new Promise((r) => setTimeout(r, 10_000))]);
+
+/**
+ * A hidden browser left open by an earlier run (the computer slept, the window was closed) still holds the
+ * WhatsApp session, and the new one cannot open it. Only one bot runs at a time (.bot.lock), so any browser
+ * using this bot's session folder is left over: close it. The user's own Chrome is not touched.
+ */
+function closeLeftoverBrowser() {
+  if (process.platform !== 'win32') return;
+  const folder = path.join(HERE, '.wwebjs_auth').toLowerCase().replace(/'/g, "''");
+  const script = `Get-CimInstance Win32_Process -Filter "name='chrome.exe' or name='msedge.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Contains('${folder}') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $_.ProcessId }`;
+  try {
+    const out = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 20_000, windowsHide: true });
+    const closed = out.split(/\s+/).filter(Boolean).length;
+    if (closed) log(`Closed ${closed} leftover WhatsApp browser process(es) from an earlier run.`);
+  } catch {}
+}
+
+/** Tells MAAI whether WhatsApp needs linking, so it can show the code (or say to scan the QR) on the phone. */
+const tellLink = (body) => maai('POST', '/link', body).catch((error) => log('⚠ Could not tell MAAI about linking:', why(error)));
 
 /** Messages waiting to be delivered (kept on disk so a restart loses nothing). */
 const QUEUE_FILE = path.join(HERE, '.queue.json');
@@ -297,13 +324,30 @@ const deliverSoon = (ms) => {
   }, ms);
 };
 
+let qrTold = false;
 wa.on('qr', (qr) => {
   console.log('\nOpen WhatsApp on the phone → Linked devices → Link a device, and scan this:\n');
   qrcode.generate(qr, { small: true });
+  console.log('Tip: put MY_PHONE=9665XXXXXXXX in .env and MAAI shows you a code to type instead of scanning.\n');
+  if (!qrTold) void tellLink({ qr: true });
+  qrTold = true;
+});
+wa.on('code', (code) => {
+  const shown = `${code.slice(0, 4)}-${code.slice(4)}`;
+  console.log(`\nWhatsApp needs linking. On the phone: WhatsApp → Linked devices → Link a device → Link with phone number instead, and type:\n\n    ${shown}\n\n(also shown in MAAI; a new code comes every 3 minutes)\n`);
+  void tellLink({ code });
 });
 wa.on('authenticated', () => log('WhatsApp linked.'));
-wa.on('auth_failure', (m) => fail(`WhatsApp sign-in failed: ${m}. Delete the .wwebjs_auth folder and scan again.`));
-wa.on('disconnected', (why) => fail(`WhatsApp disconnected (${why}). Start the bot again and scan the QR.`));
+// A lost link is not the end: the watcher starts the bot again in 30 seconds, and if WhatsApp was signed out
+// it asks for a new code (shown in MAAI) instead of stopping for good.
+wa.on('auth_failure', (m) => {
+  log(`⚠ WhatsApp sign-in failed (${m}). Starting again to link anew…`);
+  void closeWhatsApp().finally(() => process.exit(2));
+});
+wa.on('disconnected', (reason) => {
+  log(`⚠ WhatsApp disconnected (${reason}). Starting again in 30 seconds…`);
+  void Promise.all([tellLink({ lost: String(reason).slice(0, 60) }), closeWhatsApp()]).finally(() => process.exit(2));
+});
 
 // Every new message in every chat, including the user's own (those only tell MAAI the chat is answered).
 // "message" (incoming only) is listened to as well: some WhatsApp Web versions fire only one of the two.
@@ -624,6 +668,9 @@ async function sync() {
 
 wa.on('ready', async () => {
   log('WhatsApp ready. Reading recent chats…');
+  const me = idText(wa.info?.wid).split('@')[0].replace(/\D/g, '');
+  if (me && me !== myPhone) fs.writeFileSync(ME_FILE, me);
+  void tellLink({ linked: true });
   await shareContacts().catch((error) => log('⚠ Could not share contacts:', why(error)));
   await checkGrok().catch((error) => log('⚠ Grok check failed:', why(error)));
   log(ALLOWED.length ? `Files it may open or send you (each one approved in MAAI): ${ALLOWED.join(', ')}` : '⚠ No allowed folders: set ALLOWED_FOLDERS in .env to open or send files.');
@@ -703,6 +750,7 @@ async function update() {
 
 await update().catch((error) => log('Could not check for an update:', why(error)));
 setInterval(() => void update().catch((error) => log('Could not check for an update:', why(error))), 15 * 60_000);
+closeLeftoverBrowser();
 wa.initialize().catch((error) => {
   if (/Could not find Chrome|Failed to launch/i.test(error.message)) {
     fail('No browser for WhatsApp. Install Google Chrome (google.com/chrome), or put its path in .env as CHROME_PATH=C:\\...\\chrome.exe, then run npm start again.');

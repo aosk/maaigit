@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, seen, takeCommands, waitForCommands } from '../bot.js';
+import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, receiveLink, seen, takeCommands, waitForCommands } from '../bot.js';
+import { alertLink } from '../notify.js';
 import { state } from '../store.js';
 
 /**
@@ -64,6 +65,13 @@ deviceApi.post('/sync', (req, res) => {
 deviceApi.post('/contacts', (req, res) => {
   seen();
   res.json({ kept: receiveContacts(req.body) });
+});
+
+/** WhatsApp on the device needs linking (the code to show the user), or is linked again. */
+deviceApi.post('/link', (req, res) => {
+  seen();
+  receiveLink(req.body, alertLink);
+  res.json({ ok: true });
 });
 
 /** Waiting commands. Each command is handed over once. */

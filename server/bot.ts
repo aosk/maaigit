@@ -72,7 +72,46 @@ export function botStatus(now = Date.now()): BotStatus {
     messages: state.inbox.filter((m) => m.via === 'bot').length,
     replyMode: state.replyMode,
     contacts: state.contacts.length,
+    ...(linkNeeded(now) ? { link: { ...(link!.code ? { code: link!.code } : { qr: true }), at: new Date(link!.at).toISOString() } } : {}),
   };
+}
+
+// ---------- Linking WhatsApp ----------
+
+/** WhatsApp gives a new code every 3 minutes; an old one is not shown. */
+const LINK_FRESH_MS = 4 * 60_000;
+/**
+ * The code that links WhatsApp on the device, while it waits. Kept in memory only (never saved or logged):
+ * whoever has it can link the user's WhatsApp, so it goes no further than the signed-in app.
+ */
+let link: { code?: string; at: number } | null = null;
+const linkNeeded = (now: number) => Boolean(link && now - link.at < LINK_FRESH_MS);
+
+/**
+ * The bot says WhatsApp needs linking ({"code": "ABCD1234"} or {"qr": true}), or is linked again ({"linked": true}).
+ * The first time in a while it is needed, the user's phones are told, without the code (it would show on the lock screen).
+ */
+export function receiveLink(body: unknown, tell: () => Promise<void>, now = Date.now()): void {
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (b.linked === true) {
+    link = null;
+    return;
+  }
+  const code = str(b.code, 20).replace(/[\s-]/g, '').toUpperCase();
+  if (code && !/^[A-Z0-9]{8}$/.test(code)) throw new BotInputError('The code is 8 letters or digits.');
+  if (!code && b.qr !== true && typeof b.lost !== 'string') throw new BotInputError('Send {"code": "..."}, {"qr": true} or {"linked": true}.');
+  if (typeof b.lost === 'string' && !code) {
+    console.log(`Device bot: WhatsApp disconnected (${str(b.lost, 60)})`);
+    return;
+  }
+  const fresh = !linkNeeded(now);
+  link = { ...(code ? { code } : {}), at: now };
+  if (fresh) void tell().catch((error: Error) => console.error('Link alert failed:', error.message));
+}
+
+/** Forgets the code (tests only). */
+export function resetLink(): void {
+  link = null;
 }
 
 export function seen(device?: string, now = Date.now()): void {

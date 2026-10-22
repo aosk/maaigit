@@ -258,6 +258,18 @@ export async function alertHealth(key: string, text: (lang: Lang) => Text): Prom
   await deliver({ key, kind: 'health', text }, '/#/admin');
 }
 
+/** WhatsApp on the device needs linking: always told (the bot stops delivering until it is), opening the Inbox, which shows the code. */
+export async function alertLink(): Promise<void> {
+  await deliver({
+    key: `link:${Date.now()}`,
+    kind: 'health',
+    text: (lang) =>
+      lang === 'ar'
+        ? { title: 'واتساب يحتاج ربط', body: 'افتح MAAI لترى رمز الربط وتكتبه في واتساب' }
+        : { title: 'WhatsApp needs linking', body: 'Open MAAI to see the code to type in WhatsApp' },
+  }, '/#/inbox');
+}
+
 export async function sendTest() {
   await deliver({
     key: `test:${Date.now()}`,

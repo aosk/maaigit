@@ -621,6 +621,11 @@ export interface BotStatus {
   replyMode: ReplyMode;
   /** Contacts the bot shared from the phone (names and numbers), for finding someone by name. */
   contacts: number;
+  /**
+   * WhatsApp on the device needs linking: the 8-letter code to type on the phone (WhatsApp → Linked devices →
+   * Link with phone number instead), or, with no number known, a QR on the computer's screen. Kept a few minutes only.
+   */
+  link?: { code?: string; qr?: boolean; at: string };
 }
 
 export type ReplyMode = 'smart' | 'fixed' | 'off';

@@ -7,3 +7,4 @@ bot.mjs.bak
 .queue.json
 .chats.json
 .bot.lock
+.me

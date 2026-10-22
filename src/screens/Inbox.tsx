@@ -189,6 +189,13 @@ export function Inbox() {
     return () => clearInterval(timer);
   }, [load]);
   useOnRefresh(() => load(false));
+  // While WhatsApp waits for a linking code, look again often: WhatsApp makes a new one every 3 minutes.
+  const linking = Boolean(feed?.bot?.link);
+  useEffect(() => {
+    if (!linking) return;
+    const timer = setInterval(() => document.hidden || load(false), 15_000);
+    return () => clearInterval(timer);
+  }, [linking, load]);
   useEffect(() => {
     api.status().then(setStatus).catch(() => {});
   }, []);
@@ -215,6 +222,12 @@ export function Inbox() {
       </section>
 
       {bot?.stale && <div className="banner" role="status">{t.botStale}</div>}
+      {bot?.link && (
+        <div className="banner" role="status">
+          {bot.link.code ? t.botLinkCode : t.botLinkQr}
+          {bot.link.code && <div dir="ltr" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 28, letterSpacing: 4, marginTop: 6, userSelect: 'all' }}>{bot.link.code.slice(0, 4)}-{bot.link.code.slice(4)}</div>}
+        </div>
+      )}
       {error && <div className="error" role="alert">{error}</div>}
 
       <section className="card flush" aria-label={t.inboxTitle}>

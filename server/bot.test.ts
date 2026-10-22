@@ -23,7 +23,7 @@ import { contextNote } from './ai/context';
 import { createInnerApp, createOnlineSite } from './site';
 import { listen, raw } from './security/helpers';
 import { resetBotLimits } from './routes/bot';
-import { botStatus, createKey, keyMatches, queueCommand, receiveFromBot, takeCommands } from './bot';
+import { botStatus, createKey, keyMatches, queueCommand, receiveFromBot, receiveLink, resetLink, takeCommands } from './bot';
 import { cleanName, fixedReply } from './whatsapp';
 import { state } from './store';
 import { create } from './ai/claude';
@@ -54,6 +54,7 @@ beforeEach(() => {
   vi.mocked(create).mockReset();
   key = createKey();
   resetBotLimits();
+  resetLink();
 });
 
 const json = (body: unknown) => JSON.stringify(body);
@@ -276,6 +277,25 @@ describe('the fixed note', () => {
     expect(cleanName('Visit https://evil.example now please ok')).toBe('Visit https evil');
     expect(cleanName('+966511111111')).toBe('');
     expect(fixedReply('+966511111111').startsWith('الله يحييك انا ذكاء')).toBe(true);
+  });
+});
+
+describe('linking WhatsApp', () => {
+  it('shows the code to the signed-in app for a few minutes, tells the phones once, and forgets it once linked', async () => {
+    expect((await asBot('POST', '/link', { code: 'abc<1>' })).status).toBe(400);
+    expect((await asBot('POST', '/link', {})).status).toBe(400);
+    const tell = vi.fn(async () => {});
+    const now = Date.now();
+    receiveLink({ code: 'abcd-1234' }, tell, now);
+    receiveLink({ code: 'WXYZ5678' }, tell, now + 180_000); // WhatsApp's next code: no second alert
+    expect(tell).toHaveBeenCalledTimes(1);
+    expect(botStatus(now + 181_000).link).toMatchObject({ code: 'WXYZ5678' });
+    expect(botStatus(now + 180_000 + 5 * 60_000).link).toBeUndefined(); // an old code is not shown
+    receiveLink({ linked: true }, tell, now + 200_000);
+    expect(botStatus(now + 201_000).link).toBeUndefined();
+    receiveLink({ qr: true }, tell, now + 300_000);
+    expect(botStatus(now + 301_000).link).toEqual({ qr: true, at: expect.any(String) });
+    expect(JSON.stringify(state)).not.toContain('WXYZ5678'); // never saved
   });
 });
 

@@ -17,7 +17,8 @@ export function DeviceBot() {
   }, []);
   useEffect(() => {
     load();
-    const timer = setInterval(() => document.hidden || load(true), 15_000);
+    // Faster while a linking code is shown, so a new one appears soon after WhatsApp makes it.
+    const timer = setInterval(() => document.hidden || load(true), 10_000);
     return () => clearInterval(timer);
   }, [load]);
 
@@ -66,6 +67,19 @@ export function DeviceBot() {
         </div>
       )}
       {error && <div className="error" role="alert">{error}</div>}
+      {s?.link && (
+        <div className="banner" role="status" dir="rtl" lang="ar">
+          <strong>واتساب على جهازك يحتاج ربط</strong>
+          {s.link.code ? (
+            <>
+              <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 32, letterSpacing: 4, margin: '8px 0', userSelect: 'all' }} dir="ltr">{s.link.code.slice(0, 4)}-{s.link.code.slice(4)}</div>
+              <div className="sub">في جوالك: واتساب ← الأجهزة المرتبطة ← ربط جهاز ← <strong>الربط برقم الهاتف بدلاً من ذلك</strong>، واكتب الرمز. (أو اضغط تنبيه واتساب اللي وصلك.) يتجدد كل 3 دقائق، وهذه الصفحة تعرض الجديد تلقائياً.</div>
+            </>
+          ) : (
+            <div className="sub">امسح رمز QR الظاهر على شاشة الكمبيوتر: واتساب ← الأجهزة المرتبطة ← ربط جهاز. وللربط برمز بدل المسح: أضف <code dir="ltr">MY_PHONE=9665XXXXXXXX</code> في ملف <code>.env</code> للبوت.</div>
+          )}
+        </div>
+      )}
       {s && (
         <div className="row wrap" style={{ gap: 24 }}>
           <span><span className="sub">Status </span><strong style={{ color: !s.connected ? 'var(--text2)' : s.stale ? 'var(--danger)' : 'var(--success)' }}>{!s.connected ? 'Not connected' : s.stale ? 'Silent over 2 hours' : 'Working'}</strong></span>
