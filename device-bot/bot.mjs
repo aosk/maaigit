@@ -60,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-22b';
+const VERSION = '2026-10-22c';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -79,6 +79,72 @@ function fail(message) {
 const log = (...args) => console.log(new Date().toLocaleTimeString(), ...args);
 /** An error in one line, even when WhatsApp Web throws one with no message. */
 const why = (error) => (error?.message || String(error ?? 'unknown')).split('\n')[0].slice(0, 200) || error?.name || 'unknown error';
+
+// ---------- One copy at a time, and starting with Windows ----------
+
+// Two copies would fight over the same WhatsApp session. Each running copy keeps .bot.lock fresh; a lock left
+// behind by a copy that crashed (or a computer that was switched off) is old and taken over.
+const LOCK = path.join(HERE, '.bot.lock');
+const LOCK_FRESH_MS = 3 * 60_000;
+try {
+  const other = Number(fs.readFileSync(LOCK, 'utf8'));
+  const fresh = Date.now() - fs.statSync(LOCK).mtimeMs < LOCK_FRESH_MS;
+  let alive = false;
+  try {
+    alive = other > 0 && other !== process.pid && (process.kill(other, 0), true);
+  } catch {}
+  if (alive && fresh) {
+    console.log(`\nThe bot is already running in another window (process ${other}). This copy stops; nothing to do.\n`);
+    process.exit(0);
+  }
+} catch {}
+const holdLock = () => {
+  try {
+    fs.writeFileSync(LOCK, String(process.pid));
+  } catch {}
+};
+holdLock();
+setInterval(holdLock, 60_000).unref();
+process.on('exit', () => {
+  try {
+    if (fs.readFileSync(LOCK, 'utf8') === String(process.pid)) fs.unlinkSync(LOCK);
+  } catch {}
+});
+
+/**
+ * On Windows the bot starts by itself when the user signs in: a small "MAAI bot.cmd" in the Startup folder
+ * opens it in a minimised window. START_WITH_WINDOWS=off in .env removes it.
+ */
+function startWithWindows() {
+  if (process.platform !== 'win32' || !process.env.APPDATA) return;
+  const dir = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+  const file = path.join(dir, 'MAAI bot.cmd');
+  if (/^(off|no|false|0)$/i.test(process.env.START_WITH_WINDOWS ?? '')) {
+    if (fs.existsSync(file)) {
+      fs.unlinkSync(file);
+      log('No longer starts with Windows (START_WITH_WINDOWS=off).');
+    }
+    return;
+  }
+  if (!fs.existsSync(dir)) return;
+  const cmd = (p) => p.replace(/%/g, '%%');
+  const text = [
+    '@echo off',
+    'rem Starts the MAAI WhatsApp bot when you sign in to Windows. Made by the bot; set START_WITH_WINDOWS=off in its .env to stop it.',
+    'chcp 65001 >nul',
+    `cd /d "${cmd(HERE)}"`,
+    `start "MAAI bot" /min "${cmd(process.execPath)}" "${cmd(path.join(HERE, 'bot.mjs'))}"`,
+    '',
+  ].join('\r\n');
+  if (fs.existsSync(file) && fs.readFileSync(file, 'utf8') === text) return;
+  fs.writeFileSync(file, text);
+  log('✓ From now on the bot starts by itself when you sign in to Windows (minimised window "MAAI bot").');
+}
+try {
+  startWithWindows();
+} catch (error) {
+  log('⚠ Could not set the bot to start with Windows:', why(error));
+}
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- MAAI ----------
@@ -578,9 +644,18 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-await maai('GET', '/status')
-  .then(() => log(`MAAI reachable, key accepted. Bot version ${VERSION}.`))
-  .catch((error) => fail(`Could not reach MAAI at ${BASE} (${error.cause?.code ?? error.message}). Check MAAI_URL and the internet connection.`));
+// Right after Windows starts the internet may not be up yet, and MAAI may be waking up: keep trying for about 10 minutes.
+for (let attempt = 1; ; attempt++) {
+  const error = await maai('GET', '/status').then(() => null, (e) => e);
+  if (!error) {
+    log(`MAAI reachable, key accepted. Bot version ${VERSION}.`);
+    break;
+  }
+  const reason = error.cause?.code ?? error.message;
+  if (attempt >= 20) fail(`Could not reach MAAI at ${BASE} (${reason}). Check MAAI_URL and the internet connection.`);
+  if (attempt === 1) log(`Waiting for MAAI or the internet (${reason})…`);
+  await new Promise((r) => setTimeout(r, 30_000));
+}
 
 // ---------- Updating itself ----------
 

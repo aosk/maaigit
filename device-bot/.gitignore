@@ -6,3 +6,4 @@ bot.next.mjs
 bot.mjs.bak
 .queue.json
 .chats.json
+.bot.lock
