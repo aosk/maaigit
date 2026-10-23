@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { AdminOverview, BotOverview } from '../../shared/types.js';
-import { botStatus, createKey, revokeKey } from '../bot.js';
+import { botStatus, createKey, revokeKey, setOrderPhone } from '../bot.js';
 import { healthReport } from '../health.js';
 import { allEvents, audit, state } from '../store.js';
 import { status } from '../status.js';
@@ -64,6 +64,17 @@ admin.patch('/admin/bot/mode', (req, res) => {
   if (mode !== 'smart' && mode !== 'fixed' && mode !== 'off') throw new HttpError(400, 'Choose smart, fixed or off.');
   state.replyMode = mode;
   audit(`Automatic WhatsApp replies set to ${mode}`, 'User', 'done');
+  res.json(botOverview());
+});
+
+/** The user's own second WhatsApp number, whose private messages are orders for the assistant ("" to stop). */
+admin.put('/admin/bot/order-phone', (req, res) => {
+  try {
+    setOrderPhone(req.body?.phone);
+  } catch (error) {
+    throw new HttpError(400, (error as Error).message);
+  }
+  audit(state.bot.orderPhone ? `WhatsApp order number set to +${state.bot.orderPhone}` : 'WhatsApp orders switched off', 'User', 'done');
   res.json(botOverview());
 });
 

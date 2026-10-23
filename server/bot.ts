@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import type { BotCommand, BotStatus, DeviceAction, InboxMessage } from '../shared/types.js';
 import { config } from './config.js';
 import { isEmail } from './mail.js';
+import { phoneDigits } from '../shared/vcard.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
 import { answer, tell, whyNot } from './intake.js';
 
@@ -72,6 +73,7 @@ export function botStatus(now = Date.now()): BotStatus {
     messages: state.inbox.filter((m) => m.via === 'bot').length,
     replyMode: state.replyMode,
     contacts: state.contacts.length,
+    orderPhone: state.bot.orderPhone,
     ...(linkNeeded(now) ? { link: { ...(link!.code ? { code: link!.code } : { qr: true }), at: new Date(link!.at).toISOString() } } : {}),
   };
 }
@@ -140,6 +142,8 @@ interface Incoming {
   fromMe: boolean;
   /** Sent by the bot itself (MAAI's replies): neither kept nor taken as the user answering. */
   byMaai: boolean;
+  /** A photo, voice note or file (its text is only a caption, if any). */
+  media: boolean;
 }
 
 /** One delivered message, checked field by field; null for something that cannot be used. */
@@ -175,6 +179,7 @@ function parse(raw: unknown, now: number, why?: (reason: Unusable) => void): Inc
     group: m.group === true,
     fromMe: m.fromMe === true,
     byMaai: m.byMaai === true,
+    media,
   };
 }
 
@@ -186,10 +191,28 @@ export interface Delivery {
   noted: number;
   /** The user's own messages (they only mark chats as answered). */
   own: number;
+  /** Orders from the user's order number (handed to the assistant, not kept in the Inbox). */
+  orders: number;
+}
+
+/** A message from the user's own order number: an instruction for the assistant, not a message to answer. */
+export interface Order {
+  externalId: string;
+  text: string;
+  at: number;
+}
+
+/** The user's order number (digits, international form), set in the admin page; empty to stop taking orders. */
+export function setOrderPhone(value: unknown): void {
+  const phone = typeof value === 'string' ? phoneDigits(value) : '';
+  if (phone && (phone.length < 8 || phone.length > 15)) throw new BotInputError('Give the full number with the country code, for example 9665XXXXXXXX.');
+  state.bot.orderPhone = phone || undefined;
+  state.bot.orders = [];
+  save();
 }
 
 /** Keeps what the bot delivered, marks chats the user already answered on the phone, and queues the fixed note. */
-export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
+export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order: Order) => void = () => {}): Delivery {
   const list = (body as { messages?: unknown } | null)?.messages;
   if (!Array.isArray(list)) throw new BotInputError('Send {"messages": [...]}.');
   if (list.length > MAX_BATCH) throw new BotInputError(`At most ${MAX_BATCH} messages at a time.`);
@@ -197,7 +220,7 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
   const known = new Set(state.inbox.map((m) => m.externalId).filter(Boolean));
   const reasons: Partial<Record<Unusable, number>> = {};
   const parsed = list.map((raw) => parse(raw, now, (reason) => (reasons[reason] = (reasons[reason] ?? 0) + 1)));
-  const result: Delivery = { stored: 0, repeats: 0, skipped: parsed.filter((m) => !m).length, noted: 0, own: 0 };
+  const result: Delivery = { stored: 0, repeats: 0, skipped: parsed.filter((m) => !m).length, noted: 0, own: 0, orders: 0 };
   const incoming = parsed.filter((m): m is Incoming => m !== null).sort((a, b) => a.at - b.at);
 
   // The user's own messages are not kept; they only show which chats are already answered.
@@ -212,6 +235,13 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
   for (const m of incoming) {
     if (m.fromMe) {
       result.own += 1;
+      continue;
+    }
+    // Only a private message from exactly the order number is an order. It never reaches the Inbox or the
+    // automatic replies; the assistant takes it (each message once, and only while fresh: see server/remote.ts).
+    if (m.channel === 'whatsapp' && !m.group && m.phone && m.phone === state.bot.orderPhone) {
+      result.orders += 1;
+      onOrder({ externalId: m.externalId, text: m.media && m.text.startsWith('[A photo') ? '' : m.text, at: m.at });
       continue;
     }
     if (known.has(m.externalId)) {
@@ -258,7 +288,7 @@ export function receiveFromBot(body: unknown, now = Date.now()): Delivery {
   // Counts only (never names or text), so a delivery that keeps nothing can be explained from the server log.
   const version = str((body as { version?: unknown }).version, 40);
   if (version) state.bot.version = version;
-  console.log(`Device bot${version ? ` ${version}` : ''} delivered ${list.length}: ${result.stored} new, ${result.repeats} repeats, ${result.own} own, ${result.skipped} unusable${result.skipped ? ` (${Object.entries(reasons).map(([r, n]) => `${r}: ${n}`).join(', ')})` : ''}, ${result.noted} to answer${Object.keys(notAnswered).length ? ` (not answered: ${Object.entries(notAnswered).map(([r, n]) => `${r} ×${n}`).join('; ')})` : ''}`);
+  console.log(`Device bot${version ? ` ${version}` : ''} delivered ${list.length}: ${result.stored} new, ${result.repeats} repeats, ${result.own} own${result.orders ? `, ${result.orders} order(s)` : ''}, ${result.skipped} unusable${result.skipped ? ` (${Object.entries(reasons).map(([r, n]) => `${r}: ${n}`).join(', ')})` : ''}, ${result.noted} to answer${Object.keys(notAnswered).length ? ` (not answered: ${Object.entries(notAnswered).map(([r, n]) => `${r} ×${n}`).join('; ')})` : ''}`);
   save();
   return result;
 }

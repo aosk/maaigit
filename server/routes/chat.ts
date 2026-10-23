@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Proposal, StreamEvent } from '../../shared/types.js';
-import { chat } from '../ai/chat.js';
+import { answering, chat, currentConversation as conversation } from '../ai/chat.js';
 import { addFact } from '../profile.js';
 import { config } from '../config.js';
 import { firstPrayerTime } from '../notify.js';
@@ -12,15 +12,10 @@ import { canAnswer, sendWhatsApp, whatsappConfigured } from '../whatsapp.js';
 import { botConnected, botReplyTarget, deviceTarget, queueCommand } from '../bot.js';
 import { signed } from '../intake.js';
 import { markHandled, markReplyTo } from '../mail-handled.js';
-import { agentEnabled, audit, id, save, state, type Conversation } from '../store.js';
+import { agentEnabled, audit, id, save, state } from '../store.js';
 import { HttpError, explain, find, lang, text, wrap } from './http.js';
 
 export const assistant = Router();
-
-function conversation(): Conversation {
-  if (!state.conversations[0]) state.conversations.unshift({ id: id(), apiMessages: [], turns: [] });
-  return state.conversations[0];
-}
 
 assistant.get('/chat', (_req, res) => {
   const c = conversation();
@@ -32,9 +27,6 @@ assistant.get('/chat', (_req, res) => {
  * Sends a message and streams the answer as server-sent events, so the app can
  * show what MAAI is doing: its thinking, each step, and the reply as it is written.
  */
-/** Conversations Claude is answering in right now. */
-const answering = new Set<string>();
-
 assistant.post('/chat/stream', async (req, res) => {
   let files: ReturnType<typeof takeUploads>;
   try {

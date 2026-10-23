@@ -258,6 +258,18 @@ export async function alertHealth(key: string, text: (lang: Lang) => Text): Prom
   await deliver({ key, kind: 'health', text }, '/#/admin');
 }
 
+/** An order from the user's WhatsApp number made approval cards: always told, opening the assistant where they wait. */
+export async function alertOrderCards(count: number): Promise<void> {
+  await deliver({
+    key: `order:${Date.now()}`,
+    kind: 'message',
+    text: (lang) =>
+      lang === 'ar'
+        ? { title: 'بانتظار موافقتك', body: `${count === 1 ? 'بطاقة واحدة' : `${count} بطاقات`} من أمرك في الواتساب` }
+        : { title: 'Waiting for your approval', body: `${count} card(s) from your WhatsApp order` },
+  }, '/#/assistant');
+}
+
 /** WhatsApp on the device needs linking: always told (the bot stops delivering until it is), opening the Inbox, which shows the code. */
 export async function alertLink(): Promise<void> {
   await deliver({

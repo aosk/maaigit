@@ -626,6 +626,8 @@ export interface BotStatus {
    * Link with phone number instead), or, with no number known, a QR on the computer's screen. Kept a few minutes only.
    */
   link?: { code?: string; qr?: boolean; at: string };
+  /** The user's own second WhatsApp number, whose private messages are orders for the assistant. */
+  orderPhone?: string;
 }
 
 export type ReplyMode = 'smart' | 'fixed' | 'off';

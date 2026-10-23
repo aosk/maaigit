@@ -1,5 +1,5 @@
 import type { Lang, Proposal } from '../../shared/types.js';
-import { agentEnabled, audit, save, state, type Conversation } from '../store.js';
+import { agentEnabled, audit, id, save, state, type Conversation } from '../store.js';
 import { client, stream, textOf, type MessageParam, type OnEvent, type ToolUse } from './claude.js';
 import { dayTime, refreshContext, withContext } from './context.js';
 import { runTool, tools } from './tools.js';
@@ -111,6 +111,15 @@ function compact(messages: MessageParam[]) {
   }
   if (changed) dropThinking(messages);
 }
+
+/** The conversation the user is having with MAAI (the app's chat, and orders sent from the user's WhatsApp number). */
+export function currentConversation(): Conversation {
+  if (!state.conversations[0]) state.conversations.unshift({ id: id(), apiMessages: [], turns: [] });
+  return state.conversations[0];
+}
+
+/** Conversations Claude is answering in right now: two answers at once would interleave and break the history. */
+export const answering = new Set<string>();
 
 /**
  * One turn of the conversation: Claude replies, calling tools as needed. Any

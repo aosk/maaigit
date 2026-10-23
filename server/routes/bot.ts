@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, receiveLink, seen, takeCommands, waitForCommands } from '../bot.js';
 import { alertLink } from '../notify.js';
+import { takeOrder } from '../remote.js';
 import { state } from '../store.js';
 
 /**
@@ -57,7 +58,7 @@ deviceApi.use(deviceKey);
 /** Delivers messages (hourly) and gets any waiting commands back in the same answer. */
 deviceApi.post('/sync', (req, res) => {
   seen(deviceName(req.body?.device));
-  const delivered = receiveFromBot(req.body);
+  const delivered = receiveFromBot(req.body, Date.now(), (order) => takeOrder(order));
   res.json({ ...delivered, commands: takeCommands() });
 });
 

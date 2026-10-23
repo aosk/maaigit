@@ -11,6 +11,7 @@ export function DeviceBot() {
   const [key, setKey] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [orderPhone, setOrderPhone] = useState<string | null>(null);
 
   const load = useCallback((background = false) => {
     api.bot(background).then((d) => { setData(d); setError(''); }).catch((e: Error) => setError(e.message));
@@ -38,6 +39,20 @@ export function DeviceBot() {
         setKey('');
         setData(await api.botDisconnect());
       }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveOrderPhone(phone: string) {
+    if (phone && !window.confirm(`Take orders from +${phone.replace(/\D/g, '')}? Whoever has that phone can ask MAAI about your email, calendar and messages (anything that sends or changes something still needs your approval in MAAI).`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      setData(await api.setOrderPhone(phone));
+      setOrderPhone(null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -78,6 +93,20 @@ export function DeviceBot() {
           ) : (
             <div className="sub">امسح رمز QR الظاهر على شاشة الكمبيوتر: واتساب ← الأجهزة المرتبطة ← ربط جهاز. وللربط برمز بدل المسح: أضف <code dir="ltr">MY_PHONE=9665XXXXXXXX</code> في ملف <code>.env</code> للبوت.</div>
           )}
+        </div>
+      )}
+      {s?.connected && (
+        <div className="field">
+          <label htmlFor="order-phone"><strong>Order number</strong> (your own second WhatsApp)</label>
+          <p className="sub" style={{ margin: '4px 0' }}>
+            Private messages from this one number to your main WhatsApp go to the assistant as orders, and the answer comes back to it. Messages from anyone else, groups and forwards are never orders. Anything that sends, books or changes something waits for your approval in MAAI.
+          </p>
+          <div className="row wrap">
+            <input id="order-phone" dir="ltr" inputMode="tel" placeholder="9665XXXXXXXX" value={orderPhone ?? s.orderPhone ?? ''} onChange={(e) => setOrderPhone(e.target.value)} disabled={busy} />
+            <button className="admin-btn" disabled={busy || orderPhone === null || !orderPhone.trim()} onClick={() => void saveOrderPhone(orderPhone ?? '')}>Save</button>
+            {s.orderPhone && <button className="admin-btn" disabled={busy} onClick={() => void saveOrderPhone('')}>Stop taking orders</button>}
+          </div>
+          {s.orderPhone && <div className="sub">Taking orders from +{s.orderPhone}</div>}
         </div>
       )}
       {s && (

@@ -85,7 +85,21 @@ interface State {
   /** What MAAI knows about the user: short facts the user wrote or approved. */
   profile: { enabled: boolean; facts: ProfileFact[] };
   /** The user's device bot: a hash of its key (never the key), when it was last heard from, and what MAAI asked it to do. */
-  bot: { keyHash?: string; keyHint?: string; device?: string; version?: string; lastSeen?: string; lastSync?: string; commands: BotCommand[] };
+  bot: {
+    keyHash?: string;
+    keyHint?: string;
+    device?: string;
+    version?: string;
+    lastSeen?: string;
+    lastSync?: string;
+    commands: BotCommand[];
+    /** The user's own second WhatsApp number: its private messages are orders for the assistant (see server/remote.ts). */
+    orderPhone?: string;
+    /** Ids of orders already carried out, so a message delivered twice runs once. */
+    orders?: string[];
+    /** When the last orders came, for the hourly limit. */
+    orderTimes?: string[];
+  };
   /** Names and numbers from the user's phone (saved contacts, as WhatsApp on the device sees them). */
   contacts: { name: string; phone: string }[];
   /** Contacts the user imported from a contacts file (iCloud, Google…): names, numbers, emails, companies. */
