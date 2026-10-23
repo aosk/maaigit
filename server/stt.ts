@@ -56,9 +56,13 @@ export async function transcribe(audio: Buffer, fetcher: typeof fetch = fetch): 
     form.append('prompt', vocabularyHint());
     const res = await fetcher(`${BASE}/audio/transcriptions`, { method: 'POST', headers: { Authorization: `Bearer ${KEY}` }, body: form, signal: AbortSignal.timeout(45_000) });
     if (!res.ok) {
-      // The provider's message can name the key or account: log it here, say little to the app.
-      console.error('Transcription failed', res.status, (await res.text().catch(() => '')).slice(0, 300));
-      throw new HttpError(res.status === 401 || res.status === 403 ? 502 : 503, res.status === 401 || res.status === 403 ? 'The voice service did not accept its key. Check STT_API_KEY.' : 'The voice service could not transcribe that. Try again.');
+      // The provider's message can name the key or account: log it here (on one line), say little to the app.
+      const said = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 400);
+      console.error('Transcription failed', res.status, said);
+      if (res.status === 401 || res.status === 403) throw new HttpError(502, 'The voice service did not accept its key. Check STT_API_KEY.');
+      // 429 is either "no credit on the account" (it will not pass by itself) or "too many requests" (it will).
+      if (res.status === 429 && /quota|billing|credit/i.test(said)) throw new HttpError(503, 'The voice service account has no credit. Add credit to it (for OpenAI: platform.openai.com → Billing), or use another service.');
+      throw new HttpError(503, res.status === 429 ? 'The voice service is busy. Try again in a minute.' : 'The voice service could not transcribe that. Try again.');
     }
     const body = (await res.json()) as { text?: unknown };
     return typeof body.text === 'string' ? body.text.trim().slice(0, 4000) : '';
