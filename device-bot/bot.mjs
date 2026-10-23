@@ -60,8 +60,8 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-24d';
-if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
+const VERSION = '2026-10-24e';
+if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
     ? `No .env file in ${HERE} (found: ${found.join(', ') || 'none'}). ${found.some((f) => f.endsWith('.rtf')) ? 'TextEdit saved it as rich text: create it with the terminal command in README.md. ' : ''}`
@@ -77,6 +77,15 @@ function fail(message) {
   process.exit(1);
 }
 const log = (...args) => console.log(new Date().toLocaleTimeString(), ...args);
+
+// An error nothing caught (WhatsApp Web reloading mid-call, a dropped connection) would end Node with code 1,
+// which the watcher reads as a setup problem and stops for good. Restart instead (code 2: again in 30 s).
+for (const event of ['uncaughtException', 'unhandledRejection']) {
+  process.on(event, (error) => {
+    console.error(new Date().toLocaleTimeString(), `✗ Unexpected error (${event}): ${error?.message ?? error}. Starting again in 30 seconds…`);
+    process.exit(2);
+  });
+}
 /** An error in one line, even when WhatsApp Web throws one with no message. */
 const why = (error) => (error?.message || String(error ?? 'unknown')).split('\n')[0].slice(0, 200) || error?.name || 'unknown error';
 
@@ -159,7 +168,8 @@ async function maai(method, route, body) {
   });
   const text = await res.text();
   if (res.status === 401) fail(`MAAI refused the key ${KEY.slice(0, 9)}… It is not the newest one: only the last key made in the admin page works. Make a new key, then put it in .env.`);
-  if (res.status === 404) fail('MAAI has no device key now (it was disconnected, or erased because the Render disk is missing). Make a new key.');
+  // Only the key check says "no key": a 404 elsewhere (an old command, a missing file) is an ordinary error.
+  if (res.status === 404 && route === '/status') fail('MAAI has no device key now (it was disconnected, or erased because the Render disk is missing). Make a new key.');
   if (!res.ok) throw new Error(`MAAI ${res.status}: ${text.slice(0, 200)}`);
   return JSON.parse(text);
 }
@@ -194,7 +204,9 @@ const ME_FILE = path.join(HERE, '.me');
 const myPhone = (process.env.MY_PHONE || (fs.existsSync(ME_FILE) ? fs.readFileSync(ME_FILE, 'utf8') : '')).replace(/\D/g, '').replace(/^00/, '').replace(/^0(5\d{8})$/, '966$1');
 const wa = new Client({
   authStrategy: new LocalAuth({ dataPath: path.join(HERE, '.wwebjs_auth') }),
-  puppeteer: { headless: true, args: ['--no-sandbox'], ...(browser ? { executablePath: browser } : {}) },
+  // Chrome's sandbox stays on (it shows content from strangers); it is only switched off on Linux, where Chrome
+  // cannot start without it when run as root.
+  puppeteer: { headless: true, args: process.platform === 'linux' ? ['--no-sandbox'] : [], ...(browser ? { executablePath: browser } : {}) },
   ...(myPhone.length >= 10 ? { pairWithPhoneNumber: { phoneNumber: myPhone, showNotification: true, intervalMs: 180_000 } } : {}),
 });
 /** Closes WhatsApp's hidden browser (at most 10 s), so the next start can open the same session. */
@@ -383,10 +395,13 @@ const MAX_VOICE_BYTES = 3 * 1024 * 1024;
 /** A voice note from the order number goes to MAAI as audio, to be written out and carried out as an order. */
 async function sendVoice(msg, item) {
   if (voiceSent.has(item.id)) return;
-  voiceSent.add(item.id);
+  voiceSent.add(item.id); // the same note arrives through two events: claim it now, give it back if it fails
   const media = await tryGet(() => msg.downloadMedia());
   const audio = media?.data ? Buffer.from(media.data, 'base64') : null;
-  if (!audio?.length) return log('⚠ Could not download a voice order from WhatsApp.');
+  if (!audio?.length) {
+    voiceSent.delete(item.id);
+    return log('⚠ Could not download a voice order from WhatsApp. Send it again.');
+  }
   if (audio.length > MAX_VOICE_BYTES) return log('⚠ A voice order was too long to send (over about 3 minutes).');
   const query = new URLSearchParams({ id: item.id, at: item.at, phone: item.phone });
   const res = await fetch(`${BASE}/voice?${query}`, {
@@ -395,7 +410,11 @@ async function sendVoice(msg, item) {
     body: audio,
     signal: AbortSignal.timeout(60_000),
   }).catch((e) => e);
-  log(res instanceof Error || !res.ok ? `⚠ Could not send a voice order to MAAI (${res instanceof Error ? why(res) : res.status}).` : 'Voice order sent to MAAI.');
+  if (res instanceof Error || !res.ok) {
+    voiceSent.delete(item.id);
+    return log(`⚠ Could not send a voice order to MAAI (${res instanceof Error ? why(res) : res.status}). Send it again.`);
+  }
+  log('Voice order sent to MAAI.');
 }
 
 async function onMessage(msg) {
@@ -548,7 +567,11 @@ const ALLOWED = [
       .map((f) => fs.realpathSync(path.resolve(f))),
   ),
 ];
-/** Files that would run something when opened: never opened. */
+/** Files the bot opens: documents, pictures, sound and video only (anything else could run something). */
+const OPENABLE = /\.(pdf|docx?|xlsx?|pptx?|odt|ods|odp|rtf|txt|csv|md|png|jpe?g|gif|webp|heic|bmp|tiff?|mp3|m4a|wav|ogg|mp4|mov|avi|mkv|zip)$/i;
+/** Network shares and device paths: never touched (even checking them can send the Windows sign-in to another machine). */
+const FAR_AWAY = /^(\\\\|\/\/|\\\\\?\\|\\\\\.\\)/;
+/** Files that would run something when opened: never opened, and named in the refusal. */
 const RUNNABLE = /\.(exe|com|bat|cmd|ps1|psm1|psd1|vbs|vbe|js|jse|mjs|cjs|wsf|wsh|msi|msp|msix|appx|scr|pif|lnk|url|reg|hta|cpl|jar|appref-ms|application|gadget|msc|inf|scf|sh|app|command|workflow|py|pyw|iso|img|vhd|vhdx)$/i;
 const MAX_FILE_MB = 60;
 
@@ -589,6 +612,7 @@ async function search(name) {
 /** The one file or folder the user meant, inside the allowed folders, or an error saying what to do. */
 async function findTarget(target) {
   const given = target.trim().replace(/^["']|["']$/g, '').replace(/^~(?=$|[\\/])/, HOME);
+  if (FAR_AWAY.test(given)) throw new Error('Network and device paths are not used. Name a file in your allowed folders.');
   if (!ALLOWED.length) throw new Error('No allowed folders on this computer. Set ALLOWED_FOLDERS in .env (for example C:\\Users\\you\\Documents).');
   const where = ALLOWED.map((f) => path.basename(f)).join(', ');
   const tries = path.isAbsolute(given) ? [given] : ALLOWED.map((root) => path.join(root, given));
@@ -629,6 +653,7 @@ async function act(action, target) {
   const stat = fs.statSync(file);
   if (action === 'open_path') {
     if (stat.isFile() && RUNNABLE.test(file)) throw new Error(`"${path.basename(file)}" is a program or script; the bot never runs those.`);
+    if (stat.isFile() && !OPENABLE.test(file)) throw new Error(`The bot opens documents, pictures, sound and video only, not "${path.extname(file) || 'this kind of'}" files. Open it yourself.`);
     await openWithDefault(file, false);
     log(`Opened ${shown(file)}`);
     return { ok: true, output: `Opened ${shown(file)}.` };
@@ -648,7 +673,22 @@ async function act(action, target) {
   throw new Error('Unknown action.');
 }
 
+/** Commands being carried out right now: a restart or an update waits for them (a reply half-sent is never cut off). */
+let busyCommands = 0;
+async function whenIdle(maxMs = 2 * 60_000) {
+  for (const start = Date.now(); busyCommands > 0 && Date.now() - start < maxMs; ) await pause(500);
+}
+
 async function handle(commands) {
+  busyCommands++;
+  try {
+    await handleAll(commands);
+  } finally {
+    busyCommands--;
+  }
+}
+
+async function handleAll(commands) {
   let restart = false;
   for (const c of commands ?? []) {
     let result;
@@ -685,6 +725,8 @@ async function handle(commands) {
   }
   if (restart) {
     log('Restart asked from MAAI. Starting again…');
+    busyCommands--; // this round is done; wait only for others
+    await whenIdle();
     await closeWhatsApp();
     process.exit(process.env.MAAI_LAUNCHER ? UPDATED : 2);
   }
@@ -737,7 +779,8 @@ async function sync() {
       await handle(out.commands);
     } while (queue.length);
   } catch (error) {
-    log('Delivery failed, trying again later:', error.message);
+    log('Delivery failed, trying again in a minute:', error.message);
+    deliverSoon(60_000);
   } finally {
     syncing = false;
   }
@@ -769,11 +812,12 @@ wa.on('ready', async () => {
 
 process.on('SIGINT', async () => {
   log('Stopping…');
-  await wa.destroy().catch(() => {});
+  await closeWhatsApp();
   process.exit(0);
 });
 
-// Right after Windows starts the internet may not be up yet, and MAAI may be waking up: keep trying for about 10 minutes.
+// Right after Windows starts the internet may not be up yet, and MAAI may be waking up: keep trying, waiting a
+// little longer each time (up to 5 minutes). Only a refused key (handled in maai()) stops the bot.
 for (let attempt = 1; ; attempt++) {
   const error = await maai('GET', '/status').then(() => null, (e) => e);
   if (!error) {
@@ -781,9 +825,8 @@ for (let attempt = 1; ; attempt++) {
     break;
   }
   const reason = error.cause?.code ?? error.message;
-  if (attempt >= 20) fail(`Could not reach MAAI at ${BASE} (${reason}). Check MAAI_URL and the internet connection.`);
-  if (attempt === 1) log(`Waiting for MAAI or the internet (${reason})…`);
-  await new Promise((r) => setTimeout(r, 30_000));
+  if (attempt === 1 || attempt % 10 === 0) log(`Waiting for MAAI or the internet (${reason})…`);
+  await new Promise((r) => setTimeout(r, Math.min(30_000 * attempt, 5 * 60_000)));
 }
 
 // ---------- Updating itself ----------
@@ -807,6 +850,8 @@ async function update() {
 }
 async function takeUpdate() {
   const { version, code } = await maai('GET', '/script');
+  // Versions are dates ("2026-10-24e"): never go back to an older one.
+  if (typeof version === 'string' && version < VERSION) return;
   if (version && version !== VERSION) log(`A newer bot is available (${version}); updating…`);
   if (!version || version === VERSION || typeof code !== 'string' || !code.includes("const VERSION = '")) return;
   const self = path.join(HERE, 'bot.mjs');
@@ -820,11 +865,11 @@ async function takeUpdate() {
     return;
   }
   fs.copyFileSync(self, `${self}.bak`);
-  // Writing over the running file can be refused for a moment (an antivirus checking the new file): try a few times.
+  // Swapped in one step (a rename), so a power cut never leaves half a file. Windows can refuse it for a moment
+  // (an antivirus checking the new file): try a few times.
   for (let attempt = 1; ; attempt++) {
     try {
-      fs.copyFileSync(next, self);
-      fs.rmSync(next, { force: true });
+      fs.renameSync(next, self);
       break;
     } catch (error) {
       if (attempt >= 5) throw new Error(`could not replace bot.mjs (${why(error)}); download it again from GitHub`);
@@ -835,14 +880,22 @@ async function takeUpdate() {
     log(`Updated to ${version}. Start the bot again with "npm start" to use it.`);
     return;
   }
-  log(`Updated to ${version}. Restarting…`);
-  await wa.destroy().catch(() => {});
+  log(`Updated to ${version}. Restarting when the current commands are done…`);
+  await whenIdle();
+  await closeWhatsApp();
   process.exit(UPDATED);
 }
 
 await update().catch((error) => log('Could not check for an update:', why(error)));
 setInterval(() => void update().catch((error) => log('Could not check for an update:', why(error))), 15 * 60_000);
 closeLeftoverBrowser();
+// If WhatsApp's browser dies (crash, killed), nothing else would notice: the bot would look alive and do nothing.
+wa.once('ready', () => {
+  wa.pupBrowser?.on('disconnected', () => {
+    log('⚠ WhatsApp\'s browser closed. Starting again in 30 seconds…');
+    process.exit(2);
+  });
+});
 wa.initialize().catch((error) => {
   if (/Could not find Chrome|Failed to launch/i.test(error.message)) {
     fail('No browser for WhatsApp. Install Google Chrome (google.com/chrome), or put its path in .env as CHROME_PATH=C:\\...\\chrome.exe, then run npm start again.');

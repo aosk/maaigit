@@ -34,6 +34,11 @@ export function Assistant() {
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState<StatusInfo | null>(null);
+  // Known once the status has loaded (or failed to): only then is it known whether the smart voice service is there.
+  const [statusKnown, setStatusKnown] = useState(false);
+  // Opened from the "talk" shortcut: start listening once the status and the chat are loaded, with that render's toggleMic.
+  const listenWanted = useRef(false);
+  const [chatLoaded, setChatLoaded] = useState(false);
   const stopRef = useRef<() => void>();
   const inputRef = useRef<HTMLInputElement>(null);
   const [voiceNote, setVoiceNote] = useState('');
@@ -54,7 +59,7 @@ export function Assistant() {
 
   useEffect(() => {
     alive.current = true;
-    api.status().then(setStatus).catch(() => {});
+    api.status().then(setStatus).catch(() => {}).finally(() => setStatusKnown(true));
     api
       .chat()
       .then((c) => {
@@ -62,7 +67,8 @@ export function Assistant() {
         setProposals(Object.fromEntries(c.proposals.map((p) => [p.id, p])));
         const arrival = takeArrival();
         if (arrival.prompt) void send(arrival.prompt);
-        else if (arrival.listen) toggleMic();
+        else if (arrival.listen) listenWanted.current = true;
+        setChatLoaded(true);
       })
       .catch((e: Error) => setError(e.message));
     return () => {
@@ -74,6 +80,14 @@ export function Assistant() {
       previews.current.clear();
     };
   }, []);
+
+  useEffect(() => {
+    if (!statusKnown || !chatLoaded || !listenWanted.current) return;
+    listenWanted.current = false;
+    toggleMic();
+    // toggleMic is this render's, which already knows the status.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusKnown, chatLoaded]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: settings.toggles.reduceMotion ? 'auto' : 'smooth', block: 'end' });

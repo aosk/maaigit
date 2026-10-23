@@ -44,13 +44,22 @@ inbox.post('/inbox/:id/draft', wrap(async (req, res) => {
   res.json(await draftReply({ from: message.from, text: message.text, tone, lang: lang(req.body.lang) }));
 }));
 
+/** Replies being emailed right now: a second tap or a retry must not send the same email twice. */
+const emailing = new Set<string>();
+
 inbox.post('/inbox/:id/email', wrap(async (req, res) => {
   const message = find(state.inbox, req.params.id);
+  if (emailing.has(message.id)) throw new HttpError(409, 'Already sending this reply: one moment.');
   if (!agentEnabled('messaging')) throw new HttpError(403, 'Messaging is switched off by the admin.');
   const to = text(req.body.to, 320) || message.email || '';
   const body = text(req.body.body, 20_000);
   if (!body) throw new HttpError(400, 'The reply is empty');
-  await sendMail({ to, subject: text(req.body.subject, 300) || `Re: ${message.text.slice(0, 60)}`, body });
+  emailing.add(message.id);
+  try {
+    await sendMail({ to, subject: text(req.body.subject, 300) || `Re: ${message.text.slice(0, 60)}`, body });
+  } finally {
+    emailing.delete(message.id);
+  }
   message.replied = true;
   audit(`Emailed a reply to ${message.from} (${to})`, 'User', 'approved');
   res.json(message);

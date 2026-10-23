@@ -22,6 +22,7 @@ function Reply({ message, gmail, whatsapp, device, onBack, onChanged }: { messag
   const emailing = useAction();
   const texting = useAction();
   const [textSent, setTextSent] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const busy = drafting.busy;
   const error = drafting.error || emailing.error || texting.error;
   // WhatsApp only lets MAAI answer within 24 hours of their last message; the server checks it too.
@@ -57,6 +58,7 @@ function Reply({ message, gmail, whatsapp, device, onBack, onChanged }: { messag
     emailing.run(async () => {
       if (!message.email) return;
       await api.emailReply(message.id, { to: message.email, subject: replySubject, body: draft });
+      setEmailSent(true);
       onChanged();
     });
 
@@ -121,8 +123,8 @@ function Reply({ message, gmail, whatsapp, device, onBack, onChanged }: { messag
       {message.email && (
         <section className="card" aria-label={t.sendByEmail}>
           {gmail ? (
-            <button className="btn primary big" onClick={emailIt} disabled={busy || !draft || emailing.busy}>
-              <Send size={20} />{emailing.busy ? t.sending : `${t.sendByEmail} · ${message.email}`}
+            <button className="btn primary big" onClick={emailIt} disabled={busy || !draft || emailing.busy || emailSent}>
+              <Send size={20} />{emailing.busy ? t.sending : emailSent ? `✓ ${t.replied}` : `${t.sendByEmail} · ${message.email}`}
             </button>
           ) : (
             <a className="btn primary big" href={mailtoLink(message.email, replySubject, draft)} style={{ textDecoration: 'none' }}>
@@ -171,12 +173,14 @@ export function Inbox() {
   const [replying, setReplying] = useState<InboxMessage | null>(null);
   const [adding, setAdding] = useState(false);
 
+  // `background` marks the automatic refreshes: they must not count as the user being here (else the Face ID
+  // lock would never close the app while the Inbox is open).
   const load = useCallback(
-    (refresh: boolean) => {
+    (refresh: boolean, background = false) => {
       setBusy(true);
       setError('');
       api
-        .inboxFeed(lang, refresh)
+        .inboxFeed(lang, refresh, background)
         .then(setFeed)
         .catch((e: Error) => setError(e.message))
         .finally(() => setBusy(false));
@@ -185,7 +189,7 @@ export function Inbox() {
   );
   useEffect(() => {
     load(false);
-    const timer = setInterval(() => load(false), RELOAD_MS);
+    const timer = setInterval(() => document.hidden || load(false, true), RELOAD_MS);
     return () => clearInterval(timer);
   }, [load]);
   useOnRefresh(() => load(false));
@@ -193,7 +197,7 @@ export function Inbox() {
   const linking = Boolean(feed?.bot?.link);
   useEffect(() => {
     if (!linking) return;
-    const timer = setInterval(() => document.hidden || load(false), 15_000);
+    const timer = setInterval(() => document.hidden || load(false, true), 15_000);
     return () => clearInterval(timer);
   }, [linking, load]);
   useEffect(() => {

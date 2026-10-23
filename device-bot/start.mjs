@@ -8,6 +8,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const UPDATED = 75;
 const SETUP_PROBLEM = 1;
 
+let current = null;
+// One listener for Ctrl+C, passed to whichever bot is running now.
+process.on('SIGINT', () => current?.kill('SIGINT'));
+
 function run() {
   const bot = spawn(process.execPath, [path.join(HERE, 'bot.mjs')], { stdio: 'inherit', env: { ...process.env, MAAI_LAUNCHER: '1' } });
   bot.on('exit', (code) => {
@@ -21,7 +25,7 @@ function run() {
       setTimeout(run, 30_000);
     }
   });
-  process.once('SIGINT', () => bot.kill('SIGINT'));
+  current = bot;
 }
 
 run();

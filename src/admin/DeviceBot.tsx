@@ -15,7 +15,8 @@ export function DeviceBot() {
   const [pin, setPin] = useState('');
 
   const load = useCallback((background = false) => {
-    api.bot(background).then((d) => { setData(d); setError(''); }).catch((e: Error) => setError(e.message));
+    // A background refresh keeps an error the user has not read yet (from saving the PIN or number).
+    api.bot(background).then((d) => { setData(d); if (!background) setError(''); }).catch((e: Error) => setError(e.message));
   }, []);
   useEffect(() => {
     load();
@@ -46,6 +47,13 @@ export function DeviceBot() {
       setBusy(false);
     }
   }
+
+  // The new key is shown once, then hidden after 2 minutes: an admin page left open must not keep it on screen.
+  useEffect(() => {
+    if (!key) return;
+    const timer = setTimeout(() => setKey(''), 2 * 60_000);
+    return () => clearTimeout(timer);
+  }, [key]);
 
   async function restart() {
     if (!window.confirm('Restart the bot on your computer? It reconnects to WhatsApp by itself (no new link) and takes the newest version.')) return;
@@ -143,7 +151,7 @@ export function DeviceBot() {
                 With a PIN, reply <code dir="ltr">approve 3 PIN</code> (or <code>موافق 3 PIN</code>) to carry out card #3, and <code>cancel 3</code> to drop it. 3 wrong PINs lock it for an hour. Every approval is logged and your phones are told. Tasks on your computer are approved in the app only. Use a PIN that is not your phone's passcode, and turn on disappearing messages in that chat so the PIN does not stay there.
               </p>
               <div className="row wrap">
-                <input id="order-pin" type="password" inputMode="numeric" autoComplete="new-password" placeholder={s.orderPin ? 'New PIN (6–8 digits)' : '6–8 digits'} value={pin} maxLength={8} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} disabled={busy} />
+                <input id="order-pin" type="password" inputMode="numeric" autoComplete="off" placeholder={s.orderPin ? 'New PIN (6–8 digits)' : '6–8 digits'} value={pin} maxLength={8} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} disabled={busy} />
                 <button className="admin-btn" disabled={busy || pin.length < 6} onClick={() => void savePin(pin)}>{s.orderPin ? 'Change PIN' : 'Set PIN'}</button>
                 {s.orderPin && <button className="admin-btn" disabled={busy} onClick={() => void savePin('')}>Remove PIN</button>}
               </div>
