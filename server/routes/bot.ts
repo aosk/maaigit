@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { Router, type NextFunction, type Request, type Response } from 'express';
+import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, receiveLink, seen, takeCommands, waitForCommands } from '../bot.js';
 import { alertLink } from '../notify.js';
 import { takeOrder } from '../remote.js';
@@ -59,7 +59,23 @@ deviceApi.use(deviceKey);
 deviceApi.post('/sync', (req, res) => {
   seen(deviceName(req.body?.device));
   const delivered = receiveFromBot(req.body, Date.now(), (order) => takeOrder(order));
-  res.json({ ...delivered, commands: takeCommands() });
+  // The order number goes back to the bot, which then sends its voice notes as audio (to /voice).
+  res.json({ ...delivered, commands: takeCommands(), orderPhone: state.bot.orderPhone ?? '' });
+});
+
+/**
+ * A voice note from the user's order number, as raw audio (too big for the JSON door): written out and carried
+ * out as an order. Anything not from exactly the order number is refused.
+ */
+deviceApi.post('/voice', express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '4mb' }), (req, res) => {
+  seen();
+  const id = typeof req.query.id === 'string' ? req.query.id.slice(0, 128) : '';
+  const phone = typeof req.query.phone === 'string' ? req.query.phone.replace(/\D/g, '') : '';
+  const at = Date.parse(typeof req.query.at === 'string' ? req.query.at : '');
+  if (!id || !Buffer.isBuffer(req.body) || !req.body.length) throw new BotInputError('Send the recording with ?id=…&at=…&phone=…');
+  if (!state.bot.orderPhone || phone !== state.bot.orderPhone) return res.status(403).json({ error: 'Voice orders come only from the order number.' });
+  takeOrder({ externalId: `bot:${id}`, text: '', at: Number.isFinite(at) ? Math.min(at, Date.now()) : Date.now(), audio: req.body });
+  res.json({ ok: true });
 });
 
 /** The phone's contacts (names and numbers), so the assistant can find someone by name. Replaces the last list. */

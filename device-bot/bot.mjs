@@ -60,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-24b';
+const VERSION = '2026-10-24c';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -372,9 +372,39 @@ wa.on('disconnected', (reason) => {
 // "message" (incoming only) is listened to as well: some WhatsApp Web versions fire only one of the two.
 wa.on('message', (msg) => void onMessage(msg));
 wa.on('message_create', (msg) => void onMessage(msg));
+// ---------- Voice orders ----------
+
+/** The user's order number, as MAAI says on every delivery: only its voice notes are sent to MAAI as audio. */
+let orderPhone = '';
+const voiceSent = new Set();
+/** Longest voice note sent (about 3 minutes): longer ones get a note back instead. */
+const MAX_VOICE_BYTES = 3 * 1024 * 1024;
+
+/** A voice note from the order number goes to MAAI as audio, to be written out and carried out as an order. */
+async function sendVoice(msg, item) {
+  if (voiceSent.has(item.id)) return;
+  voiceSent.add(item.id);
+  const media = await tryGet(() => msg.downloadMedia());
+  const audio = media?.data ? Buffer.from(media.data, 'base64') : null;
+  if (!audio?.length) return log('⚠ Could not download a voice order from WhatsApp.');
+  if (audio.length > MAX_VOICE_BYTES) return log('⚠ A voice order was too long to send (over about 3 minutes).');
+  const query = new URLSearchParams({ id: item.id, at: item.at, phone: item.phone });
+  const res = await fetch(`${BASE}/voice?${query}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${KEY}`, 'content-type': 'audio/ogg' },
+    body: audio,
+    signal: AbortSignal.timeout(60_000),
+  }).catch((e) => e);
+  log(res instanceof Error || !res.ok ? `⚠ Could not send a voice order to MAAI (${res instanceof Error ? why(res) : res.status}).` : 'Voice order sent to MAAI.');
+}
+
 async function onMessage(msg) {
   try {
     const item = await toItem(msg);
+    if (item && orderPhone && item.phone === orderPhone && !item.fromMe && !item.group && (msg.type === 'ptt' || msg.type === 'audio')) {
+      await sendVoice(msg, item);
+      return;
+    }
     if (!item) {
       if (!msg.fromMe && process.env.DEBUG) log(`Skipped a "${msg.type}" message from ${msg.from}.`);
       return;
@@ -676,6 +706,7 @@ async function sync() {
     do {
       const batch = queue.slice(0, 200);
       const out = await maai('POST', '/sync', { device: DEVICE, version: VERSION, messages: batch });
+      orderPhone = typeof out.orderPhone === 'string' ? out.orderPhone : '';
       queue = queue.slice(batch.length);
       for (const m of batch) queued.delete(m.id);
       keepQueue();

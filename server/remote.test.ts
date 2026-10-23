@@ -13,10 +13,12 @@ vi.hoisted(() => {
 
 // The assistant itself is tested elsewhere: here it is a stand-in that records what it was asked.
 vi.mock('./ai/chat.js', async (original) => ({ ...(await original<typeof import('./ai/chat')>()), chat: vi.fn() }));
+vi.mock('./stt.js', async (original) => ({ ...(await original<typeof import('./stt')>()), sttConfigured: true, transcribe: vi.fn() }));
 vi.mock('./ai/claude.js', async (original) => ({ ...(await original<typeof import('./ai/claude')>()), client: {}, create: vi.fn() }));
 
 import type { Proposal } from '../shared/types';
 import { chat } from './ai/chat';
+import { transcribe } from './stt';
 import { createKey, receiveFromBot, takeCommands } from './bot';
 import { createInnerApp, createOnlineSite } from './site';
 import { listen, raw } from './security/helpers';
@@ -53,6 +55,7 @@ beforeEach(async () => {
   state.proposals = [];
   state.audit = [];
   answered.mockReset();
+  vi.mocked(transcribe).mockReset();
   answered.mockResolvedValue({ text: 'Tomorrow: stand-up at 9.', proposals: [] });
   key = createKey();
   resetBotLimits();
@@ -189,6 +192,37 @@ describe('orders from the user\'s own WhatsApp number', () => {
       receiveFromBot({ messages: [wa({ phone: '966500000002', text: `approve ${no} ${PIN}` })] }, Date.now(), () => expect.fail('not an order'));
       await new Promise((r) => setTimeout(r, 50));
       expect(p.status).toBe('pending');
+    });
+  });
+
+  describe('voice notes from the order number', () => {
+    const heard = vi.mocked(transcribe);
+    const voice = (phone = ORDERS, id = `v${Math.random().toString(16).slice(2)}`) =>
+      fetch(`http://127.0.0.1:${site.port}/bot/v1/voice?${new URLSearchParams({ id, at: new Date().toISOString(), phone })}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${key}`, 'content-type': 'audio/ogg' },
+        body: Buffer.from('OggS fake voice note'),
+      });
+
+    it('are written out, shown back, and carried out like a typed order', async () => {
+      heard.mockResolvedValueOnce('وش عندي بكرة؟');
+      expect((await voice()).status).toBe(200);
+      await vi.waitFor(() => expect(state.bot.commands.filter((c) => c.status === 'queued')).toHaveLength(2));
+      const [echo, reply] = takeCommands();
+      expect(echo.text).toBe('🤖 MAAI\n🎙️ سمعت: «وش عندي بكرة؟»');
+      expect(answered).toHaveBeenCalledWith(expect.anything(), '(from my WhatsApp) وش عندي بكرة؟', 'ar');
+      expect(reply.text).toContain('Tomorrow: stand-up at 9.');
+    });
+
+    it('come only from the order number, and never approve: a spoken PIN is refused', async () => {
+      expect((await voice('966500000002')).status).toBe(403);
+      expect((await fetch(`http://127.0.0.1:${site.port}/bot/v1/voice?id=x&phone=${ORDERS}`, { method: 'POST', headers: { 'content-type': 'audio/ogg' }, body: 'x' })).status).toBe(401);
+      await asUser('PUT', '/admin/bot/order-pin', { pin: '482913' });
+      heard.mockResolvedValueOnce('موافق ٣ ٤٨٢٩١٣');
+      await voice();
+      const [reply] = await repliesSoon();
+      expect(reply.text).toContain('بالكتابة فقط');
+      expect(answered).not.toHaveBeenCalled();
     });
   });
 

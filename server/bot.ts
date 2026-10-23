@@ -201,6 +201,8 @@ export interface Order {
   externalId: string;
   text: string;
   at: number;
+  /** A voice note (its recording), written out before it is carried out. */
+  audio?: Buffer;
 }
 
 /** The user's order number (digits, international form), set in the admin page; empty to stop taking orders. */
