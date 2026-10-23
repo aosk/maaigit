@@ -60,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-24a';
+const VERSION = '2026-10-24b';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -625,7 +625,11 @@ async function handle(commands) {
       if (c.kind === 'reply') {
         if (!c.phone) throw new Error('No number');
         // MAAI's text is sent exactly as given; only one person, never a group.
-        const target = chatOf[c.phone] ?? `${c.phone}@c.us`;
+        // A chat MAAI has seen is answered there; anyone else is looked up first: newer WhatsApp refuses
+        // "number@c.us" for a person it knows by a hidden id ("No LID for user").
+        const found = chatOf[c.phone] ? null : await tryGet(() => wa.getNumberId(c.phone));
+        if (!chatOf[c.phone] && found === null) throw new Error(`+${c.phone} is not on WhatsApp`);
+        const target = chatOf[c.phone] || idText(found) || `${c.phone}@c.us`;
         rememberSent(target, c.text);
         await wa.sendMessage(target, c.text);
         log(`Sent to ${c.toName ?? `+${c.phone}`}`);

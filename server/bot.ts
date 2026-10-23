@@ -415,6 +415,8 @@ export function finishCommand(commandId: string, body: unknown, now = Date.now()
   c.status = b.ok ? 'done' : 'failed';
   c.finishedAt = new Date(now).toISOString();
   c.result = str(b.output, 4000) || undefined;
+  // Why something failed goes to the server log too (the bot's own error words: no message text is in them).
+  if (!b.ok) console.log(`Device bot could not do ${c.kind}${c.action ? ` ${c.action}` : ''}${c.automatic ? ' (automatic)' : ''}: ${(c.result ?? 'no reason given').slice(0, 200)}`);
   if (!c.automatic) audit(`Device bot ${b.ok ? 'did' : 'could not do'}: ${c.kind === 'reply' ? `the WhatsApp reply to ${c.toName ?? c.phone}` : c.text.slice(0, 80)}`, 'Device bot', b.ok ? 'done' : 'error');
   save();
   return c;
