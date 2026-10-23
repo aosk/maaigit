@@ -60,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-22f';
+const VERSION = '2026-10-24a';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -260,6 +260,25 @@ const queued = new Set(queue.map((m) => m.id));
 /** A WhatsApp id as text, whether WhatsApp Web gives a string or an id object. */
 const idText = (x) => (typeof x === 'string' ? x : x?._serialized ?? (x?.user && x?.server ? `${x.user}@${x.server}` : ''));
 
+/**
+ * The real phone number behind a WhatsApp id. Newer WhatsApp often names a person by a hidden id ("…@lid")
+ * instead of their number, and then the contact's "number" is that hidden id too: ask WhatsApp for the real
+ * one, so MAAI sees the same number the user saved (the order number, contacts, replies). Kept per run.
+ */
+const realNumbers = new Map();
+async function phoneOf(id, contact) {
+  if (!id) return digits(contact?.number);
+  if (id.endsWith('@c.us')) return digits(id);
+  if (!id.endsWith('@lid')) return digits(contact?.number) || digits(id);
+  if (!realNumbers.has(id)) {
+    const [found] = (await tryGet(() => wa.getContactLidAndPhone([id]))) ?? [];
+    const pn = found?.pn && found.pn.endsWith('@c.us') ? digits(found.pn) : '';
+    if (pn) realNumbers.set(id, pn);
+    else return digits(contact?.number) || digits(id);
+  }
+  return realNumbers.get(id);
+}
+
 async function toItem(msg, knownChat) {
   const chatId = idText(msg.fromMe ? msg.to : msg.from) || idText(msg.id?.remote);
   const body = typeof msg.body === 'string' ? msg.body : typeof msg._data?.body === 'string' ? msg._data.body : String(msg.caption ?? '');
@@ -273,11 +292,11 @@ async function toItem(msg, knownChat) {
   let phone = '';
   let from = '';
   if (msg.fromMe) {
-    phone = chatId.endsWith('@c.us') ? digits(chatId) : digits((await tryGet(() => chat?.getContact()))?.number) || digits(chatId);
+    phone = await phoneOf(chatId, chatId.endsWith('@c.us') ? null : await tryGet(() => chat?.getContact()));
   } else {
     const contact = await tryGet(() => msg.getContact());
     const person = group ? idText(msg.author) : chatId;
-    phone = digits(contact?.number) || digits(person);
+    phone = await phoneOf(person, contact);
     from = contact?.pushname || contact?.name || msg._data?.notifyName || '';
     if (group) from = `${from || `+${phone}`} · ${chat?.name ?? 'Group'}`;
     // Replies go back to this exact chat, whatever form its id takes.
