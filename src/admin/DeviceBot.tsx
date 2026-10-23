@@ -47,6 +47,19 @@ export function DeviceBot() {
     }
   }
 
+  async function restart() {
+    if (!window.confirm('Restart the bot on your computer? It reconnects to WhatsApp by itself (no new link) and takes the newest version.')) return;
+    setBusy(true);
+    setError('');
+    try {
+      setData(await api.restartBot());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveOrderPhone(phone: string) {
     if (phone && !window.confirm(`Take orders from +${phone.replace(/\D/g, '')}? Whoever has that phone can ask MAAI about your email, calendar and messages (anything that sends or changes something still needs your approval in MAAI).`)) return;
     setBusy(true);
@@ -83,6 +96,7 @@ export function DeviceBot() {
         <h2 className="h2" style={{ fontSize: 18 }}>Device bot</h2>
         <div className="row wrap">
           <button className="admin-btn" onClick={() => act('key')} disabled={busy}>{s?.connected ? 'New key' : 'Make a device key'}</button>
+          {s?.connected && <button className="admin-btn" onClick={() => void restart()} disabled={busy}>Restart bot</button>}
           {s?.connected && <button className="admin-btn" onClick={() => act('off')} disabled={busy}>Disconnect</button>}
         </div>
       </div>
@@ -157,7 +171,7 @@ export function DeviceBot() {
               {data.commands.map((c) => (
                 <tr key={c.id}>
                   <td className="sub" style={{ whiteSpace: 'nowrap' }}>{when(c.createdAt)}</td>
-                  <td dir="auto">{c.kind === 'reply' ? `${c.automatic ? 'Fixed note' : 'WhatsApp reply'} to ${c.toName ?? `+${c.phone}`}` : c.text}</td>
+                  <td dir="auto">{c.kind === 'reply' ? `${c.automatic ? 'Automatic reply' : 'WhatsApp reply'} to ${c.toName ?? `+${c.phone}`}` : c.text}</td>
                   <td>{c.status}</td>
                   <td className="sub" dir="auto" style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.result ?? ''}</td>
                 </tr>

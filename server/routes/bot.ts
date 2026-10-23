@@ -60,7 +60,7 @@ deviceApi.post('/sync', (req, res) => {
   seen(deviceName(req.body?.device));
   const delivered = receiveFromBot(req.body, Date.now(), (order) => takeOrder(order));
   // The order number goes back to the bot, which then sends its voice notes as audio (to /voice).
-  res.json({ ...delivered, commands: takeCommands(), orderPhone: state.bot.orderPhone ?? '' });
+  res.json({ ...delivered, commands: takeCommands(), orderPhone: state.bot.orderPhone ?? '', latest: latest() });
 });
 
 /**
@@ -98,7 +98,7 @@ deviceApi.get('/commands', async (req, res) => {
   const wait = Math.min(Math.max(Number(req.query.wait) || 0, 0), 25) * 1000;
   // The response (not the request) closing early means the bot hung up.
   const commands = await waitForCommands(wait, (gone) => res.on('close', gone));
-  if (!res.headersSent && !res.writableEnded) res.json({ commands });
+  if (!res.headersSent && !res.writableEnded) res.json({ commands, latest: latest() });
 });
 
 /** What happened with one command: {"ok": true|false, "output": "..."}. */
@@ -111,6 +111,16 @@ deviceApi.post('/commands/:id/result', (req, res) => {
 
 /** The newest bot, as deployed with MAAI, so the bot can update itself (it checks it before using it). */
 const SCRIPT = fileURLToPath(new URL('../../device-bot/bot.mjs', import.meta.url));
+/** Its version, read once: told to the bot with every answer, so it updates at once instead of at its 15-minute check. */
+let newest: string | undefined;
+const latest = (): string => {
+  try {
+    newest ??= /const VERSION = '([^']+)'/.exec(fs.readFileSync(SCRIPT, 'utf8'))?.[1] ?? '';
+  } catch {
+    newest = '';
+  }
+  return newest;
+};
 deviceApi.get('/script', (_req, res) => {
   seen();
   let code: string;

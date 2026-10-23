@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { AdminOverview, BotOverview } from '../../shared/types.js';
-import { botStatus, createKey, revokeKey, setOrderPhone } from '../bot.js';
+import { botStatus, createKey, queueCommand, revokeKey, setOrderPhone } from '../bot.js';
 import { setOrderPin } from '../remote.js';
 import { healthReport } from '../health.js';
 import { allEvents, audit, state } from '../store.js';
@@ -65,6 +65,17 @@ admin.patch('/admin/bot/mode', (req, res) => {
   if (mode !== 'smart' && mode !== 'fixed' && mode !== 'off') throw new HttpError(400, 'Choose smart, fixed or off.');
   state.replyMode = mode;
   audit(`Automatic WhatsApp replies set to ${mode}`, 'User', 'done');
+  res.json(botOverview());
+});
+
+/** Starts the bot on the user's computer again (WhatsApp stays linked); it also takes the newest version then. */
+admin.post('/admin/bot/restart', (_req, res) => {
+  try {
+    queueCommand({ kind: 'restart', text: 'Restart the bot' });
+  } catch (error) {
+    throw new HttpError(409, (error as Error).message);
+  }
+  audit('Asked the device bot to restart', 'User', 'done');
   res.json(botOverview());
 });
 

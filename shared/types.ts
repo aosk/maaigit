@@ -582,8 +582,8 @@ export type DeviceAction = 'open_url' | 'open_path' | 'send_file';
 
 export interface BotCommand {
   id: string;
-  /** reply: send a WhatsApp message from the user's own number; task: an instruction the user approved. */
-  kind: 'reply' | 'task';
+  /** reply: send a WhatsApp message from the user's own number; task: an instruction the user approved; restart: start the bot again (asked in Admin). */
+  kind: 'reply' | 'task' | 'restart';
   /** A task the bot does itself; text is then the link (open_url) or the file or folder (open_path, send_file). */
   action?: DeviceAction;
   /** For a reply: the number, digits only, and who it is. */

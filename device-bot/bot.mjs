@@ -60,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-24c';
+const VERSION = '2026-10-24d';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost/.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -649,10 +649,15 @@ async function act(action, target) {
 }
 
 async function handle(commands) {
+  let restart = false;
   for (const c of commands ?? []) {
     let result;
     try {
-      if (c.kind === 'reply') {
+      if (c.kind === 'restart') {
+        // Asked from MAAI's admin page: start again (WhatsApp stays linked), once this round's results are in.
+        restart = true;
+        result = { ok: true, output: 'Restarting.' };
+      } else if (c.kind === 'reply') {
         if (!c.phone) throw new Error('No number');
         // MAAI's text is sent exactly as given; only one person, never a group.
         // A chat MAAI has seen is answered there; anyone else is looked up first: newer WhatsApp refuses
@@ -678,6 +683,20 @@ async function handle(commands) {
     }
     await maai('POST', `/commands/${c.id}/result`, result).catch((e) => log(e.message));
   }
+  if (restart) {
+    log('Restart asked from MAAI. Starting again…');
+    await closeWhatsApp();
+    process.exit(process.env.MAAI_LAUNCHER ? UPDATED : 2);
+  }
+}
+
+/** MAAI says which bot is newest with every answer: a different one is taken at once, not at the next 15-minute check. */
+// A version that could not be taken is tried again only at the 15-minute check, not every 25 seconds.
+const triedAt = new Map();
+function newestIs(latest) {
+  if (typeof latest !== 'string' || !latest || latest === VERSION || Date.now() - (triedAt.get(latest) ?? 0) < 15 * 60_000) return;
+  triedAt.set(latest, Date.now());
+  void update().catch((error) => log('Could not update:', why(error)));
 }
 
 // ---------- The loops ----------
@@ -690,6 +709,7 @@ async function listenForCommands() {
   for (;;) {
     try {
       const r = await maai('GET', `/commands?wait=25&device=${encodeURIComponent(DEVICE)}`);
+      newestIs(r.latest);
       await handle(r.commands);
     } catch (error) {
       log('Waiting for commands failed, trying again in 10 s:', why(error));
@@ -707,6 +727,7 @@ async function sync() {
       const batch = queue.slice(0, 200);
       const out = await maai('POST', '/sync', { device: DEVICE, version: VERSION, messages: batch });
       orderPhone = typeof out.orderPhone === 'string' ? out.orderPhone : '';
+      newestIs(out.latest);
       queue = queue.slice(batch.length);
       for (const m of batch) queued.delete(m.id);
       keepQueue();
@@ -774,7 +795,17 @@ const UPDATED = 75;
  * Takes the newest bot from MAAI when it differs from this one: written next to this file, checked to be
  * valid JavaScript, the old copy kept as bot.mjs.bak, then restarted. Any problem: keep running as is.
  */
+let updating = false;
 async function update() {
+  if (updating) return;
+  updating = true;
+  try {
+    await takeUpdate();
+  } finally {
+    updating = false;
+  }
+}
+async function takeUpdate() {
   const { version, code } = await maai('GET', '/script');
   if (version && version !== VERSION) log(`A newer bot is available (${version}); updating…`);
   if (!version || version === VERSION || typeof code !== 'string' || !code.includes("const VERSION = '")) return;
