@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { FeedItem, InboxFeed, InboxMessage, StatusInfo, Tone } from '../../shared/types';
 import { api } from '../api';
+import { cachedFeed, keepFeed } from '../inboxCache';
 import { dayTime, time } from '../format';
 import { askAssistant } from '../nav';
 import { useSettings } from '../settings';
@@ -166,7 +167,10 @@ export function Inbox() {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   const [status, setStatus] = useState<StatusInfo | null>(null);
-  const [feed, setFeed] = useState<InboxFeed | null>(null);
+  // The last Inbox shows at once; the fresh one replaces it when it arrives.
+  const [feed, setFeed] = useState<InboxFeed | null>(() => cachedFeed(lang));
+  // Only the newest request may change the screen (a slow older one must not overwrite a newer answer).
+  const latest = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState<string | null>(null);
@@ -177,13 +181,18 @@ export function Inbox() {
   // lock would never close the app while the Inbox is open).
   const load = useCallback(
     (refresh: boolean, background = false) => {
+      const mine = ++latest.current;
       setBusy(true);
       setError('');
       api
         .inboxFeed(lang, refresh, background)
-        .then(setFeed)
-        .catch((e: Error) => setError(e.message))
-        .finally(() => setBusy(false));
+        .then((fresh) => {
+          if (mine !== latest.current) return;
+          setFeed(fresh);
+          keepFeed(lang, fresh);
+        })
+        .catch((e: Error) => mine === latest.current && setError(e.message))
+        .finally(() => mine === latest.current && setBusy(false));
     },
     [lang],
   );
@@ -222,7 +231,7 @@ export function Inbox() {
           <button className="btn ghost" onClick={() => load(true)} disabled={busy}>{busy ? t.reading : t.refresh}</button>
         </div>
         <p aria-live="polite" dir="auto">{busy && !feed ? t.readingInbox : feed?.summary || '…'}</p>
-        {feed && <div className="sub">{t.lastChecked(dayTime(feed.fetchedAt, lang))}{botLine ? ` · ${botLine}` : ''}</div>}
+        {feed && <div className="sub">{busy ? t.refreshing : t.lastChecked(dayTime(feed.fetchedAt, lang))}{botLine ? ` · ${botLine}` : ''}</div>}
       </section>
 
       {bot?.stale && <div className="banner" role="status">{t.botStale}</div>}

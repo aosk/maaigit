@@ -25,7 +25,10 @@ function Badge({ outcome, label }: { outcome: string; label?: string }) {
   return <span className="badge" style={{ background: bg, color: fg }}>{label ?? outcome[0].toUpperCase() + outcome.slice(1)}</span>;
 }
 
-/** The admin portal from the design: live counts, agent switches, integration health and the audit log. */
+/**
+ * The admin portal: one section at a time, picked in the side menu (#/admin/<section>), so each page stays short.
+ * Overview has the counts and the health summary; the others are one subject each.
+ */
 const SECTIONS = [
   { id: '', label: 'Overview' },
   { id: 'health', label: 'Server health' },
@@ -53,8 +56,9 @@ export function Admin() {
       const next = readSection();
       setSection(next);
       requestAnimationFrame(() => {
-        if (next) document.getElementById(next)?.scrollIntoView({ block: 'start' });
-        else window.scrollTo(0, 0);
+        window.scrollTo(0, 0);
+        // On a phone the menu is a row to swipe: bring the open section's button into view.
+        document.querySelector('.admin-nav a[aria-current="page"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
       });
     };
     go();
@@ -114,12 +118,10 @@ export function Admin() {
       <main className="admin-main">
         <header className="between wrap">
           <div>
-            <h1 style={{ fontSize: 28 }}>Overview</h1>
-            <span className="sub">Everything MAAI has done on this computer · refreshes every 10 seconds</span>
+            <h1 style={{ fontSize: 28 }}>{SECTIONS.find((x) => x.id === section)?.label ?? 'Overview'}</h1>
+            {section === '' && <span className="sub">Everything MAAI has done · refreshes every 10 seconds · pick a section on the side for the details</span>}
           </div>
           <div className="row wrap">
-            <label htmlFor="search" className="sr-only">Search the audit log</label>
-            <input id="search" className="admin-input" placeholder="Search the audit log" value={query} onChange={(e) => setQuery(e.target.value)} />
             <button className="admin-btn" aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => update({ look: dark ? 'light' : 'dark' })}>
               <Moon size={18} />
             </button>
@@ -128,9 +130,9 @@ export function Admin() {
 
         {error && <div className="error" role="alert">{error}</div>}
 
-        <Health />
+        {(section === '' || section === 'health') && <Health />}
 
-        <section aria-label="Key metrics" className="metrics">
+        {section === '' && <section aria-label="Key metrics" className="metrics">
           {metrics.map((m) => (
             <div key={m.label} className="admin-card">
               <span className="sub" style={{ fontWeight: 600 }}>{m.label}</span>
@@ -138,15 +140,15 @@ export function Admin() {
               <span className="sub">{m.note}</span>
             </div>
           ))}
-        </section>
+        </section>}
 
-        {data && <TokenUsage rows={data.usageLog} timeZone={data.status.location.timezone} allTime={data.usage} />}
-        {data && <CloudUsage maaiThirtyDayTokens={data.usageLog.reduce((a, r) => a + r.input + r.cached + r.output, 0)} />}
+        {section === 'usage' && data && <TokenUsage rows={data.usageLog} timeZone={data.status.location.timezone} allTime={data.usage} />}
+        {section === 'cloud' && data && <CloudUsage maaiThirtyDayTokens={data.usageLog.reduce((a, r) => a + r.input + r.cached + r.output, 0)} />}
 
-        <DeviceBot />
+        {section === 'device' && <DeviceBot />}
 
         <div className="row wrap" style={{ alignItems: 'stretch', gap: 24 }}>
-          <section id="agents" aria-label="Agents" className="admin-card" style={{ flex: '999 1 520px', minWidth: 0 }}>
+          {section === 'agents' && <section id="agents" aria-label="Agents" className="admin-card" style={{ flex: '999 1 520px', minWidth: 0 }}>
             <h2 className="h2" style={{ fontSize: 18 }}>Agents</h2>
             <div style={{ overflowX: 'auto' }}>
               <table className="admin-table">
@@ -168,9 +170,9 @@ export function Admin() {
                 </tbody>
               </table>
             </div>
-          </section>
+          </section>}
 
-          <section id="integrations" aria-label="Integrations" className="admin-card" style={{ flex: '1 1 300px', minWidth: 0 }}>
+          {section === 'integrations' && <section id="integrations" aria-label="Integrations" className="admin-card" style={{ flex: '1 1 300px', minWidth: 0 }}>
             <h2 className="h2" style={{ fontSize: 18 }}>Integrations</h2>
             {[
               { name: 'Claude API', ok: data?.status.aiConfigured, okText: 'Connected', offText: 'Not set (demo mode)' },
@@ -205,14 +207,16 @@ export function Admin() {
                 </span>
               </div>
             ))}
-          </section>
+          </section>}
         </div>
 
-        <section id="audit" aria-label="Audit log" className="admin-card">
+        {section === 'audit' && <section id="audit" aria-label="Audit log" className="admin-card">
           <div className="between wrap">
             <h2 className="h2" style={{ fontSize: 18 }}>Safety &amp; audit</h2>
             <span className="sub">Every proposal, approval and admin change is logged</span>
           </div>
+          <label htmlFor="search" className="sr-only">Search the audit log</label>
+          <input id="search" className="admin-input" placeholder="Search the audit log" value={query} onChange={(e) => setQuery(e.target.value)} />
           <div style={{ overflowX: 'auto' }} tabIndex={0} role="region" aria-label="Audit log entries">
             <table className="admin-table">
               <thead><tr><th>Time</th><th>Event</th><th>Who</th><th>Outcome</th></tr></thead>
@@ -229,7 +233,7 @@ export function Admin() {
               </tbody>
             </table>
           </div>
-        </section>
+        </section>}
       </main>
     </div>
   );

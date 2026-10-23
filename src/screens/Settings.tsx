@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import type { Lang, ReplyMode, StatusInfo } from '../../shared/types';
 import { api } from '../api';
+import { forgetFeeds } from '../inboxCache';
 import { dayTime } from '../format';
 import { useSettings, type Look, type ToggleId } from '../settings';
 import type { LayoutChoice } from '../layout';
@@ -12,6 +13,7 @@ import { FaceId } from '../components/FaceId';
 import { VoiceSettings } from '../components/VoiceSettings';
 import { ContactsImport } from '../components/ContactsImport';
 import { Chevron } from '../components/Icons';
+import { Group } from '../components/Group';
 
 export function SettingsScreen() {
   const { t, settings, update, toggle, detected, width } = useSettings();
@@ -39,34 +41,6 @@ export function SettingsScreen() {
     <div className="screen cols">
       <h1 className="title">{t.settings}</h1>
 
-      <section className="card">
-        <div className="field">
-          <span className="section-label" id="lang-label" style={{ padding: 0 }}>{t.language}</span>
-          <div className="seg" role="radiogroup" aria-labelledby="lang-label">
-            {langs.map((l) => (
-              <button key={l.id} role="radio" aria-checked={settings.lang === l.id} onClick={() => update({ lang: l.id })}>{l.label}</button>
-            ))}
-          </div>
-        </div>
-        <div className="field">
-          <span className="section-label" id="look-label" style={{ padding: 0 }}>{t.appearance}</span>
-          <div className="seg" role="radiogroup" aria-labelledby="look-label">
-            {looks.map((l) => (
-              <button key={l} role="radio" aria-checked={settings.look === l} onClick={() => update({ look: l })}>{t.looks[l]}</button>
-            ))}
-          </div>
-        </div>
-        <div className="field">
-          <span className="section-label" id="layout-label" style={{ padding: 0 }}>{t.layoutTitle}</span>
-          <div className="seg wrap" role="radiogroup" aria-labelledby="layout-label">
-            {layouts.map((l) => (
-              <button key={l} role="radio" aria-checked={settings.layout === l} onClick={() => update({ layout: l })}>{t.layoutChoices[l]}</button>
-            ))}
-          </div>
-          <span className="sub">{t.layoutNow(t.layoutNames[detected], width)}. {t.layoutHint}</span>
-        </div>
-      </section>
-
       <a className="card link-row" href="#/profile">
         <span>
           <strong>{t.profileTitle}</strong>
@@ -75,101 +49,144 @@ export function SettingsScreen() {
         <Chevron size={20} />
       </a>
 
-      <div className="section-label">{t.connections}</div>
-      <section className="card" aria-label={t.connections}>
-        {status ? (
-          <>
-            <Conn state={status.aiConfigured ? 'on' : 'off'} name="Claude AI">{status.aiConfigured ? t.aiConnected(status.model) : t.aiDemo}</Conn>
-            <Conn state={status.mail?.configured ? 'on' : 'off'} name={t.gmail}>{status.mail?.configured ? t.gmailConnected(status.mail.from) : t.gmailOff}</Conn>
-            <Conn state={status.calendar?.error ? 'bad' : status.calendar?.configured ? 'on' : 'off'} name={t.calendars}>
-              {status.calendar?.configured ? (
-                <>
-                  {status.calendar.sources?.map((c) => (
-                    <span key={c.name} style={{ display: 'block' }}>
-                      {c.error ? '✗' : '✓'} {t.calendarSource(c.name, c.events)}
-                      {c.error && <span className="sub" style={{ display: 'block' }}>{t.calendarError(c.error)}</span>}
-                    </span>
-                  ))}
-                  {status.calendar.merged ? <span className="sub" style={{ display: 'block' }}>{t.calendarMerged(status.calendar.merged)}</span> : null}
-                </>
-              ) : (
-                t.calendarOff
-              )}
-                          {status.calendar?.write && (
-                <span style={{ display: 'block', marginTop: 4 }}>
-                  {status.calendar.write.configured ? (status.calendar.write.error ? `✗ ${t.googleWriteError(status.calendar.write.error)}` : `✓ ${t.googleWriteOn(status.calendar.write.calendar ?? 'Google Calendar')}`) : <span className="sub">{t.googleWriteOff}</span>}
-                </span>
-              )}
-            </Conn>
-            <Conn state={status.asana?.error ? 'bad' : status.asana?.configured ? 'on' : 'off'} name={t.asana}>
-              {status.asana?.error
-                ? t.asanaError(status.asana.error)
-                : status.asana?.configured
-                  ? t.asanaConnected(status.asana.open, status.asana.overdue)
-                  : t.asanaOff}
-            </Conn>
-            {status.storage && (
-              <Conn state={status.storage.persistent ? 'on' : 'bad'} name={t.storageName}>
-                {status.storage.persistent ? t.storageOk : t.storageLost}
+      <Group id="look" title={t.groupLook} defaultOpen>
+        <section className="card">
+          <div className="field">
+            <span className="section-label" id="lang-label" style={{ padding: 0 }}>{t.language}</span>
+            <div className="seg" role="radiogroup" aria-labelledby="lang-label">
+              {langs.map((l) => (
+                <button key={l.id} role="radio" aria-checked={settings.lang === l.id} onClick={() => update({ lang: l.id })}>{l.label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="field">
+            <span className="section-label" id="look-label" style={{ padding: 0 }}>{t.appearance}</span>
+            <div className="seg" role="radiogroup" aria-labelledby="look-label">
+              {looks.map((l) => (
+                <button key={l} role="radio" aria-checked={settings.look === l} onClick={() => update({ look: l })}>{t.looks[l]}</button>
+              ))}
+            </div>
+          </div>
+          <div className="field">
+            <span className="section-label" id="layout-label" style={{ padding: 0 }}>{t.layoutTitle}</span>
+            <div className="seg wrap" role="radiogroup" aria-labelledby="layout-label">
+              {layouts.map((l) => (
+                <button key={l} role="radio" aria-checked={settings.layout === l} onClick={() => update({ layout: l })}>{t.layoutChoices[l]}</button>
+              ))}
+            </div>
+            <span className="sub">{t.layoutNow(t.layoutNames[detected], width)}. {t.layoutHint}</span>
+          </div>
+        </section>
+      </Group>
+
+      <Group id="connections" title={t.connections} hint={t.groupConnectionsHint}>
+        <section className="card" aria-label={t.connections}>
+          {status ? (
+            <>
+              <Conn state={status.aiConfigured ? 'on' : 'off'} name="Claude AI">{status.aiConfigured ? t.aiConnected(status.model) : t.aiDemo}</Conn>
+              <Conn state={status.mail?.configured ? 'on' : 'off'} name={t.gmail}>{status.mail?.configured ? t.gmailConnected(status.mail.from) : t.gmailOff}</Conn>
+              <Conn state={status.calendar?.error ? 'bad' : status.calendar?.configured ? 'on' : 'off'} name={t.calendars}>
+                {status.calendar?.configured ? (
+                  <>
+                    {status.calendar.sources?.map((c) => (
+                      <span key={c.name} style={{ display: 'block' }}>
+                        {c.error ? '✗' : '✓'} {t.calendarSource(c.name, c.events)}
+                        {c.error && <span className="sub" style={{ display: 'block' }}>{t.calendarError(c.error)}</span>}
+                      </span>
+                    ))}
+                    {status.calendar.merged ? <span className="sub" style={{ display: 'block' }}>{t.calendarMerged(status.calendar.merged)}</span> : null}
+                  </>
+                ) : (
+                  t.calendarOff
+                )}
+                            {status.calendar?.write && (
+                  <span style={{ display: 'block', marginTop: 4 }}>
+                    {status.calendar.write.configured ? (status.calendar.write.error ? `✗ ${t.googleWriteError(status.calendar.write.error)}` : `✓ ${t.googleWriteOn(status.calendar.write.calendar ?? 'Google Calendar')}`) : <span className="sub">{t.googleWriteOff}</span>}
+                  </span>
+                )}
               </Conn>
-            )}
-            <Conn state={status.bot?.stale ? 'bad' : status.bot?.connected ? 'on' : 'off'} name={t.botConn}>
-              {status.bot?.connected ? (status.bot.stale ? t.botStale : t.botConnected(status.bot.device ?? '', status.bot.lastSync ? dayTime(status.bot.lastSync, settings.lang) : '')) : t.botOff}
-            </Conn>
-            <Conn state={status.whatsapp?.configured ? 'on' : 'off'} name={t.whatsappConn}>
-              {status.whatsapp?.configured ? t.whatsappConnected(status.whatsapp.number ?? '', status.whatsapp.keepDays) : t.whatsappOff}
-            </Conn>
-          </>
-        ) : (
-          <div className="skeleton"><span /><span /></div>
-        )}
+              <Conn state={status.asana?.error ? 'bad' : status.asana?.configured ? 'on' : 'off'} name={t.asana}>
+                {status.asana?.error
+                  ? t.asanaError(status.asana.error)
+                  : status.asana?.configured
+                    ? t.asanaConnected(status.asana.open, status.asana.overdue)
+                    : t.asanaOff}
+              </Conn>
+              {status.storage && (
+                <Conn state={status.storage.persistent ? 'on' : 'bad'} name={t.storageName}>
+                  {status.storage.persistent ? t.storageOk : t.storageLost}
+                </Conn>
+              )}
+              <Conn state={status.bot?.stale ? 'bad' : status.bot?.connected ? 'on' : 'off'} name={t.botConn}>
+                {status.bot?.connected ? (status.bot.stale ? t.botStale : t.botConnected(status.bot.device ?? '', status.bot.lastSync ? dayTime(status.bot.lastSync, settings.lang) : '')) : t.botOff}
+              </Conn>
+              <Conn state={status.whatsapp?.configured ? 'on' : 'off'} name={t.whatsappConn}>
+                {status.whatsapp?.configured ? t.whatsappConnected(status.whatsapp.number ?? '', status.whatsapp.keepDays) : t.whatsappOff}
+              </Conn>
+            </>
+          ) : (
+            <div className="skeleton"><span /><span /></div>
+          )}
+        </section>
+      </Group>
+
+      <Group id="whatsapp" title={t.groupWhatsApp} hint={t.groupWhatsAppHint}>
+        {status?.bot?.connected && <ReplyModeCard mode={status.bot.replyMode} onChanged={() => void loadStatus()} />}
+        <ContactsImport />
+      </Group>
+
+      <Group id="calendar" title={t.groupCalendar}>
+        <CalendarFeed googleDirect={Boolean(status?.calendar?.write?.working)} />
+      </Group>
+
+      <Group id="security" title={t.groupSecurity} hint={t.groupSecurityHint}>
+        <FaceId />
+      </Group>
+
+      <Group id="notifications" title={t.groupNotifications}>
+        <NotificationSettings />
+      </Group>
+
+      <Group id="access" title={t.accessibility} hint={t.howYouUse}>
+        <section className="card flush">
+          {toggles.map((id) => {
+            const [label, hint] = t.toggles[id];
+            return (
+              <div key={id} className="toggle-row">
+                <div>
+                  <div>{label}</div>
+                  <div className="sub">{hint}</div>
+                </div>
+                <button role="switch" className="switch" aria-checked={settings.toggles[id]} aria-label={label} onClick={() => toggle(id)}>
+                  <span />
+                </button>
+              </div>
+            );
+          })}
+        </section>
+        <p className="sub">{t.followsDevice}</p>
+
+      </Group>
+
+      <Group id="voice" title={t.dictationTitle}>
+        <section className="card">
+          <p className="sub"><strong>{t.smartVoiceName}:</strong> {status?.voice?.smart ? t.smartVoiceOn : t.smartVoiceOff}</p>
+        </section>
+
+        <VoiceSettings />
+      </Group>
+
+      <section className="card">
         <div className="row wrap">
           <a href="#/admin" className="btn secondary grow" style={{ textDecoration: 'none' }}>{t.adminPortal}</a>
           {status?.auth && status.auth !== 'none' && (
             <>
-              <button className="btn danger" onClick={() => api.logout().finally(() => window.location.reload())}>{t.signOut}</button>
-              <button className="btn ghost" onClick={() => window.confirm(t.signOutEverywhereConfirm) && api.logout(true).finally(() => window.location.reload())}>{t.signOutEverywhere}</button>
+              <button className="btn danger" onClick={() => { forgetFeeds(); void api.logout().finally(() => window.location.reload()); }}>{t.signOut}</button>
+              <button className="btn ghost" onClick={() => { if (!window.confirm(t.signOutEverywhereConfirm)) return; forgetFeeds(); void api.logout(true).finally(() => window.location.reload()); }}>{t.signOutEverywhere}</button>
             </>
           )}
         </div>
       </section>
-
-      {status?.bot?.connected && <ReplyModeCard mode={status.bot.replyMode} onChanged={() => void loadStatus()} />}
-
-      <ContactsImport />
-
-      <CalendarFeed googleDirect={Boolean(status?.calendar?.write?.working)} />
-
-      <FaceId />
-
-      <NotificationSettings />
-
-      <div className="section-label">{t.accessibility} · {t.howYouUse}</div>
-      <section className="card flush">
-        {toggles.map((id) => {
-          const [label, hint] = t.toggles[id];
-          return (
-            <div key={id} className="toggle-row">
-              <div>
-                <div>{label}</div>
-                <div className="sub">{hint}</div>
-              </div>
-              <button role="switch" className="switch" aria-checked={settings.toggles[id]} aria-label={label} onClick={() => toggle(id)}>
-                <span />
-              </button>
-            </div>
-          );
-        })}
-      </section>
-      <p className="sub">{t.followsDevice}</p>
-
-      <div className="section-label">{t.dictationTitle}</div>
-      <section className="card">
-        <p className="sub"><strong>{t.smartVoiceName}:</strong> {status?.voice?.smart ? t.smartVoiceOn : t.smartVoiceOff}</p>
-      </section>
-
-      <VoiceSettings />
-
     </div>
   );
 }
