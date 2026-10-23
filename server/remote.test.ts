@@ -232,6 +232,17 @@ describe('orders from the user\'s own WhatsApp number', () => {
       expect(reply.text).toContain('Tomorrow: stand-up at 9.');
     });
 
+    it('tells the user on WhatsApp when the bot could not get the recording', async () => {
+      const res = await fetch(`http://127.0.0.1:${site.port}/bot/v1/voice?${new URLSearchParams({ id: 'vfail', at: new Date().toISOString(), phone: ORDERS, failed: 'download' })}`, {
+        method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'audio/ogg' }, body: Buffer.alloc(0),
+      });
+      expect(res.status).toBe(200);
+      const [reply] = takeCommands();
+      expect(reply).toMatchObject({ kind: 'reply', phone: ORDERS });
+      expect(reply.text).toContain('أرسلها مرة ثانية');
+      expect(heard).not.toHaveBeenCalled();
+    });
+
     it('come only from the order number, and never approve: a spoken PIN is refused', async () => {
       expect((await voice('966500000002')).status).toBe(403);
       expect((await fetch(`http://127.0.0.1:${site.port}/bot/v1/voice?id=x&phone=${ORDERS}`, { method: 'POST', headers: { 'content-type': 'audio/ogg' }, body: 'x' })).status).toBe(401);

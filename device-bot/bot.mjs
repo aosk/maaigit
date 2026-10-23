@@ -60,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-24e';
+const VERSION = '2026-10-24f';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -396,25 +396,40 @@ const MAX_VOICE_BYTES = 3 * 1024 * 1024;
 async function sendVoice(msg, item) {
   if (voiceSent.has(item.id)) return;
   voiceSent.add(item.id); // the same note arrives through two events: claim it now, give it back if it fails
-  const media = await tryGet(() => msg.downloadMedia());
-  const audio = media?.data ? Buffer.from(media.data, 'base64') : null;
-  if (!audio?.length) {
-    voiceSent.delete(item.id);
-    return log('⚠ Could not download a voice order from WhatsApp. Send it again.');
+  // WhatsApp Web can take a while to hand over a recording: up to 3 tries, 30 seconds each.
+  let audio = null;
+  for (let attempt = 1; attempt <= 3 && !audio?.length; attempt++) {
+    const media = await Promise.race([msg.downloadMedia().catch(() => null), pause(30_000).then(() => null)]);
+    audio = media?.data ? Buffer.from(media.data, 'base64') : null;
+    if (!audio?.length && attempt < 3) await pause(3000);
   }
-  if (audio.length > MAX_VOICE_BYTES) return log('⚠ A voice order was too long to send (over about 3 minutes).');
-  const query = new URLSearchParams({ id: item.id, at: item.at, phone: item.phone });
-  const res = await fetch(`${BASE}/voice?${query}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${KEY}`, 'content-type': 'audio/ogg' },
-    body: audio,
-    signal: AbortSignal.timeout(60_000),
-  }).catch((e) => e);
-  if (res instanceof Error || !res.ok) {
-    voiceSent.delete(item.id);
-    return log(`⚠ Could not send a voice order to MAAI (${res instanceof Error ? why(res) : res.status}). Send it again.`);
+  const query = (extra) => new URLSearchParams({ id: item.id, at: item.at, phone: item.phone, ...extra });
+  const post = (params, body) =>
+    fetch(`${BASE}/voice?${query(params)}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${KEY}`, 'content-type': 'audio/ogg' },
+      body,
+      signal: AbortSignal.timeout(60_000),
+    }).catch((e) => e);
+  // What went wrong is told to MAAI, which answers the user on WhatsApp (so a voice order never just vanishes).
+  if (!audio?.length || audio.length > MAX_VOICE_BYTES) {
+    const reason = !audio?.length ? 'download' : 'too-long';
+    log(reason === 'download' ? '⚠ WhatsApp did not hand over a voice order after 3 tries.' : '⚠ A voice order was too long (over about 3 minutes).');
+    await post({ failed: reason }, Buffer.alloc(0));
+    if (reason === 'download') voiceSent.delete(item.id);
+    return;
   }
-  log('Voice order sent to MAAI.');
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = await post({}, audio);
+    if (!(res instanceof Error) && res.ok) return log('Voice order sent to MAAI.');
+    log(`⚠ Could not send a voice order to MAAI (${res instanceof Error ? why(res) : res.status})${attempt < 3 ? '; trying again…' : '.'}`);
+    if (attempt < 3) await pause(attempt * 10_000);
+  }
+  voiceSent.delete(item.id);
+  // MAAI cannot be reached: say so on WhatsApp straight from here.
+  const notice = '🤖 MAAI\nما قدرت أوصل رسالتك الصوتية لـ MAAI. أرسلها مرة ثانية بعد قليل أو اكتبها.\nCould not pass your voice note to MAAI. Send it again in a moment, or type it.';
+  rememberSent(msg.from, notice);
+  await wa.sendMessage(msg.from, notice).catch(() => {});
 }
 
 async function onMessage(msg) {

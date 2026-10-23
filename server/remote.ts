@@ -215,6 +215,17 @@ async function approval(text: string, lang: Lang, now: number): Promise<string |
   }
 }
 
+/** The bot could not get a voice note from WhatsApp (or it was too long): say so on WhatsApp. */
+export function voiceFailed(reason: string): void {
+  const phone = state.bot.orderPhone;
+  if (!phone) return;
+  const text =
+    reason === 'too-long'
+      ? 'الرسالة الصوتية أطول من ٣ دقائق. أرسل رسالة أقصر أو اكتبها.\nThat voice note is over 3 minutes. Send a shorter one, or type it.'
+      : 'ما قدرت أقرأ رسالتك الصوتية من الواتساب. أرسلها مرة ثانية أو اكتبها.\nI could not get your voice note from WhatsApp. Send it again, or type it.';
+  queueCommand({ kind: 'reply', phone, toName: 'MAAI', text: `🤖 MAAI\n${text}`, automatic: true });
+}
+
 // ---------- Orders ----------
 
 /** Orders run one after another, in the order they were sent. */

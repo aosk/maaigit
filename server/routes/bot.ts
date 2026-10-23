@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, receiveLink, seen, takeCommands, waitForCommands } from '../bot.js';
 import { alertLink } from '../notify.js';
-import { takeOrder } from '../remote.js';
+import { takeOrder, voiceFailed } from '../remote.js';
 import { state } from '../store.js';
 
 /**
@@ -72,8 +72,15 @@ deviceApi.post('/voice', express.raw({ type: ['audio/*', 'application/octet-stre
   const id = typeof req.query.id === 'string' ? req.query.id.slice(0, 128) : '';
   const phone = typeof req.query.phone === 'string' ? req.query.phone.replace(/\D/g, '') : '';
   const at = Date.parse(typeof req.query.at === 'string' ? req.query.at : '');
-  if (!id || !Buffer.isBuffer(req.body) || !req.body.length) throw new BotInputError('Send the recording with ?id=…&at=…&phone=…');
   if (!state.bot.orderPhone || phone !== state.bot.orderPhone) return res.status(403).json({ error: 'Voice orders come only from the order number.' });
+  // The bot could not get the recording: logged here, and the user is told on WhatsApp (instead of silence).
+  const failed = typeof req.query.failed === 'string' ? req.query.failed.slice(0, 20) : '';
+  if (failed) {
+    console.log(`Device bot could not pass on a voice order (${failed})`);
+    voiceFailed(failed);
+    return res.json({ ok: true });
+  }
+  if (!id || !Buffer.isBuffer(req.body) || !req.body.length) throw new BotInputError('Send the recording with ?id=…&at=…&phone=…');
   takeOrder({ externalId: `bot:${id}`, text: '', at: Number.isFinite(at) ? Math.min(at, Date.now()) : Date.now(), audio: req.body });
   res.json({ ok: true });
 });
