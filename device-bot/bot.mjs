@@ -60,7 +60,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-24f';
+const VERSION = '2026-10-24g';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -396,12 +396,24 @@ const MAX_VOICE_BYTES = 3 * 1024 * 1024;
 async function sendVoice(msg, item) {
   if (voiceSent.has(item.id)) return;
   voiceSent.add(item.id); // the same note arrives through two events: claim it now, give it back if it fails
-  // WhatsApp Web can take a while to hand over a recording: up to 3 tries, 30 seconds each.
+  // The message as it first arrives often lacks its media details yet (then the library returns nothing
+  // without trying), so each try reads the message afresh. Up to 4 tries, 30 seconds each.
   let audio = null;
-  for (let attempt = 1; attempt <= 3 && !audio?.length; attempt++) {
-    const media = await Promise.race([msg.downloadMedia().catch(() => null), pause(30_000).then(() => null)]);
-    audio = media?.data ? Buffer.from(media.data, 'base64') : null;
-    if (!audio?.length && attempt < 3) await pause(3000);
+  let reason = 'download';
+  const msgId = idText(msg.id);
+  for (let attempt = 1; attempt <= 4 && !audio?.length; attempt++) {
+    if (attempt > 1) await pause(attempt * 3000);
+    const fresh = (msgId && (await tryGet(() => wa.getMessageById(msgId)))) || msg;
+    if (!fresh.hasMedia) {
+      reason = 'no-media-yet';
+      continue;
+    }
+    const media = await Promise.race([
+      fresh.downloadMedia().catch((error) => ({ error })),
+      pause(30_000).then(() => ({ error: new Error('timeout') })),
+    ]);
+    if (media?.data) audio = Buffer.from(media.data, 'base64');
+    else reason = media?.error ? `error-${why(media.error).replace(/[^\w-]+/g, '-').slice(0, 40)}` : 'not-downloadable';
   }
   const query = (extra) => new URLSearchParams({ id: item.id, at: item.at, phone: item.phone, ...extra });
   const post = (params, body) =>
@@ -413,10 +425,10 @@ async function sendVoice(msg, item) {
     }).catch((e) => e);
   // What went wrong is told to MAAI, which answers the user on WhatsApp (so a voice order never just vanishes).
   if (!audio?.length || audio.length > MAX_VOICE_BYTES) {
-    const reason = !audio?.length ? 'download' : 'too-long';
-    log(reason === 'download' ? '⚠ WhatsApp did not hand over a voice order after 3 tries.' : '⚠ A voice order was too long (over about 3 minutes).');
+    if (audio?.length) reason = 'too-long';
+    log(reason === 'too-long' ? '⚠ A voice order was too long (over about 3 minutes).' : `⚠ WhatsApp did not hand over a voice order (${reason}).`);
     await post({ failed: reason }, Buffer.alloc(0));
-    if (reason === 'download') voiceSent.delete(item.id);
+    if (reason !== 'too-long') voiceSent.delete(item.id);
     return;
   }
   for (let attempt = 1; attempt <= 3; attempt++) {

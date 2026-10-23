@@ -74,7 +74,7 @@ deviceApi.post('/voice', express.raw({ type: ['audio/*', 'application/octet-stre
   const at = Date.parse(typeof req.query.at === 'string' ? req.query.at : '');
   if (!state.bot.orderPhone || phone !== state.bot.orderPhone) return res.status(403).json({ error: 'Voice orders come only from the order number.' });
   // The bot could not get the recording: logged here, and the user is told on WhatsApp (instead of silence).
-  const failed = typeof req.query.failed === 'string' ? req.query.failed.slice(0, 20) : '';
+  const failed = typeof req.query.failed === 'string' ? req.query.failed.replace(/[^\w-]/g, '').slice(0, 60) : '';
   if (failed) {
     console.log(`Device bot could not pass on a voice order (${failed})`);
     voiceFailed(failed);
