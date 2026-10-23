@@ -98,6 +98,22 @@ function describe(p: Proposal, lang: Lang): string {
 // ---------- Approving from WhatsApp ----------
 
 const APPROVE = /^(?:approve|ok|yes|موافق|وافق|اعتمد|نعم)\s*#?\s*(\d{1,3})(?:\s+(\S+))?\s*$/i;
+/** An approval word and a card number ("موافق 3 …"): never passed to the assistant, even when the rest is not understood. */
+const LOOKS_LIKE_APPROVAL = /^(?:approve|موافق|وافق|اعتمد)\s*#?\s*\d/i;
+
+/**
+ * Arabic keyboards type ٠١٢٣ (and Persian ones ۰۱۲۳): read them as 0123, and drop the invisible direction
+ * marks phones add around numbers, so "موافق ١ ١٢٣٤٥٦" is read the same as "approve 1 123456".
+ */
+const plainDigits = (text: string) =>
+  text
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[\u200e\u200f\u061c\u202a-\u202e\u2066-\u2069]/g, '')
+    .trim();
+
+/** Whether the message holds the PIN anywhere (then it is never passed to the assistant). */
+const holdsPin = (text: string) => (text.match(/\d{6,8}/g) ?? []).some(pinMatches);
 const CANCEL = /^(?:cancel|no|الغ|الغي|إلغاء|الغاء|لا)\s*#?\s*(\d{1,3})\s*$/i;
 
 /** Handles "approve 3 123456" and "cancel 3". Returns the answer, or null when the message is not one of those. */
@@ -187,9 +203,15 @@ async function carryOut(order: Order, now: number): Promise<void> {
   }
 
   // "approve 3 123456" / "cancel 3" never go to the assistant: the PIN stays out of Claude and the history.
-  const decided = await approval(text, lang, now).finally(save);
+  const plain = plainDigits(text);
+  const decided = await approval(plain, lang, now).finally(save);
   if (decided) {
     reply(decided);
+    return;
+  }
+  // An approval MAAI could not read, or anything with the PIN in it, stays out of the assistant too.
+  if (LOOKS_LIKE_APPROVAL.test(plain) || holdsPin(plain)) {
+    reply(lang === 'ar' ? 'ما فهمت الموافقة. اكتبها هكذا: موافق 3 ثم رمزك (مثال: موافق 3 123456).' : 'I could not read that approval. Write it like: approve 3 and your PIN (for example: approve 3 123456).');
     return;
   }
 

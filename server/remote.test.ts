@@ -143,6 +143,19 @@ describe('orders from the user\'s own WhatsApp number', () => {
       expect(await send(`approve ${no} ${PIN}`)).toContain('already approved'); // once only
     });
 
+    it('reads Arabic digits, and never passes a PIN to the assistant even in a message it cannot read', async () => {
+      await asUser('PUT', '/admin/bot/order-pin', { pin: PIN });
+      const p = card();
+      const no = await orderMaking(p);
+      const arabicDigits = (s: string) => s.replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
+      expect(await send(`موافق ${no}، ${arabicDigits(PIN)} شكراً`)).toContain('ما فهمت الموافقة');
+      expect(await send(`my pin is ${PIN} please approve`)).toContain('could not read that approval');
+      expect(await send(`\u200fموافق ${arabicDigits(String(no))} ${arabicDigits(PIN)}\u200f`)).toContain('✅');
+      expect(p.status).toBe('approved');
+      expect(answered).toHaveBeenCalledTimes(1); // only the order that made the card
+      expect(JSON.stringify(answered.mock.calls)).not.toContain(PIN);
+    });
+
     it('locks after 3 wrong PINs, even for the right one, and cancels without a PIN', async () => {
       await asUser('PUT', '/admin/bot/order-pin', { pin: PIN });
       const p = card();
