@@ -75,6 +75,7 @@ export function botStatus(now = Date.now()): BotStatus {
     contacts: state.contacts.length,
     orderPhone: state.bot.orderPhone,
     orderPin: Boolean(state.bot.orderPin),
+    ...(state.bot.orderUnlockedUntil && Date.parse(state.bot.orderUnlockedUntil) > now ? { orderUnlockedUntil: state.bot.orderUnlockedUntil } : {}),
     ...(linkNeeded(now) ? { link: { ...(link!.code ? { code: link!.code } : { qr: true }), at: new Date(link!.at).toISOString() } } : {}),
   };
 }

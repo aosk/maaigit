@@ -14,10 +14,14 @@ import { audit, save, state } from './store.js';
  * back to that number. The number is matched exactly, private chats only: a message from anyone else, a group,
  * or a forward in another chat is never an order.
  *
- * Anything that sends, books or changes something becomes an approval card, as in the app. With a PIN set (in
- * the app), a card can also be approved from that number: "approve 3 123456". The approval message is handled
- * here, before the assistant, so the PIN never reaches Claude or the conversation. Wrong PINs lock WhatsApp
- * approval for an hour, every approval is logged as made from WhatsApp, and the user's phones are told.
+ * The number is locked until the PIN unlocks it ("فتح 123456" / "unlock 123456", for an hour; "قفل" / "lock"
+ * locks it again), so a lost or borrowed phone can neither ask about the user's mail and calendar nor act.
+ * An order sent while locked is held for a few minutes and runs once the number is unlocked.
+ *
+ * Anything that sends, books or changes something becomes an approval card, as in the app, approved with the
+ * PIN each time: "approve 3 123456". PIN messages are handled here, before the assistant, so the PIN never
+ * reaches Claude or the conversation. Wrong PINs lock the PIN for an hour, everything done with the PIN is
+ * logged as made from WhatsApp, and the user's phones are told.
  */
 
 /** At most this many orders an hour (a lost phone, or a loop with another bot, cannot run up Claude). */
@@ -33,6 +37,9 @@ const CARD_FRESH_MS = 30 * 60_000;
 /** Wrong PINs allowed before WhatsApp approval is locked, and for how long. */
 const MAX_WRONG = 3;
 const LOCK_MS = 60 * 60_000;
+/** How long the PIN unlocks the number for questions and orders, and how long an order sent while locked is held. */
+const UNLOCK_MS = 60 * 60_000;
+const HOLD_MS = 5 * 60_000;
 /** Cards that can only be approved in the app: they act on the user's work computer. */
 const APP_ONLY: Proposal['kind'][] = ['device'];
 
@@ -65,6 +72,48 @@ function pinMatches(pin: string): boolean {
   const expected = Buffer.from(saved.hash, 'hex');
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
+
+/**
+ * Checks a PIN typed on WhatsApp. Null when it is right; otherwise what to answer (no PIN set, locked after
+ * wrong tries, or how many tries are left). Three wrong PINs in an hour lock the PIN for an hour.
+ */
+function checkPin(pin: string | undefined, ar: boolean, now: number, what: string): string | null {
+  if (!state.bot.orderPin) return ar ? 'يحتاج رمز PIN: عيّنه في MAAI ← الإدارة ← بوت الجهاز.' : 'This needs a PIN: set it in MAAI → Admin → Device bot.';
+  const fails = state.bot.pinFails;
+  if (fails && fails.count >= MAX_WRONG && now - Date.parse(fails.since) < LOCK_MS) {
+    return ar ? 'الرمز مقفل ساعة بسبب محاولات خاطئة. استخدم التطبيق.' : 'The PIN is locked for an hour after wrong tries. Use the app.';
+  }
+  if (!pin) return ar ? 'أرسل الرمز مع الأمر.' : 'Send your PIN with it.';
+  if (pinMatches(pin)) {
+    delete state.bot.pinFails;
+    return null;
+  }
+  const fresh = !fails || now - Date.parse(fails.since) >= LOCK_MS;
+  state.bot.pinFails = { count: fresh ? 1 : fails.count + 1, since: fresh ? new Date(now).toISOString() : fails.since };
+  const left = MAX_WRONG - state.bot.pinFails.count;
+  audit(`Wrong PIN from WhatsApp (${what})`, 'WhatsApp order number', 'error');
+  if (left <= 0) {
+    audit('WhatsApp PIN locked for an hour after wrong tries', 'WhatsApp order number', 'error');
+    void alertWhatsAppApproval(ar ? 'رمز خاطئ ٣ مرات من رقم الأوامر: أُقفل الرمز ساعة' : '3 wrong PINs from the order number: the PIN is locked for an hour', { ar: 'رمز خاطئ من الواتساب', en: 'Wrong PIN from WhatsApp' }).catch(() => {});
+    return ar ? 'رمز خاطئ. أُقفل الرمز ساعة.' : 'Wrong PIN. The PIN is now locked for an hour.';
+  }
+  return ar ? `رمز خاطئ. باقي ${left} محاولة.` : `Wrong PIN. ${left} tries left.`;
+}
+
+const unlocked = (now: number) => Boolean(state.bot.orderUnlockedUntil && Date.parse(state.bot.orderUnlockedUntil) > now);
+
+/** Locks the order number now (also from the admin page). */
+export function lockOrders(): void {
+  delete state.bot.orderUnlockedUntil;
+  held = null;
+  save();
+}
+
+const UNLOCK = /^(?:unlock|فتح|افتح)\s+(\S+)\s*$/i;
+const LOCK = /^(?:lock|قفل|اقفل)\s*$/i;
+
+/** An order sent while the number was locked, run once it is unlocked (if that is soon). */
+let held: { order: Order; at: number } | null = null;
 
 // ---------- Numbered cards ----------
 
@@ -151,26 +200,8 @@ async function approval(text: string, lang: Lang, now: number): Promise<string |
     return ar ? `ألغيت البطاقة #${no}.` : `Cancelled card #${no}.`;
   }
 
-  if (!state.bot.orderPin) return ar ? 'الموافقة من الواتساب تحتاج رمز PIN: عيّنه في MAAI ← الإدارة ← بوت الجهاز. أو وافق من التطبيق.' : 'Approving from WhatsApp needs a PIN: set it in MAAI → Admin → Device bot. Or approve in the app.';
-  const fails = state.bot.pinFails;
-  if (fails && fails.count >= MAX_WRONG && now - Date.parse(fails.since) < LOCK_MS) {
-    return ar ? 'الموافقة من الواتساب مقفلة ساعة بسبب رمز خاطئ. وافق من التطبيق.' : 'Approving from WhatsApp is locked for an hour after wrong PINs. Approve in the app.';
-  }
-  const pin = approve![2];
-  if (!pin) return ar ? `أرسل: موافق ${no} ثم رمزك` : `Send: approve ${no} and your PIN`;
-  if (!pinMatches(pin)) {
-    const fresh = !fails || now - Date.parse(fails.since) >= LOCK_MS;
-    state.bot.pinFails = { count: fresh ? 1 : fails.count + 1, since: fresh ? new Date(now).toISOString() : fails.since };
-    const left = MAX_WRONG - state.bot.pinFails.count;
-    audit(`Wrong PIN from WhatsApp for card #${no}`, 'WhatsApp order number', 'error');
-    if (left <= 0) {
-      audit('WhatsApp approval locked for an hour after wrong PINs', 'WhatsApp order number', 'error');
-      void alertWhatsAppApproval(ar ? 'رمز خاطئ ٣ مرات: أُقفلت الموافقة من الواتساب ساعة' : '3 wrong PINs: approving from WhatsApp is locked for an hour').catch(() => {});
-      return ar ? 'رمز خاطئ. أُقفلت الموافقة من الواتساب ساعة.' : 'Wrong PIN. Approving from WhatsApp is now locked for an hour.';
-    }
-    return ar ? `رمز خاطئ. باقي ${left} محاولة.` : `Wrong PIN. ${left} tries left.`;
-  }
-  delete state.bot.pinFails;
+  const pinProblem = checkPin(approve![2], ar, now, `card #${no}`);
+  if (pinProblem) return approve![2] || !state.bot.orderPin ? pinProblem : ar ? `أرسل: موافق ${no} ثم رمزك` : `Send: approve ${no} and your PIN`;
   if (entry.appOnly) return ar ? `البطاقة #${no} طويلة ولم تُعرض كاملة هنا: وافق عليها من التطبيق.` : `Card #${no} was too long to show in full here: approve it in the app.`;
   if (APP_ONLY.includes(card.kind)) return ar ? `البطاقة #${no} تعمل على جهازك، ووافق عليها من التطبيق فقط.` : `Card #${no} acts on your computer: approve it in the app.`;
   if (now - Date.parse(entry.at) > CARD_FRESH_MS) return ar ? `البطاقة #${no} قديمة (أكثر من ٣٠ دقيقة). وافق عليها من التطبيق.` : `Card #${no} is over 30 minutes old. Approve it in the app.`;
@@ -216,6 +247,14 @@ async function carryOut(order: Order, now: number): Promise<void> {
   }
   state.bot.orderTimes = [...recent, new Date(now).toISOString()];
 
+  const ar0 = lang === 'ar';
+  // A voice note cannot unlock (a PIN is never spoken): while locked it is held, not even written out.
+  if (order.audio && !unlocked(now)) {
+    held = { order, at: now };
+    reply(ar0 || !order.text ? '🔒 رقم الأوامر مقفل. أرسل: فتح ثم رمزك (مثال: فتح 123456)، وأنفّذ رسالتك الصوتية بعدها.\n🔒 Locked. Send: unlock <your PIN>, and your voice note runs then.' : '🔒 Locked. Send: unlock <your PIN>, and your voice note runs then.');
+    return;
+  }
+
   let text = order.text.trim();
   // A voice note is written out first (Arabic and English in one sentence), and the user sees what was heard.
   if (order.audio) {
@@ -248,16 +287,51 @@ async function carryOut(order: Order, now: number): Promise<void> {
     return;
   }
 
-  // "approve 3 123456" / "cancel 3" never go to the assistant: the PIN stays out of Claude and the history.
   const plain = plainDigits(text);
+  const ar = lang === 'ar';
+
+  // "فتح 123456" unlocks for an hour (and runs an order held while locked); "قفل" locks again.
+  if (!order.audio && LOCK.test(plain)) {
+    lockOrders();
+    audit('Order number locked from WhatsApp', 'You (WhatsApp)', 'done');
+    reply(ar ? '🔒 قفلت رقم الأوامر.' : '🔒 Locked.');
+    return;
+  }
+  const unlock = order.audio ? null : UNLOCK.exec(plain);
+  if (unlock) {
+    const problem = checkPin(unlock[1], ar, now, 'unlock');
+    save();
+    if (problem) {
+      reply(problem);
+      return;
+    }
+    state.bot.orderUnlockedUntil = new Date(now + UNLOCK_MS).toISOString();
+    save();
+    audit('Order number unlocked from WhatsApp for an hour', 'You (WhatsApp, with PIN)', 'done');
+    void alertWhatsAppApproval(ar ? 'فُتح رقم الأوامر لمدة ساعة' : 'The order number was unlocked for an hour', { ar: 'فُتح من الواتساب', en: 'Unlocked from WhatsApp' }).catch(() => {});
+    reply(ar ? '🔓 مفتوح لمدة ساعة. للقفل الآن أرسل: قفل' : '🔓 Unlocked for an hour. To lock now, send: lock');
+    const waiting = held;
+    held = null;
+    if (waiting && now - waiting.at < HOLD_MS) queue = queue.then(() => carryOut(waiting.order, Date.now())).catch((error: Error) => console.error('Order failed:', error.message));
+    return;
+  }
+
+  // "approve 3 123456" / "cancel 3" never go to the assistant: the PIN stays out of Claude and the history.
   const decided = await approval(plain, lang, now).finally(save);
   if (decided) {
     reply(decided);
     return;
   }
-  // An approval MAAI could not read, or anything with the PIN in it, stays out of the assistant too.
-  if (LOOKS_LIKE_APPROVAL.test(plain) || holdsPin(plain)) {
+  // An approval or unlock MAAI could not read, or anything with the PIN in it, stays out of the assistant too.
+  if (LOOKS_LIKE_APPROVAL.test(plain) || /^(?:unlock|فتح|افتح)\s*\d/i.test(plain) || holdsPin(plain)) {
     reply(lang === 'ar' ? 'ما فهمت الموافقة. اكتبها هكذا: موافق 3 ثم رمزك (مثال: موافق 3 123456).' : 'I could not read that approval. Write it like: approve 3 and your PIN (for example: approve 3 123456).');
+    return;
+  }
+
+  // Questions and orders need the number unlocked: a phone in someone else's hand learns nothing.
+  if (!order.audio && !unlocked(now)) {
+    held = { order, at: now };
+    reply(ar ? '🔒 رقم الأوامر مقفل. أرسل: فتح ثم رمزك (مثال: فتح 123456)، وأنفّذ طلبك بعدها.' : '🔒 Locked. Send: unlock <your PIN> (e.g. unlock 123456), and your order runs then.');
     return;
   }
 

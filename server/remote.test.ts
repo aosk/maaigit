@@ -60,6 +60,8 @@ beforeEach(async () => {
   key = createKey();
   resetBotLimits();
   expect((await asUser('PUT', '/admin/bot/order-phone', { phone: `+${ORDERS}` })).status).toBe(200);
+  // Most tests start unlocked; the lock itself is tested in its own block.
+  state.bot.orderUnlockedUntil = new Date(Date.now() + 60 * 60_000).toISOString();
 });
 
 describe('orders from the user\'s own WhatsApp number', () => {
@@ -239,6 +241,50 @@ describe('orders from the user\'s own WhatsApp number', () => {
       const [reply] = await repliesSoon();
       expect(reply.text).toContain('بالكتابة فقط');
       expect(answered).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('locked until the PIN unlocks it', () => {
+    const PIN = '482913';
+    const send = async (text: string) => {
+      await asBot({ messages: [wa({ text })] });
+      return (await repliesSoon())[0].text;
+    };
+    beforeEach(async () => {
+      await asUser('PUT', '/admin/bot/order-pin', { pin: PIN });
+      delete state.bot.orderUnlockedUntil;
+    });
+
+    it('answers nothing while locked, and runs the held question once unlocked, without the PIN reaching the assistant', async () => {
+      expect(await send('What is in my inbox?')).toContain('🔒');
+      expect(answered).not.toHaveBeenCalled();
+      expect(await send('unlock 000000')).toContain('2 tries left');
+      expect(await send(`فتح ${PIN}`)).toContain('🔓');
+      await vi.waitFor(() => expect(answered).toHaveBeenCalledWith(expect.anything(), '(from my WhatsApp) What is in my inbox?', 'en'));
+      expect(JSON.stringify(answered.mock.calls)).not.toContain(PIN);
+      expect(state.audit.some((a) => a.event.includes('unlocked'))).toBe(true);
+    });
+
+    it('locks again on "قفل" and from the app, and a voice note cannot unlock it', async () => {
+      await send(`unlock ${PIN}`);
+      expect(await send('قفل')).toContain('🔒');
+      expect(await send('hello')).toContain('🔒');
+      await send(`unlock ${PIN}`);
+      await repliesSoon().catch(() => []); // the held "hello" runs
+      expect((await asUser('POST', '/admin/bot/order-lock', {})).status).toBe(200);
+      expect(state.bot.orderUnlockedUntil).toBeUndefined();
+      const voice = await fetch(`http://127.0.0.1:${site.port}/bot/v1/voice?${new URLSearchParams({ id: 'vlock', at: new Date().toISOString(), phone: ORDERS })}`, {
+        method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'audio/ogg' }, body: Buffer.from('OggS x'),
+      });
+      expect(voice.status).toBe(200);
+      expect((await repliesSoon())[0].text).toContain('🔒');
+      expect(vi.mocked(transcribe)).not.toHaveBeenCalled(); // not even written out while locked
+    });
+
+    it('stays locked after an hour', async () => {
+      await send(`unlock ${PIN}`);
+      state.bot.orderUnlockedUntil = new Date(Date.now() - 1000).toISOString();
+      expect(await send('anything new?')).toContain('🔒');
     });
   });
 

@@ -630,6 +630,8 @@ export interface BotStatus {
   orderPhone?: string;
   /** A PIN is set, so cards can be approved from that number ("approve 3 <PIN>"). */
   orderPin?: boolean;
+  /** Until when that number is unlocked for questions and orders ("فتح <PIN>"), if it is now. */
+  orderUnlockedUntil?: string;
 }
 
 export type ReplyMode = 'smart' | 'fixed' | 'off';

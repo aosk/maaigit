@@ -82,6 +82,19 @@ export function DeviceBot() {
     }
   }
 
+  /** Runs an admin action and shows its result (or its error). */
+  async function run(action: () => Promise<BotOverview>) {
+    setBusy(true);
+    setError('');
+    try {
+      setData(await action());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function savePin(value: string) {
     if (!value && !window.confirm('Remove the PIN? Cards can then be approved only in the app.')) return;
     setBusy(true);
@@ -156,6 +169,13 @@ export function DeviceBot() {
                 {s.orderPin && <button className="admin-btn" disabled={busy} onClick={() => void savePin('')}>Remove PIN</button>}
               </div>
               <div className="sub">{s.orderPin ? 'PIN set: cards can be approved from WhatsApp.' : 'No PIN: cards are approved in the app only.'}</div>
+              <p className="sub" style={{ margin: '8px 0 4px' }}>
+                Questions and orders from that number need it unlocked first: send <code>فتح PIN</code> (or <code dir="ltr">unlock PIN</code>) for an hour, <code>قفل</code> to lock. Your phones are told each time.
+              </p>
+              <div className="row wrap">
+                <strong>{s.orderUnlockedUntil ? `🔓 Unlocked until ${when(s.orderUnlockedUntil)}` : '🔒 Locked'}</strong>
+                {s.orderUnlockedUntil && <button className="admin-btn" disabled={busy} onClick={() => void run(() => api.lockOrders())}>Lock now</button>}
+              </div>
             </>
           )}
         </div>

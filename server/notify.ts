@@ -270,12 +270,12 @@ export async function alertOrderCards(count: number): Promise<void> {
   }, '/#/assistant');
 }
 
-/** Something was approved (or locked) from the user's WhatsApp order number: always told, so a stranger's use shows at once. */
-export async function alertWhatsAppApproval(what: string): Promise<void> {
+/** Something was done from the user's WhatsApp order number (an approval, an unlock, wrong PINs): always told, so a stranger's use shows at once. */
+export async function alertWhatsAppApproval(what: string, title: { ar: string; en: string } = { ar: 'موافقة من الواتساب', en: 'Approved from WhatsApp' }): Promise<void> {
   await deliver({
     key: `wa-approval:${Date.now()}`,
     kind: 'message',
-    text: (lang) => ({ title: lang === 'ar' ? 'موافقة من الواتساب' : 'Approved from WhatsApp', body: what }),
+    text: (lang) => ({ title: title[lang], body: what }),
   }, '/#/admin/audit');
 }
 

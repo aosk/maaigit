@@ -106,6 +106,8 @@ interface State {
     /** The short numbers given to cards made from orders ("approve 3 …"), last day only. */
     orderCards?: { no: number; id: string; at: string; appOnly?: boolean }[];
     cardNo?: number;
+    /** Until when questions and orders from the order number are taken (unlocked with the PIN, for an hour). */
+    orderUnlockedUntil?: string;
   };
   /** Names and numbers from the user's phone (saved contacts, as WhatsApp on the device sees them). */
   contacts: { name: string; phone: string }[];

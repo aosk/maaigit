@@ -251,5 +251,6 @@ export const api = {
   setReplyMode: (mode: ReplyMode) => call<BotOverview>('PATCH', '/admin/bot/mode', { mode }),
   restartBot: () => call<BotOverview>('POST', '/admin/bot/restart', {}),
   setOrderPhone: (phone: string) => call<BotOverview>('PUT', '/admin/bot/order-phone', { phone }),
+  lockOrders: () => call<BotOverview>('POST', '/admin/bot/order-lock', {}),
   setOrderPin: (pin: string) => call<BotOverview>('PUT', '/admin/bot/order-pin', { pin }),
 };

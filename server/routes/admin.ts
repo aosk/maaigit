@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { AdminOverview, BotOverview } from '../../shared/types.js';
 import { botStatus, createKey, queueCommand, revokeKey, setOrderPhone } from '../bot.js';
-import { setOrderPin } from '../remote.js';
+import { lockOrders, setOrderPin } from '../remote.js';
 import { healthReport } from '../health.js';
 import { allEvents, audit, state } from '../store.js';
 import { status } from '../status.js';
@@ -98,6 +98,13 @@ admin.put('/admin/bot/order-pin', (req, res) => {
     throw new HttpError(400, (error as Error).message);
   }
   audit(state.bot.orderPin ? 'WhatsApp approval PIN set' : 'WhatsApp approval PIN removed', 'User', 'done');
+  res.json(botOverview());
+});
+
+/** Locks the order number now: questions and orders from it wait for the PIN again. */
+admin.post('/admin/bot/order-lock', (_req, res) => {
+  lockOrders();
+  audit('Order number locked from the app', 'User', 'done');
   res.json(botOverview());
 });
 
