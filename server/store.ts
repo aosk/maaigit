@@ -99,6 +99,13 @@ interface State {
     orders?: string[];
     /** When the last orders came, for the hourly limit. */
     orderTimes?: string[];
+    /** The PIN for approving cards from the order number: a salted scrypt hash, never the PIN. */
+    orderPin?: { salt: string; hash: string };
+    /** Wrong PINs in a row, and since when (approving from WhatsApp locks for an hour after 3). */
+    pinFails?: { count: number; since: string };
+    /** The short numbers given to cards made from orders ("approve 3 …"), last day only. */
+    orderCards?: { no: number; id: string; at: string }[];
+    cardNo?: number;
   };
   /** Names and numbers from the user's phone (saved contacts, as WhatsApp on the device sees them). */
   contacts: { name: string; phone: string }[];

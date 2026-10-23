@@ -628,6 +628,8 @@ export interface BotStatus {
   link?: { code?: string; qr?: boolean; at: string };
   /** The user's own second WhatsApp number, whose private messages are orders for the assistant. */
   orderPhone?: string;
+  /** A PIN is set, so cards can be approved from that number ("approve 3 <PIN>"). */
+  orderPin?: boolean;
 }
 
 export type ReplyMode = 'smart' | 'fixed' | 'off';

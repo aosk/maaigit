@@ -12,6 +12,7 @@ export function DeviceBot() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [orderPhone, setOrderPhone] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
 
   const load = useCallback((background = false) => {
     api.bot(background).then((d) => { setData(d); setError(''); }).catch((e: Error) => setError(e.message));
@@ -53,6 +54,20 @@ export function DeviceBot() {
     try {
       setData(await api.setOrderPhone(phone));
       setOrderPhone(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function savePin(value: string) {
+    if (!value && !window.confirm('Remove the PIN? Cards can then be approved only in the app.')) return;
+    setBusy(true);
+    setError('');
+    try {
+      setData(await api.setOrderPin(value));
+      setPin('');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -107,6 +122,20 @@ export function DeviceBot() {
             {s.orderPhone && <button className="admin-btn" disabled={busy} onClick={() => void saveOrderPhone('')}>Stop taking orders</button>}
           </div>
           {s.orderPhone && <div className="sub">Taking orders from +{s.orderPhone}</div>}
+          {s.orderPhone && (
+            <>
+              <label htmlFor="order-pin" style={{ marginTop: 12, display: 'block' }}><strong>Approval PIN</strong> (approve cards from that number)</label>
+              <p className="sub" style={{ margin: '4px 0' }}>
+                With a PIN, reply <code dir="ltr">approve 3 PIN</code> (or <code>موافق 3 PIN</code>) to carry out card #3, and <code>cancel 3</code> to drop it. 3 wrong PINs lock it for an hour. Every approval is logged and your phones are told. Tasks on your computer are approved in the app only. Use a PIN that is not your phone's passcode, and turn on disappearing messages in that chat so the PIN does not stay there.
+              </p>
+              <div className="row wrap">
+                <input id="order-pin" type="password" inputMode="numeric" autoComplete="new-password" placeholder={s.orderPin ? 'New PIN (6–8 digits)' : '6–8 digits'} value={pin} maxLength={8} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} disabled={busy} />
+                <button className="admin-btn" disabled={busy || pin.length < 6} onClick={() => void savePin(pin)}>{s.orderPin ? 'Change PIN' : 'Set PIN'}</button>
+                {s.orderPin && <button className="admin-btn" disabled={busy} onClick={() => void savePin('')}>Remove PIN</button>}
+              </div>
+              <div className="sub">{s.orderPin ? 'PIN set: cards can be approved from WhatsApp.' : 'No PIN: cards are approved in the app only.'}</div>
+            </>
+          )}
         </div>
       )}
       {s && (

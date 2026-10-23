@@ -51,6 +51,7 @@ beforeEach(async () => {
   state.bot = { commands: [] };
   state.replyMode = 'smart';
   state.proposals = [];
+  state.audit = [];
   answered.mockReset();
   answered.mockResolvedValue({ text: 'Tomorrow: stand-up at 9.', proposals: [] });
   key = createKey();
@@ -96,12 +97,86 @@ describe('orders from the user\'s own WhatsApp number', () => {
   });
 
   it('says which cards wait for approval: the order itself sends nothing', async () => {
-    const card = { id: 'p1', kind: 'whatsapp', status: 'pending', title: 'Reply to Khalid' } as unknown as Proposal;
+    const card = { id: 'p1', kind: 'whatsapp', status: 'pending', title: 'Reply to Khalid', toName: 'Khalid', phone: '966522222222', body: 'I will be 10 minutes late', canSend: true } as unknown as Proposal;
     answered.mockResolvedValue({ text: 'تمام، جهزت الرد.', proposals: [card] });
     await asBot({ messages: [wa({ text: 'رد على خالد اني متأخر' })] });
     const [reply] = await repliesSoon();
     expect(answered).toHaveBeenCalledWith(expect.anything(), expect.any(String), 'ar');
-    expect(reply.text).toContain('بطاقة واحدة تنتظر موافقتك في MAAI: Reply to Khalid');
+    expect(reply.text).toMatch(/بانتظار موافقتك:\n#\d+ 💬 Khalid: I will be 10 minutes late/);
+    expect(reply.text).toContain('وافق من تطبيق MAAI'); // no PIN set: the app only
+  });
+
+  describe('approving from WhatsApp with the PIN', () => {
+    const PIN = '482913';
+    const card = (extra: Record<string, unknown> = {}) => ({ id: `p${Math.random().toString(16).slice(2)}`, kind: 'remember', status: 'pending', title: 'Prefers morning meetings', category: 'preference', ...extra }) as unknown as Proposal;
+    /** Sends an order that makes one card, and returns its number from MAAI's answer. */
+    const orderMaking = async (p: Proposal) => {
+      answered.mockResolvedValueOnce({ text: 'Done.', proposals: [p] });
+      state.proposals.push(p);
+      await asBot({ messages: [wa({ text: 'remember I prefer mornings' })] });
+      const [reply] = await repliesSoon();
+      return Number(/#(\d+) /.exec(reply.text)![1]);
+    };
+    const send = async (text: string) => {
+      await asBot({ messages: [wa({ text })] });
+      return (await repliesSoon())[0].text;
+    };
+
+    it('the PIN is set in the app only, kept as a hash, and must be 6 to 8 digits', async () => {
+      expect((await asUser('PUT', '/admin/bot/order-pin', { pin: '1234' })).status).toBe(400);
+      expect((await asUser('PUT', '/admin/bot/order-pin', { pin: '111111' })).status).toBe(400);
+      expect((await raw(site.port, 'PUT', '/api/admin/bot/order-pin', { body: JSON.stringify({ pin: PIN }) })).status).toBe(401);
+      expect((await asUser('PUT', '/admin/bot/order-pin', { pin: PIN })).status).toBe(200);
+      expect(JSON.stringify(state)).not.toContain(PIN);
+    });
+
+    it('carries out the card with the right PIN, logs it as from WhatsApp, and never shows the PIN to the assistant', async () => {
+      await asUser('PUT', '/admin/bot/order-pin', { pin: PIN });
+      const p = card();
+      const no = await orderMaking(p);
+      expect(await send(`approve ${no}`)).toContain('PIN');
+      expect(await send(`موافق ${no} ${PIN}`)).toContain('✅');
+      expect(p.status).toBe('approved');
+      expect(state.audit[0]).toMatchObject({ who: 'You (WhatsApp, with PIN)', outcome: 'approved' });
+      expect(answered).toHaveBeenCalledTimes(1); // only the first order; the approvals never reached Claude
+      expect(JSON.stringify(answered.mock.calls)).not.toContain(PIN);
+      expect(await send(`approve ${no} ${PIN}`)).toContain('already approved'); // once only
+    });
+
+    it('locks after 3 wrong PINs, even for the right one, and cancels without a PIN', async () => {
+      await asUser('PUT', '/admin/bot/order-pin', { pin: PIN });
+      const p = card();
+      const no = await orderMaking(p);
+      expect(await send(`approve ${no} 000000`)).toContain('2 tries left');
+      await send(`approve ${no} 000001`);
+      expect(await send(`approve ${no} 000002`)).toContain('locked');
+      expect(await send(`approve ${no} ${PIN}`)).toContain('locked');
+      expect(p.status).toBe('pending');
+      expect(await send(`cancel ${no}`)).toContain('Cancelled');
+      expect(p.status).toBe('cancelled');
+    });
+
+    it('needs a PIN to be set, and keeps computer tasks and old cards to the app', async () => {
+      const p = card();
+      const no = await orderMaking(p);
+      expect(await send(`approve ${no} ${PIN}`)).toContain('needs a PIN');
+      await asUser('PUT', '/admin/bot/order-pin', { pin: PIN });
+      const device = card({ kind: 'device', title: 'Open the report', task: 'report.pdf', action: 'open_path' });
+      const deviceNo = await orderMaking(device);
+      expect(await send(`approve ${deviceNo} ${PIN}`)).toContain('in the app');
+      state.bot.orderCards!.find((c) => c.no === no)!.at = new Date(Date.now() - 31 * 60_000).toISOString();
+      expect(await send(`approve ${no} ${PIN}`)).toContain('over 30 minutes old');
+      expect([p.status, device.status]).toEqual(['pending', 'pending']);
+    });
+
+    it('cannot be used from any other number', async () => {
+      await asUser('PUT', '/admin/bot/order-pin', { pin: PIN });
+      const p = card();
+      const no = await orderMaking(p);
+      receiveFromBot({ messages: [wa({ phone: '966500000002', text: `approve ${no} ${PIN}` })] }, Date.now(), () => expect.fail('not an order'));
+      await new Promise((r) => setTimeout(r, 50));
+      expect(p.status).toBe('pending');
+    });
   });
 
   it('stops when switched off', async () => {

@@ -74,6 +74,7 @@ export function botStatus(now = Date.now()): BotStatus {
     replyMode: state.replyMode,
     contacts: state.contacts.length,
     orderPhone: state.bot.orderPhone,
+    orderPin: Boolean(state.bot.orderPin),
     ...(linkNeeded(now) ? { link: { ...(link!.code ? { code: link!.code } : { qr: true }), at: new Date(link!.at).toISOString() } } : {}),
   };
 }

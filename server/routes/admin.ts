@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { AdminOverview, BotOverview } from '../../shared/types.js';
 import { botStatus, createKey, revokeKey, setOrderPhone } from '../bot.js';
+import { setOrderPin } from '../remote.js';
 import { healthReport } from '../health.js';
 import { allEvents, audit, state } from '../store.js';
 import { status } from '../status.js';
@@ -75,6 +76,17 @@ admin.put('/admin/bot/order-phone', (req, res) => {
     throw new HttpError(400, (error as Error).message);
   }
   audit(state.bot.orderPhone ? `WhatsApp order number set to +${state.bot.orderPhone}` : 'WhatsApp orders switched off', 'User', 'done');
+  res.json(botOverview());
+});
+
+/** The PIN for approving cards from the order number on WhatsApp ("" removes it). Only its hash is kept. */
+admin.put('/admin/bot/order-pin', (req, res) => {
+  try {
+    setOrderPin(req.body?.pin);
+  } catch (error) {
+    throw new HttpError(400, (error as Error).message);
+  }
+  audit(state.bot.orderPin ? 'WhatsApp approval PIN set' : 'WhatsApp approval PIN removed', 'User', 'done');
   res.json(botOverview());
 });
 
