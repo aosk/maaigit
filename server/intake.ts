@@ -142,7 +142,8 @@ export function whyNot(message: InboxMessage, now = Date.now()): string | null {
   const hourAgoIso = new Date(now - 3_600_000).toISOString();
   if ((state.intake[message.phone]?.sent ?? []).filter((x) => x.at > hourAgoIso).length >= PER_PERSON_HOUR) return `${PER_PERSON_HOUR} replies to this person in the last hour`;
   const hourAgo = new Date(now - 3_600_000).toISOString();
-  const lastHour = Object.values(state.intake).reduce((n, r) => n + r.sent.filter((x) => x.at > hourAgo).length, 0);
+  // Replies being written count too: many people in one delivery must not all pass before any is recorded.
+  const lastHour = Object.values(state.intake).reduce((n, r) => n + r.sent.filter((x) => x.at > hourAgo).length, 0) + busy.size;
   return lastHour >= PER_HOUR ? `${PER_HOUR} replies in the last hour` : null;
 }
 
@@ -151,6 +152,8 @@ const shouldAnswer = (message: InboxMessage, now = Date.now()): boolean => whyNo
 
 /** People being answered right now: a second delivery while Claude is writing must not start another reply. */
 const busy = new Set<string>();
+/** A newer message from someone being answered: answered as soon as the current reply is done. */
+const waiting = new Map<string, { message: InboxMessage; send: (text: string) => void }>();
 
 /**
  * Answers the newest message from this person (several messages close together get one answer), and tells
@@ -158,7 +161,11 @@ const busy = new Set<string>();
  */
 export async function answer(message: InboxMessage, send: (text: string) => void, now = Date.now()): Promise<void> {
   const phone = message.phone!;
-  if (busy.has(phone) || !shouldAnswer(message, now)) return;
+  if (busy.has(phone)) {
+    waiting.set(phone, { message, send });
+    return;
+  }
+  if (!shouldAnswer(message, now)) return;
   busy.add(phone);
   try {
     const round = roundFor(phone, now);
@@ -201,6 +208,10 @@ export async function answer(message: InboxMessage, send: (text: string) => void
     if (result && (result.urgent || (round.done && !wasDone))) await tell(message, { summary: round.summary, urgent: result.urgent, complete: Boolean(round.done) }, now);
   } finally {
     busy.delete(phone);
+    // Something came in while this reply was being written: answer it now (with the whole conversation so far).
+    const next = waiting.get(phone);
+    waiting.delete(phone);
+    if (next) void answer(next.message, next.send).catch((error: Error) => console.error('First reply failed:', error.message));
   }
 }
 

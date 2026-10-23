@@ -105,7 +105,8 @@ describe('orders from the user\'s own WhatsApp number', () => {
     await asBot({ messages: [wa({ text: 'رد على خالد اني متأخر' })] });
     const [reply] = await repliesSoon();
     expect(answered).toHaveBeenCalledWith(expect.anything(), expect.any(String), 'ar');
-    expect(reply.text).toMatch(/بانتظار موافقتك:\n#\d+ 💬 Khalid: I will be 10 minutes late/);
+    // The real number and the whole text: what is approved is exactly what was read.
+    expect(reply.text).toMatch(/بانتظار موافقتك:\n#\d+ 💬 واتساب إلى Khalid \(\+966522222222\)\nI will be 10 minutes late/);
     expect(reply.text).toContain('وافق من تطبيق MAAI'); // no PIN set: the app only
   });
 
@@ -170,6 +171,21 @@ describe('orders from the user\'s own WhatsApp number', () => {
       expect(p.status).toBe('pending');
       expect(await send(`cancel ${no}`)).toContain('Cancelled');
       expect(p.status).toBe('cancelled');
+    });
+
+    it('shows an email card with its real address and whole text, and keeps a card too long to show to the app', async () => {
+      await asUser('PUT', '/admin/bot/order-pin', { pin: PIN });
+      const email = card({ kind: 'email', title: 'To Mom', to: 'attacker@example.com', toName: 'Mom', subject: 'Hi', body: 'x'.repeat(500) });
+      answered.mockResolvedValueOnce({ text: 'Done.', proposals: [email] });
+      state.proposals.push(email);
+      await asBot({ messages: [wa({ text: 'email mom' })] });
+      const [shown] = await repliesSoon();
+      expect(shown.text).toContain('Mom <attacker@example.com>');
+      expect(shown.text).toContain('x'.repeat(500));
+      const long = card({ kind: 'email', title: 'Long one', to: 'a@b.co', subject: 'S', body: 'y'.repeat(3500) });
+      const no = await orderMaking(long);
+      expect(await send(`approve ${no} ${PIN}`)).toContain('approve it in the app');
+      expect(long.status).toBe('pending');
     });
 
     it('needs a PIN to be set, and keeps computer tasks and old cards to the app', async () => {

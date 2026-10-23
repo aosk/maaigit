@@ -168,6 +168,16 @@ describe('messages the bot delivers', () => {
     expect(await repliesSoon()).toHaveLength(1);
   });
 
+  it('keeps to 60 replies an hour even when many people arrive in one delivery', async () => {
+    claudeSays('أهلاً');
+    const people = Array.from({ length: 75 }, (_, i) => wa({ phone: `9665${String(10_000_000 + i)}`, from: `P${i}` }));
+    receiveFromBot({ messages: people.slice(0, 60) });
+    receiveFromBot({ messages: people.slice(60) });
+    await vi.waitFor(() => expect(state.bot.commands.filter((c) => c.status === 'queued').length).toBe(60));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(state.bot.commands.filter((c) => c.status === 'queued')).toHaveLength(60);
+  });
+
   it('falls back to the fixed note with the warning when the AI cannot answer, and sends nothing when switched off', async () => {
     vi.mocked(create).mockRejectedValue(new Error('Claude is busy'));
     receiveFromBot({ messages: [wa()] });

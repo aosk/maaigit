@@ -95,9 +95,12 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
 
   // Five wrong tries lock sign-in, and each further round of five locks it twice as long
   // (1 minute, 2, 4 … up to an hour), so a passcode can't be guessed by trying them all.
+  // The count is for everyone together, not per address: a guesser spread over many addresses gets no more
+  // tries. A day with no wrong try starts the doubling over, so old failures do not keep the lock long for ever.
   let failures = 0;
   let rounds = 0;
   let lockedUntil = 0;
+  let lastWrong = 0;
 
   function guard(req: Request, res: Response, next: NextFunction) {
     if (req.path === '/unlock' && req.method === 'POST') {
@@ -108,6 +111,8 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
       }
       const given = typeof req.body?.pin === 'string' ? req.body.pin.trim() : '';
       if (!sameText(hash(given), passcodeHash)) {
+        if (now() - lastWrong > 24 * 60 * 60_000) rounds = 0;
+        lastWrong = now();
         failures += 1;
         if (failures >= 5) {
           failures = 0;

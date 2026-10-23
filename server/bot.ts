@@ -209,8 +209,9 @@ export interface Order {
 export function setOrderPhone(value: unknown): void {
   const phone = typeof value === 'string' ? phoneDigits(value) : '';
   if (phone && (phone.length < 8 || phone.length > 15)) throw new BotInputError('Give the full number with the country code, for example 9665XXXXXXXX.');
+  // A new number starts a new record; saving the same number again must not let recent orders run twice.
+  if (phone !== state.bot.orderPhone) state.bot.orders = [];
   state.bot.orderPhone = phone || undefined;
-  state.bot.orders = [];
   save();
 }
 

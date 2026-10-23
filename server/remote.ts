@@ -68,37 +68,53 @@ function pinMatches(pin: string): boolean {
 
 // ---------- Numbered cards ----------
 
-/** Gives each card made from an order a short number to approve it by. */
-function number(cards: Proposal[], now: number): { no: number; card: Proposal }[] {
+/**
+ * Gives each card made from an order a short number to approve it by, with its full description. A card whose
+ * description does not fit in the WhatsApp answer is listed by title only, and can be approved in the app only.
+ */
+function number(cards: Proposal[], lang: Lang, now: number): string[] {
   const list = (state.bot.orderCards ?? []).filter((c) => now - Date.parse(c.at) < 24 * 3_600_000);
-  const out = cards.map((card) => {
+  let room = ROOM_FOR_CARDS;
+  const shown = cards.map((card) => {
     state.bot.cardNo = ((state.bot.cardNo ?? 0) % 999) + 1;
-    list.push({ no: state.bot.cardNo, id: card.id, at: new Date(now).toISOString() });
-    return { no: state.bot.cardNo, card };
+    const no = state.bot.cardNo;
+    const full = `#${no} ${describe(card, lang)}`;
+    const fits = full.length <= room;
+    if (fits) room -= full.length;
+    list.push({ no, id: card.id, at: new Date(now).toISOString(), ...(fits ? {} : { appOnly: true }) });
+    return fits ? full : `#${no} ${card.title} (${lang === 'ar' ? 'طويلة: وافق عليها من التطبيق' : 'too long to show here: approve it in the app'})`;
   });
   state.bot.orderCards = list.slice(-50);
-  return out;
+  return shown;
 }
 
-/** What a card will do, in one line, so it can be approved without opening the app. */
+/**
+ * Everything a card will do, in full, so approving it from WhatsApp approves exactly what was read: the real
+ * address or number (never only the name Claude gave it) and the whole text. Approval carries out the card as
+ * it is, so nothing it does may be left out or shortened here.
+ */
 function describe(p: Proposal, lang: Lang): string {
-  const cut = (s: string, n = 120) => (s.length > n ? `${s.slice(0, n)}…` : s);
   const when = (iso: string) => new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA' : 'en-GB', { timeZone: config.timezone, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+  const ar = lang === 'ar';
   switch (p.kind) {
-    case 'email': return `✉️ ${p.toName ?? p.to}: ${cut(p.subject)}\n${cut(p.body, 300)}`;
-    case 'whatsapp': return `💬 ${p.toName}: ${cut(p.body, 300)}`;
-    case 'meeting': return `📅 ${p.title}${p.options[0] ? ` · ${when(p.options[0].start)}` : ''}${p.options.length > 1 ? (lang === 'ar' ? ' (الخيار الأول)' : ' (first option)') : ''}`;
+    case 'email': return `✉️ ${ar ? 'إيميل إلى' : 'Email to'} ${p.toName ? `${p.toName} <${p.to}>` : p.to}\n${ar ? 'الموضوع' : 'Subject'}: ${p.subject}\n${p.body}`;
+    case 'whatsapp': return `💬 ${ar ? 'واتساب إلى' : 'WhatsApp to'} ${p.toName} (+${p.phone})\n${p.body}`;
+    case 'meeting': return `📅 ${p.title}${p.attendeeEmail ? ` · ${p.attendeeEmail}` : ''}${p.options[0] ? ` · ${when(p.options[0].start)} (${p.minutes} ${ar ? 'دقيقة' : 'min'})` : ''}${p.options.length > 1 ? (ar ? ' (الخيار الأول)' : ' (first option)') : ''}`;
     case 'reminder': return `⏰ ${p.title} · ${p.when}`;
-    case 'asana': return `✅ ${p.taskName}${p.comment ? `: ${cut(p.comment)}` : ''}${p.complete ? (lang === 'ar' ? ' (إنهاء)' : ' (mark done)') : ''}${p.dueOn ? ` · ${p.dueOn}` : ''}`;
-    case 'asana_new': return `➕ ${p.title}${p.dueOn ? ` · ${p.dueOn}` : ''}`;
-    case 'remember': return `🧠 ${cut(p.title)}`;
+    case 'asana': return `✅ ${p.taskName}${p.comment ? `\n${ar ? 'تعليق' : 'Comment'}: ${p.comment}` : ''}${p.complete ? (ar ? '\n(إنهاء المهمة)' : '\n(mark done)') : ''}${p.dueOn ? `\n${ar ? 'الموعد' : 'Due'}: ${p.dueOn}` : ''}`;
+    case 'asana_new': return `➕ ${p.title}${p.notes ? `\n${p.notes}` : ''}${p.dueOn ? `\n${ar ? 'الموعد' : 'Due'}: ${p.dueOn}` : ''}${p.projectGid ? `\n${ar ? 'المشروع' : 'Project'}: ${p.projectGid}` : ''}`;
+    case 'remember': return `🧠 ${p.title}`;
     case 'device': return `🖥️ ${p.title}`;
   }
 }
 
+/** Room in one WhatsApp answer for the cards' full descriptions (the rest is the assistant's words and the how-to). */
+const ROOM_FOR_CARDS = 3000;
+
 // ---------- Approving from WhatsApp ----------
 
-const APPROVE = /^(?:approve|ok|yes|موافق|وافق|اعتمد|نعم)\s*#?\s*(\d{1,3})(?:\s+(\S+))?\s*$/i;
+// Only these words decide a card: a casual 'yes 2' or 'لا 3' (an answer to a question) stays an order.
+const APPROVE = /^(?:approve|موافق|وافق|اعتمد)\s*#?\s*(\d{1,3})(?:\s+(\S+))?\s*$/i;
 /** An approval word and a card number ("موافق 3 …"): never passed to the assistant, even when the rest is not understood. */
 const LOOKS_LIKE_APPROVAL = /^(?:approve|موافق|وافق|اعتمد)\s*#?\s*\d/i;
 
@@ -114,8 +130,9 @@ const plainDigits = (text: string) =>
     .trim();
 
 /** Whether the message holds the PIN anywhere (then it is never passed to the assistant). */
-const holdsPin = (text: string) => (text.match(/\d{6,8}/g) ?? []).some(pinMatches);
-const CANCEL = /^(?:cancel|no|الغ|الغي|إلغاء|الغاء|لا)\s*#?\s*(\d{1,3})\s*$/i;
+// A few numbers at most: each check is a deliberately slow hash, and a long text must not stall the server.
+const holdsPin = (text: string) => (text.match(/\d{6,8}/g) ?? []).slice(0, 5).some(pinMatches);
+const CANCEL = /^(?:cancel|الغ|الغي|إلغاء|الغاء)\s*#?\s*(\d{1,3})\s*$/i;
 
 /** Handles "approve 3 123456" and "cancel 3". Returns the answer, or null when the message is not one of those. */
 async function approval(text: string, lang: Lang, now: number): Promise<string | null> {
@@ -154,10 +171,11 @@ async function approval(text: string, lang: Lang, now: number): Promise<string |
     return ar ? `رمز خاطئ. باقي ${left} محاولة.` : `Wrong PIN. ${left} tries left.`;
   }
   delete state.bot.pinFails;
+  if (entry.appOnly) return ar ? `البطاقة #${no} طويلة ولم تُعرض كاملة هنا: وافق عليها من التطبيق.` : `Card #${no} was too long to show in full here: approve it in the app.`;
   if (APP_ONLY.includes(card.kind)) return ar ? `البطاقة #${no} تعمل على جهازك، ووافق عليها من التطبيق فقط.` : `Card #${no} acts on your computer: approve it in the app.`;
   if (now - Date.parse(entry.at) > CARD_FRESH_MS) return ar ? `البطاقة #${no} قديمة (أكثر من ٣٠ دقيقة). وافق عليها من التطبيق.` : `Card #${no} is over 30 minutes old. Approve it in the app.`;
   try {
-    // Approved exactly as shown: the card's own content, with nothing changed.
+    // Carried out exactly as shown in full when it was made: the card's own content, nothing changed.
     const done = await approveCard(card, { ...card }, 'You (WhatsApp, with PIN)');
     void alertWhatsAppApproval(done).catch(() => {});
     return `✅ ${done}`;
@@ -178,7 +196,8 @@ export function takeOrder(order: Order, now = Date.now()): void {
   done.push(order.externalId);
   if (done.length > KEEP_IDS) done.splice(0, done.length - KEEP_IDS);
   save();
-  queue = queue.then(() => carryOut(order, now)).catch((error: Error) => console.error('Order failed:', error.message));
+  // Its clock starts when it runs: an order can wait behind others for a while.
+  queue = queue.then(() => carryOut(order, Date.now())).catch((error: Error) => console.error('Order failed:', error.message));
 }
 
 async function carryOut(order: Order, now: number): Promise<void> {
@@ -252,12 +271,12 @@ async function carryOut(order: Order, now: number): Promise<void> {
   try {
     audit('Order from your WhatsApp number', 'You (WhatsApp)', 'done');
     const answer = await chat(conversation, `(from my WhatsApp) ${text.slice(0, 4000)}`, lang);
-    const cards = number(answer.proposals, now);
+    const cards = number(answer.proposals, lang, now);
     const ar = lang === 'ar';
     const how = state.bot.orderPin
       ? ar ? 'للموافقة أرسل: موافق <الرقم> <رمزك> · للإلغاء: الغ <الرقم> · أو من التطبيق.' : 'To approve, send: approve <number> <your PIN> · to cancel: cancel <number> · or use the app.'
       : ar ? 'وافق من تطبيق MAAI (أو عيّن رمز PIN في الإدارة لتوافق من هنا).' : 'Approve in the MAAI app (or set a PIN in Admin to approve from here).';
-    const waiting = cards.length ? `\n\n📝 ${ar ? 'بانتظار موافقتك:' : 'Waiting for your approval:'}\n${cards.map(({ no, card }) => `#${no} ${describe(card, lang)}`).join('\n\n')}\n\n${how}` : '';
+    const waiting = cards.length ? `\n\n📝 ${ar ? 'بانتظار موافقتك:' : 'Waiting for your approval:'}\n${cards.join('\n\n')}\n\n${how}` : '';
     reply(`${answer.text}${waiting}`);
     if (cards.length) await alertOrderCards(cards.length);
   } catch (error) {

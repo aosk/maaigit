@@ -104,7 +104,7 @@ interface State {
     /** Wrong PINs in a row, and since when (approving from WhatsApp locks for an hour after 3). */
     pinFails?: { count: number; since: string };
     /** The short numbers given to cards made from orders ("approve 3 …"), last day only. */
-    orderCards?: { no: number; id: string; at: string }[];
+    orderCards?: { no: number; id: string; at: string; appOnly?: boolean }[];
     cardNo?: number;
   };
   /** Names and numbers from the user's phone (saved contacts, as WhatsApp on the device sees them). */
