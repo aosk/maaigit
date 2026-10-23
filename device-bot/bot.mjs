@@ -1,5 +1,6 @@
 // MAAI device bot: WhatsApp (through WhatsApp Web on this device) ⇄ MAAI. See README.md.
 import { execFileSync, spawn } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -60,7 +61,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-24g';
+const VERSION = '2026-10-24h';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -393,6 +394,28 @@ const voiceSent = new Set();
 const MAX_VOICE_BYTES = 3 * 1024 * 1024;
 
 /** A voice note from the order number goes to MAAI as audio, to be written out and carried out as an order. */
+/**
+ * Downloads and decrypts a WhatsApp voice note (or other media) straight from WhatsApp's media servers, the
+ * documented way (HKDF-SHA256 on the message's media key, AES-256-CBC, a 10-byte HMAC check), without going
+ * through WhatsApp Web's own code, which the library cannot always call ("r" errors when they change).
+ */
+const MEDIA_INFO = { ptt: 'WhatsApp Audio Keys', audio: 'WhatsApp Audio Keys', image: 'WhatsApp Image Keys', video: 'WhatsApp Video Keys', document: 'WhatsApp Document Keys' };
+async function downloadDirect(m) {
+  const mediaKey = m.mediaKey ?? m._data?.mediaKey;
+  const directPath = m._data?.directPath ?? m.directPath;
+  if (!mediaKey || !directPath) throw new Error('no-media-key');
+  const keys = Buffer.from(crypto.hkdfSync('sha256', Buffer.from(mediaKey, 'base64'), Buffer.alloc(0), MEDIA_INFO[m.type] ?? MEDIA_INFO.ptt, 112));
+  const iv = keys.subarray(0, 16);
+  const res = await fetch(`https://mmg.whatsapp.net${directPath}`, { signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) throw new Error(`media-server-${res.status}`);
+  const encrypted = Buffer.from(await res.arrayBuffer());
+  const body = encrypted.subarray(0, -10);
+  const mac = crypto.createHmac('sha256', keys.subarray(48, 80)).update(iv).update(body).digest().subarray(0, 10);
+  if (!mac.equals(encrypted.subarray(-10))) throw new Error('media-check-failed');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', keys.subarray(16, 48), iv);
+  return Buffer.concat([decipher.update(body), decipher.final()]);
+}
+
 async function sendVoice(msg, item) {
   if (voiceSent.has(item.id)) return;
   voiceSent.add(item.id); // the same note arrives through two events: claim it now, give it back if it fails
@@ -408,12 +431,19 @@ async function sendVoice(msg, item) {
       reason = 'no-media-yet';
       continue;
     }
+    // First straight from WhatsApp's media servers; the library's own way only if that fails.
+    const direct = await downloadDirect(fresh).catch((error) => error);
+    if (Buffer.isBuffer(direct) && direct.length) {
+      audio = direct;
+      break;
+    }
+    reason = `direct-${why(direct).replace(/[^\w-]+/g, '-').slice(0, 30)}`;
     const media = await Promise.race([
       fresh.downloadMedia().catch((error) => ({ error })),
       pause(30_000).then(() => ({ error: new Error('timeout') })),
     ]);
     if (media?.data) audio = Buffer.from(media.data, 'base64');
-    else reason = media?.error ? `error-${why(media.error).replace(/[^\w-]+/g, '-').slice(0, 40)}` : 'not-downloadable';
+    else reason += media?.error ? `-lib-${why(media.error).replace(/[^\w-]+/g, '-').slice(0, 20)}` : '-lib-none';
   }
   const query = (extra) => new URLSearchParams({ id: item.id, at: item.at, phone: item.phone, ...extra });
   const post = (params, body) =>
