@@ -8,6 +8,8 @@ import { noteRateLimits } from '../anthropic-limits.js';
 
 export type MessageParam = Anthropic.Beta.Messages.BetaMessageParam;
 export type Tool = Anthropic.Beta.Messages.BetaTool;
+/** A tool Anthropic runs itself (web search): declared like the others, with no code of ours behind it. */
+export type ServerTool = Anthropic.Beta.Messages.BetaWebSearchTool20260209;
 export type ToolUse = Anthropic.Beta.Messages.BetaToolUseBlock;
 export type ToolResult = Anthropic.Beta.Messages.BetaToolResultBlockParam;
 type Message = Anthropic.Beta.Messages.BetaMessage;
@@ -29,7 +31,7 @@ interface Request {
   purpose: UsagePurpose;
   system: string;
   messages: MessageParam[];
-  tools?: Tool[];
+  tools?: (Tool | ServerTool)[];
   effort: 'low' | 'medium';
   maxTokens: number;
   /** A JSON schema the reply must follow. */
@@ -114,8 +116,11 @@ export function stream(req: Request, onEvent: OnEvent): Promise<Message> {
       thinking: { type: 'adaptive', display: 'summarized' },
     });
     for await (const event of s) {
-      if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+      if (event.type === 'content_block_start' && (event.content_block.type === 'tool_use' || event.content_block.type === 'server_tool_use')) {
         onEvent({ type: 'step', tool: event.content_block.name });
+      } else if (event.type === 'content_block_start' && event.content_block.type === 'web_search_tool_result') {
+        // Anthropic ran the search itself: its results arriving closes the step.
+        onEvent({ type: 'step', tool: 'web_search:done' });
       } else if (event.type === 'content_block_delta') {
         if (event.delta.type === 'thinking_delta') onEvent({ type: 'thinking', text: event.delta.thinking });
         else if (event.delta.type === 'text_delta') onEvent({ type: 'text', text: event.delta.text });

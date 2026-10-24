@@ -210,6 +210,8 @@ const en = {
   hideThinking: 'Hide thinking',
   stepLabels: {
     read_email: 'Reading an email',
+    search_email: 'Searching your mail',
+    web_search: 'Searching the web',
     propose_meeting: 'Finding free times and preparing a meeting',
     propose_reminder: 'Preparing a reminder',
     propose_email: 'Writing an email',
@@ -692,6 +694,8 @@ const ar: Strings = {
   hideThinking: 'إخفاء التفكير',
   stepLabels: {
     read_email: 'أقرأ رسالة',
+    search_email: 'أبحث في بريدك',
+    web_search: 'أبحث في الإنترنت',
     propose_meeting: 'أبحث عن أوقات فارغة وأجهز الاجتماع',
     propose_reminder: 'أجهز التذكير',
     propose_email: 'أكتب البريد',

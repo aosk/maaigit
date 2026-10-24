@@ -40,8 +40,11 @@ const LOCK_MS = 60 * 60_000;
 /** How long the PIN unlocks the number for questions and orders, and how long an order sent while locked is held. */
 const UNLOCK_MS = 60 * 60_000;
 const HOLD_MS = 5 * 60_000;
-/** Cards that can only be approved in the app: they act on the user's work computer. */
-const APP_ONLY: Proposal['kind'][] = ['device'];
+/**
+ * Cards that can only be approved in the app: they act on the user's work computer. Opening a web link is the
+ * exception (it only shows a page, and the card shows the exact address); files and other tasks stay in the app.
+ */
+const appOnly = (p: Proposal) => p.kind === 'device' && p.action !== 'open_url';
 
 const arabic = (text: string) => /[؀-ۿ]/.test(text);
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -153,7 +156,7 @@ function describe(p: Proposal, lang: Lang): string {
     case 'asana': return `✅ ${p.taskName}${p.comment ? `\n${ar ? 'تعليق' : 'Comment'}: ${p.comment}` : ''}${p.complete ? (ar ? '\n(إنهاء المهمة)' : '\n(mark done)') : ''}${p.dueOn ? `\n${ar ? 'الموعد' : 'Due'}: ${p.dueOn}` : ''}`;
     case 'asana_new': return `➕ ${p.title}${p.notes ? `\n${p.notes}` : ''}${p.dueOn ? `\n${ar ? 'الموعد' : 'Due'}: ${p.dueOn}` : ''}${p.projectGid ? `\n${ar ? 'المشروع' : 'Project'}: ${p.projectGid}` : ''}`;
     case 'remember': return `🧠 ${p.title}`;
-    case 'device': return `🖥️ ${p.title}`;
+    case 'device': return p.action === 'open_url' ? `🌐 ${ar ? 'فتح على جهازك' : 'Open on your computer'}: ${p.task}` : `🖥️ ${p.title}`;
   }
 }
 
@@ -203,7 +206,7 @@ async function approval(text: string, lang: Lang, now: number): Promise<string |
   const pinProblem = checkPin(approve![2], ar, now, `card #${no}`);
   if (pinProblem) return approve![2] || !state.bot.orderPin ? pinProblem : ar ? `أرسل: موافق ${no} ثم رمزك` : `Send: approve ${no} and your PIN`;
   if (entry.appOnly) return ar ? `البطاقة #${no} طويلة ولم تُعرض كاملة هنا: وافق عليها من التطبيق.` : `Card #${no} was too long to show in full here: approve it in the app.`;
-  if (APP_ONLY.includes(card.kind)) return ar ? `البطاقة #${no} تعمل على جهازك، ووافق عليها من التطبيق فقط.` : `Card #${no} acts on your computer: approve it in the app.`;
+  if (appOnly(card)) return ar ? `البطاقة #${no} تعمل على جهازك، ووافق عليها من التطبيق فقط.` : `Card #${no} acts on your computer: approve it in the app.`;
   if (now - Date.parse(entry.at) > CARD_FRESH_MS) return ar ? `البطاقة #${no} قديمة (أكثر من ٣٠ دقيقة). وافق عليها من التطبيق.` : `Card #${no} is over 30 minutes old. Approve it in the app.`;
   try {
     // Carried out exactly as shown in full when it was made: the card's own content, nothing changed.

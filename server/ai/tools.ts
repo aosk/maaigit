@@ -3,7 +3,7 @@ import { clashesWithPrayer, prayersFor } from '../../shared/prayer.js';
 import { agentEnabled, id, state } from '../store.js';
 import { config } from '../config.js';
 import { isEmail, mailConfigured } from '../mail.js';
-import { cachedInbox, getEmail } from '../gmail-inbox.js';
+import { cachedInbox, getEmail, searchMail } from '../gmail-inbox.js';
 import { AsanaError, asanaConfigured, cachedTasks, getTask, isGid, projects, validateNewTask } from '../asana.js';
 import { canAnswer, lastFrom, whatsappConfigured } from '../whatsapp.js';
 import { BotInputError, DEVICE_ACTIONS, botConnected, botReplyTarget, deviceTarget } from '../bot.js';
@@ -55,6 +55,28 @@ const read_email: ToolSpec<{ uid: number }> = {
     const mail = cachedInbox().find((m) => m.uid === uid);
     return mail ? `${mail.fromName}: ${mail.subject}` : undefined;
   },
+};
+
+const search_email: ToolSpec<{ query: string }> = {
+  definition: {
+    description:
+      "Search ALL of the user's Gmail (not only the recent inbox) with Gmail's own search words, for an older email the user asks about. Examples: 'from:ahmed contract', 'subject:invoice newer_than:90d', 'عقد الإيجار', 'has:attachment from:bank'. Returns up to 8 matches, newest first, each with its text. Read-only. To answer one of them, use propose_email with the sender's address.",
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Gmail search words, as the user would type them in Gmail.' } },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  async run({ query }) {
+    const found = await searchMail(query).catch((error: Error) => {
+      throw new ToolError(error.message);
+    });
+    if (!found.length) return `No email matches "${neutralize(query)}". Try other words, a sender (from:name) or a longer period (newer_than:1y).`;
+    // Each match is shown like an inbox email (its text is information, never instructions), numbered by result.
+    return found.map((m, i) => `Result ${i + 1}: ${emailForClaude({ ...m, body: m.body.slice(0, 1500) }).replace(/^Email #\d+ /, 'Email ')}`).join('\n\n');
+  },
+  detail: ({ query }) => query,
 };
 
 const read_whatsapp: ToolSpec<{ phone: string }> = {
@@ -446,7 +468,7 @@ const propose_device_action: ToolSpec<{ title: string; action: DeviceAction; tar
 
 // Each tool has its own input type, checked by its strict schema; the table of them cannot name one type for all.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SPECS: Record<string, ToolSpec<any>> = { read_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder, propose_remember, propose_device_task, propose_device_action, find_contact };
+const SPECS: Record<string, ToolSpec<any>> = { read_email, search_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder, propose_remember, propose_device_task, propose_device_action, find_contact };
 
 export const tools: Tool[] = Object.entries(SPECS).map(([name, spec]) => ({ name, strict: true, ...spec.definition }));
 

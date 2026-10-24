@@ -44,6 +44,79 @@ function cleanBody(text: string): string {
   return (cut > 0 ? lines.slice(0, cut) : lines).join('\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, BODY_CHARS);
 }
 
+/** Signs in to Gmail for reading (read-only use, App Password). Errors say what to fix. */
+async function signIn(): Promise<ImapFlow> {
+  const client = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user, pass }, logger: false });
+  // A dropped connection is reported as an error event; with no listener Node would stop the whole server.
+  client.on('error', (error: Error) => console.error('Gmail inbox connection error:', error.message));
+  try {
+    await client.connect();
+    return client;
+  } catch (error) {
+    const message = (error as { responseText?: string; message?: string }).responseText ?? (error as Error).message ?? '';
+    console.error('Gmail inbox sign-in failed:', message);
+    failed('gmail', /AUTHENTICATIONFAILED|Invalid credentials|auth/i.test(message) ? 'Gmail refused the sign-in (App Password)' : 'Could not reach Gmail');
+    if (/AUTHENTICATIONFAILED|Invalid credentials|auth/i.test(message)) {
+      throw new MailError('Gmail refused the sign-in for reading. Check GMAIL_USER and the App Password in Render → Environment.');
+    }
+    throw new MailError('Could not reach Gmail. Try again in a moment.');
+  }
+}
+
+/** The given messages of the open mailbox, as MailItems (newest last, as asked). */
+async function readMessages(client: ImapFlow, uids: number[]): Promise<MailItem[]> {
+  const items: MailItem[] = [];
+  if (!uids.length) return items;
+  for await (const msg of client.fetch(uids, { uid: true, flags: true, source: { maxLength: 300_000 } }, { uid: true })) {
+    if (!msg.source) continue;
+    const mail = await simpleParser(msg.source);
+    const from = mail.from?.value[0];
+    items.push({
+      uid: msg.uid,
+      fromName: from?.name || from?.address || 'Unknown',
+      fromAddress: from?.address ?? '',
+      subject: mail.subject ?? '(no subject)',
+      date: (mail.date ?? new Date()).toISOString(),
+      unread: !msg.flags?.has('\\Seen'),
+      body: cleanBody(mail.text ?? ''),
+    });
+  }
+  return items;
+}
+
+/** Most messages one search returns. */
+const SEARCH_MAX = 8;
+
+/**
+ * Searches all of the user's mail (not only the recent inbox) with Gmail's own search words, e.g.
+ * "from:ahmed contract newer_than:60d", newest first. Read-only. The folder holding all mail is found by its
+ * role, not its name, since Gmail names it in the account's language.
+ */
+export async function searchMail(query: string): Promise<MailItem[]> {
+  if (!inboxConfigured) throw new MailError('Gmail is not connected. Add GMAIL_USER and GMAIL_APP_PASSWORD in Render → Environment.');
+  const words = query.trim().slice(0, 300);
+  if (!words) throw new MailError('Say what to look for.');
+  if (demo) {
+    const terms = words.toLowerCase().split(/\s+/).filter((t) => !t.includes(':'));
+    return demoInbox().filter((m) => terms.every((t) => `${m.fromName} ${m.fromAddress} ${m.subject} ${m.body}`.toLowerCase().includes(t))).slice(0, SEARCH_MAX);
+  }
+  const client = await signIn();
+  try {
+    const boxes = await client.list();
+    const all = boxes.find((b) => b.specialUse === '\\All')?.path ?? 'INBOX';
+    const lock = await client.getMailboxLock(all, { readOnly: true });
+    try {
+      const uids = await client.search({ gmraw: words }, { uid: true });
+      const found = await readMessages(client, (uids || []).slice(-SEARCH_MAX));
+      return found.sort((a, b) => b.date.localeCompare(a.date));
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => {});
+  }
+}
+
 export async function fetchInbox(opts: { days?: number; max?: number; refresh?: boolean } = {}): Promise<MailItem[]> {
   if (!inboxConfigured) throw new MailError('Gmail is not connected. Add GMAIL_USER and GMAIL_APP_PASSWORD in Render → Environment.');
   const days = opts.days ?? 2;
@@ -55,45 +128,15 @@ export async function fetchInbox(opts: { days?: number; max?: number; refresh?: 
   }
 
   const started = Date.now();
-  const client = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user, pass }, logger: false });
-  // A dropped connection is reported as an error event; with no listener Node would stop the whole server.
-  client.on('error', (error: Error) => console.error('Gmail inbox connection error:', error.message));
-  try {
-    await client.connect();
-  } catch (error) {
-    const message = (error as { responseText?: string; message?: string }).responseText ?? (error as Error).message ?? '';
-    console.error('Gmail inbox sign-in failed:', message);
-    failed('gmail', /AUTHENTICATIONFAILED|Invalid credentials|auth/i.test(message) ? 'Gmail refused the sign-in (App Password)' : 'Could not reach Gmail');
-    if (/AUTHENTICATIONFAILED|Invalid credentials|auth/i.test(message)) {
-      throw new MailError('Gmail refused the sign-in for reading. Check GMAIL_USER and the App Password in Render → Environment.');
-    }
-    throw new MailError('Could not reach Gmail. Try again in a moment.');
-  }
-
-  const items: MailItem[] = [];
+  const client = await signIn();
+  let items: MailItem[];
   try {
     const lock = await client.getMailboxLock('INBOX', { readOnly: true });
     try {
       // Gmail's own search: the Primary tab only, so promotions and social updates stay out.
       let uids = await client.search({ gmraw: `category:primary newer_than:${days}d` }, { uid: true }).catch(() => false as const);
       if (!uids) uids = await client.search({ since: new Date(Date.now() - days * 86_400_000) }, { uid: true });
-      const recent = (uids || []).slice(-max);
-      if (recent.length) {
-        for await (const msg of client.fetch(recent, { uid: true, flags: true, source: { maxLength: 300_000 } }, { uid: true })) {
-          if (!msg.source) continue;
-          const mail = await simpleParser(msg.source);
-          const from = mail.from?.value[0];
-          items.push({
-            uid: msg.uid,
-            fromName: from?.name || from?.address || 'Unknown',
-            fromAddress: from?.address ?? '',
-            subject: mail.subject ?? '(no subject)',
-            date: (mail.date ?? new Date()).toISOString(),
-            unread: !msg.flags?.has('\\Seen'),
-            body: cleanBody(mail.text ?? ''),
-          });
-        }
-      }
+      items = await readMessages(client, (uids || []).slice(-max));
     } finally {
       lock.release();
     }

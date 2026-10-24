@@ -198,6 +198,16 @@ describe('orders from the user\'s own WhatsApp number', () => {
       const device = card({ kind: 'device', title: 'Open the report', task: 'report.pdf', action: 'open_path' });
       const deviceNo = await orderMaking(device);
       expect(await send(`approve ${deviceNo} ${PIN}`)).toContain('in the app');
+      // A web link (the card shows its exact address) can be approved from WhatsApp.
+      const link = card({ kind: 'device', title: 'Open Najiz', task: 'https://najiz.sa/', action: 'open_url' });
+      state.bot.keyHash = state.bot.keyHash ?? 'x';
+      const linkNo = await orderMaking(link);
+      await asBot({ messages: [wa({ text: `approve ${linkNo} ${PIN}` })] });
+      await vi.waitFor(() => expect(state.bot.commands.filter((c) => c.status === 'queued').length).toBe(2));
+      const sent = takeCommands();
+      expect(sent).toContainEqual(expect.objectContaining({ kind: 'task', action: 'open_url', text: 'https://najiz.sa/' }));
+      expect(sent.find((c) => c.kind === 'reply')?.text).toContain('✅');
+      expect(link.status).toBe('approved');
       state.bot.orderCards!.find((c) => c.no === no)!.at = new Date(Date.now() - 31 * 60_000).toISOString();
       expect(await send(`approve ${no} ${PIN}`)).toContain('over 30 minutes old');
       expect([p.status, device.status]).toEqual(['pending', 'pending']);
