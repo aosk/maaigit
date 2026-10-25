@@ -82,4 +82,18 @@ describe('transcribing', () => {
     await expect(transcribe(WEBM, down)).rejects.toMatchObject({ status: 503 });
     errors.mockRestore();
   });
+
+  it('stops offering itself to the app for half an hour when the account has no credit, and again once it works', async () => {
+    const { transcribe, sttWorking } = await load();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const broke = vi.fn(async () => new Response('{"error":{"message":"You have no credits remaining.","code":"credit_balance_exhausted"}}', { status: 429 })) as unknown as typeof fetch;
+    expect(sttWorking()).toBe(true);
+    await expect(transcribe(WEBM, broke)).rejects.toThrow(/no credit/);
+    expect(sttWorking()).toBe(false);
+    expect(sttWorking(Date.now() + 31 * 60_000)).toBe(true);
+    const ok = vi.fn(async () => Response.json({ text: 'hello' })) as unknown as typeof fetch;
+    await expect(transcribe(WEBM, ok)).resolves.toBe('hello');
+    expect(sttWorking()).toBe(true);
+    errors.mockRestore();
+  });
 });

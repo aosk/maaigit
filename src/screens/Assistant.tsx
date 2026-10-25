@@ -42,6 +42,8 @@ export function Assistant() {
   const stopRef = useRef<() => void>();
   const inputRef = useRef<HTMLInputElement>(null);
   const [voiceNote, setVoiceNote] = useState('');
+  // The voice service failed (no credit, down): the phone's own voice typing listens instead until the app is reopened.
+  const [smartFailed, setSmartFailed] = useState(false);
   const [progress, setProgress] = useState<Progress>(emptyProgress);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -135,7 +137,7 @@ export function Assistant() {
 
   // The microphone listens for the app's language (the ع / EN button at the top changes it); the voice service, when on, understands both at once.
   const dictLang: Lang = lang;
-  const smart = Boolean(status?.voice?.smart) && canRecord;
+  const smart = Boolean(status?.voice?.smart) && canRecord && !smartFailed;
 
   async function send(text: string, voice?: Lang) {
     if (busyRef.current || !alive.current) return;
@@ -232,7 +234,11 @@ export function Assistant() {
         api
           .transcribe(audio)
           .then((words) => alive.current && heardWords(words))
-          .catch((e: Error) => alive.current && setVoiceNote(t.voiceFailed(e.message)))
+          .catch((e: Error) => {
+            if (!alive.current) return;
+            if (canListen) setSmartFailed(true);
+            setVoiceNote(canListen ? t.voicePhoneInstead : t.voiceFailed(e.message));
+          })
           .finally(() => alive.current && setTranscribing(false));
       },
     });

@@ -13,6 +13,11 @@ const MODEL = process.env.STT_MODEL ?? 'whisper-1';
 
 export const sttConfigured = Boolean(KEY);
 
+/** Set when the provider says the account has no credit: until then the app listens with the phone's own voice typing. */
+let noCreditUntil = 0;
+/** Whether the app should send its recordings here (set up, and not known to be out of credit in the last half hour). */
+export const sttWorking = (now = Date.now()) => sttConfigured && now >= noCreditUntil;
+
 /** What a recording can be: its first bytes decide, never its name or what the browser says it is. */
 export function audioKind(buf: Buffer): { ext: string; mime: string } | null {
   if (buf.length < 16) return null;
@@ -61,9 +66,13 @@ export async function transcribe(audio: Buffer, fetcher: typeof fetch = fetch): 
       console.error('Transcription failed', res.status, said);
       if (res.status === 401 || res.status === 403) throw new HttpError(502, 'The voice service did not accept its key. Check STT_API_KEY.');
       // 429 is either "no credit on the account" (it will not pass by itself) or "too many requests" (it will).
-      if (res.status === 429 && /quota|billing|credit/i.test(said)) throw new HttpError(503, 'The voice service account has no credit. Add credit to it (for OpenAI: platform.openai.com → Billing), or use another service.');
+      if (res.status === 429 && /quota|billing|credit/i.test(said)) {
+        noCreditUntil = Date.now() + 30 * 60_000;
+        throw new HttpError(503, 'The voice service account has no credit. Add credit to it (for OpenAI: platform.openai.com → Billing), or use another service.');
+      }
       throw new HttpError(503, res.status === 429 ? 'The voice service is busy. Try again in a minute.' : 'The voice service could not transcribe that. Try again.');
     }
+    noCreditUntil = 0;
     const body = (await res.json()) as { text?: unknown };
     return typeof body.text === 'string' ? body.text.trim().slice(0, 4000) : '';
   } catch (error) {
