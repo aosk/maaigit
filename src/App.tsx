@@ -24,6 +24,11 @@ export function App() {
   const [locked, setLocked] = useState<{ kind: 'pin' | 'password'; face: boolean } | null>(null);
   const unread = useMailCount();
 
+  // The page being shown, for its own colours (the main page is pink).
+  useEffect(() => {
+    document.documentElement.dataset.page = route;
+  }, [route]);
+
   // The service worker shows notifications; register it early so they work with the app closed.
   useEffect(() => {
     void worker();
