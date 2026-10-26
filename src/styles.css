@@ -87,13 +87,6 @@
 :root[data-contrast='true'] .card,
 :root[data-contrast='true'] .bubble { outline: 2px solid var(--border); }
 :root[data-large='true'] { --scale: 1.2; }
-/* The main page (Today) is pink; the cards on it stay white (or dark) so the text reads the same. */
-:root[data-page='today'] { --bg: #fde4ee; --tab-bar: rgba(253, 236, 243, 0.96); }
-@media (prefers-color-scheme: dark) {
-  :root[data-page='today']:not([data-look='light']) { --bg: #2b0d1a; --tab-bar: rgba(43, 13, 26, 0.96); }
-}
-:root[data-page='today'][data-look='dark'] { --bg: #2b0d1a; --tab-bar: rgba(43, 13, 26, 0.96); }
-
 :root[lang='ar'] { --font: 'IBM Plex Sans Arabic', -apple-system, 'Segoe UI', Tahoma, sans-serif; }
 :root[data-motion='reduce'] *, :root[data-motion='reduce'] *::before { animation: none !important; transition: none !important; }
 
