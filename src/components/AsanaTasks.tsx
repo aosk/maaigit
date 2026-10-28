@@ -74,12 +74,12 @@ export function AsanaTasks() {
     // Never vanish without a word: say that it is loading, or why it could not be loaded.
     return (
       <>
-        <div className="between wrap"><h2 className="h2 sec sec-task">{t.asanaTasks}</h2></div>
+        <div className="between wrap"><h2 className="h2 sec sec-task">{t.asanaTasks}<span className="source-tag">{t.asana}</span></h2></div>
         {loadError ? (
           <div className="card soft" role="alert">
-            <span className="sub">{t.asanaLoadFailed(loadError)}</span>
+            <span className="sub" title={loadError}>{t.loadFailed}</span>
             <div className="row">
-              <button className="btn secondary round" onClick={() => void load()}>{t.asanaRetry}</button>
+              <button className="btn secondary round" onClick={() => void load()}>{t.tryAgain}</button>
               <button className="btn ghost round" onClick={check} disabled={checking}>{checking ? t.asanaChecking : t.asanaCheck}</button>
             </div>
             {report && <ul className="sub" style={{ margin: 0, paddingInlineStart: 18 }}>{report.map((line) => <li key={line}>{line}</li>)}</ul>}
@@ -122,12 +122,13 @@ export function AsanaTasks() {
       await load();
     });
 
-  const note = !data.configured ? t.asanaOff : data.error ? t.asanaError(data.error) : data.tasks.length === 0 && !adding ? t.asanaNone : '';
+  // The technical details (keys, what Asana said) belong in Settings → Connections; here only what to do.
+  const note = !data.configured ? t.asanaConnect : data.error ? t.loadFailed : data.tasks.length === 0 && !adding ? t.asanaNone : '';
 
   return (
     <>
       <div className="between wrap">
-        <h2 className="h2 sec sec-task">{t.asanaTasks}{data.configured && !data.error && <CountBadge kind="task" n={data.open} alert={data.overdue > 0} />}</h2>
+        <h2 className="h2 sec sec-task">{t.asanaTasks}<span className="source-tag">{t.asana}</span>{data.configured && !data.error && <CountBadge kind="task" n={data.open} alert={data.overdue > 0} />}</h2>
         <div className="row" style={{ gap: 8 }}>
           {data.overdue > 0 && <div className="pill warn">{t.asanaOverdue(data.overdue)}</div>}
           {data.configured && !data.error && (
@@ -164,11 +165,13 @@ export function AsanaTasks() {
 
       {note ? (
         <div className="card soft">
-          <a href="#/settings" style={{ textDecoration: 'none', color: 'inherit' }}><span className="sub">{note}</span></a>
+          <span className="sub" title={data.error}>{note}</span>
+          {!data.configured && <a className="btn secondary" href="#/settings" style={{ alignSelf: 'flex-start', textDecoration: 'none' }}>{t.asanaConnectBtn}</a>}
           {data.configured && (
             <>
               <div className="row">
-                <button className="btn secondary round" onClick={check} disabled={checking}>{checking ? t.asanaChecking : t.asanaCheck}</button>
+                {data.error && <button className="btn secondary round" onClick={() => void load()}>{t.tryAgain}</button>}
+                <button className="btn ghost round" onClick={check} disabled={checking}>{checking ? t.asanaChecking : t.asanaCheck}</button>
               </div>
               {report && <ul className="sub" style={{ margin: 0, paddingInlineStart: 18 }}>{report.map((line) => <li key={line}>{line}</li>)}</ul>}
             </>

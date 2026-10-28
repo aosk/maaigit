@@ -56,13 +56,13 @@ export function BriefingCard({
 
   const tiles: Tile[] = [];
   if (facts) {
-    tiles.push({ key: 'events', kind: 'event', label: t.stressFactor.schedule, value: facts.events.left, meta: facts.events.total ? t.tileOf(facts.events.total) : undefined, go: () => jump('today-schedule') });
+    tiles.push({ key: 'events', kind: 'event', label: t.tileLabels.schedule, value: facts.events.left, meta: facts.events.total ? t.tileOf(facts.events.total) : undefined, go: () => jump('today-schedule') });
     const due = facts.tasks.overdue + facts.tasks.dueToday;
-    tiles.push({ key: 'tasks', kind: 'task', label: t.stressFactor.tasks, value: due, meta: facts.tasks.overdue ? t.tileOverdue(facts.tasks.overdue) : undefined, urgent: facts.tasks.overdue > 0, go: () => jump('today-tasks') });
-    tiles.push({ key: 'reminders', kind: 'reminder', label: t.stressFactor.reminders, value: facts.reminders.open, go: () => jump('today-reminders') });
+    tiles.push({ key: 'tasks', kind: 'task', label: t.tileLabels.tasks, value: due, meta: facts.tasks.overdue ? t.tileOverdue(facts.tasks.overdue) : undefined, urgent: facts.tasks.overdue > 0, go: () => jump('today-tasks') });
+    tiles.push({ key: 'reminders', kind: 'reminder', label: t.tileLabels.reminders, value: facts.reminders.open, go: () => jump('today-reminders') });
     const needs = facts.email.toDecide + facts.email.toReply;
-    tiles.push({ key: 'email', kind: 'mail', label: t.stressFactor.email, value: needs || facts.email.unread, meta: needs ? t.stressCount.email(needs) : facts.email.unread ? t.tileUnread(facts.email.unread) : undefined, urgent: facts.email.toDecide > 0, go: () => openInbox('email') });
-    if (facts.whatsapp.waiting > 0) tiles.push({ key: 'whatsapp', kind: 'chat', label: t.stressFactor.whatsapp, value: facts.whatsapp.waiting, go: () => openInbox('whatsapp') });
+    tiles.push({ key: 'email', kind: 'mail', label: t.tileLabels.email, value: needs || facts.email.unread, meta: needs ? t.stressCount.email(needs) : facts.email.unread ? t.tileUnread(facts.email.unread) : undefined, urgent: facts.email.toDecide > 0, go: () => openInbox('email') });
+    if (facts.whatsapp.waiting > 0) tiles.push({ key: 'whatsapp', kind: 'chat', label: t.tileLabels.whatsapp, value: facts.whatsapp.waiting, go: () => openInbox('whatsapp') });
   }
   const sum = tiles.reduce((a, b) => a + b.value, 0);
 
@@ -126,10 +126,10 @@ export function BriefingCard({
       )}
 
       <div className="row brief-actions">
-        <button className="btn on-dark grow" onClick={onListen} disabled={!brief}>
+        <button className="btn on-dark grow" onClick={onPlan}>{t.planMyDay}</button>
+        <button className="btn on-dark-outline grow" onClick={onListen} disabled={!brief}>
           <Speaker size={18} />{speaking ? t.stop : t.listen}
         </button>
-        <button className="btn on-dark-outline grow" onClick={onPlan}>{t.planMyDay}</button>
       </div>
     </section>
   );

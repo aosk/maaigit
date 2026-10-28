@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Briefing, BriefingFacts, CalendarEvent, TodayData } from '../../shared/types';
 import { PRAYER_BUFFER_MINUTES } from '../../shared/prayer';
+import { OWNER_FIRST_NAME } from '../../shared/owner';
 import { dayPeriod, eventEnd, leaveTime } from '../../shared/schedule';
 import { api } from '../api';
 import { dayHeading, dayTime, hijri, sameDay, time } from '../format';
@@ -117,6 +118,8 @@ export function Today() {
   const next = data?.nextPrayer;
   const minsToPrayer = next ? Math.max(0, Math.round((new Date(next.time).getTime() - now.getTime()) / 60_000)) : 0;
   const openReminders = (data?.reminders ?? []).filter((r) => !r.done);
+  // The first event still to start is marked as the next one.
+  const nextEventId = rows.find((row): row is Extract<Row, { kind: 'event' }> => row.kind === 'event' && Date.parse(row.at) > now.getTime())?.event.id;
 
   function toggleListen() {
     if (!brief) return;
@@ -158,19 +161,21 @@ export function Today() {
     <div className="screen cols">
       <div className="top">
         <div>
-          <div className="eyebrow">{dayHeading(now, lang)}</div>
-          <div className="eyebrow hijri">{hijri(now, lang)}</div>
-          <h1 className="title row" style={{ gap: 10 }}>
-            <span style={{ color: 'var(--tint-text)', display: 'inline-flex' }}><Logo size={30} /></span>
-            {t.today}
-          </h1>
+          <div className="greeting row"><span style={{ color: 'var(--tint-text)', display: 'inline-flex' }}><Logo size={22} /></span>{t.greeting(OWNER_FIRST_NAME[lang])}</div>
+          <h1 className="title">{t.today}</h1>
+          <div className="eyebrow">{dayHeading(now, lang)} · <span className="hijri">{hijri(now, lang)}</span></div>
         </div>
         <button className="icon-btn mic-head" aria-label={t.talkToMaai} onClick={talkToAssistant}>
           <Mic size={24} />
         </button>
       </div>
 
-      {error && <div className="error" role="alert">{error}</div>}
+      {error && (
+        <div className="error row between" role="alert">
+          <span>{t.loadFailed}</span>
+          <button className="btn secondary" onClick={() => { setError(''); load(); }}>{t.tryAgain}</button>
+        </div>
+      )}
 
       <BriefingCard
         period={period}
@@ -185,8 +190,6 @@ export function Today() {
           if (event) setSelected(event);
         }}
       />
-
-      {facts && <StressCard stress={facts.stress} />}
 
       <div className="between" id="today-schedule">
         <h2 className="h2 sec sec-event">{t.schedule}{facts && facts.events.total > 0 && <CountBadge kind="event" n={facts.events.left} of={facts.events.total} />}</h2>
@@ -204,7 +207,7 @@ export function Today() {
       )}
 
       <section className="card flush" aria-label={t.schedule}>
-        {rows.length === 0 && <div className="slot"><span className="sub">{t.nothingToday}</span></div>}
+        {rows.length === 0 && <div className="slot empty"><span className="sub">{t.nothingToday}</span></div>}
         {pastCount > 0 && (
           <button className="slot earlier" onClick={() => setShowPast((v) => !v)} aria-expanded={showPast}>
             <span className="sub">{showPast ? t.hideEarlier : t.earlierToday(pastCount)}</span>
@@ -217,7 +220,7 @@ export function Today() {
               {i === pastCount && pastCount > 0 && (
                 <div className="now-line" aria-label={t.now}><span>{t.now} · {time(now, lang)}</span></div>
               )}
-              <ScheduleRow row={row} past={row.end < now.getTime()} onSelect={setSelected} />
+              <ScheduleRow row={row} past={row.end < now.getTime()} next={row.kind === 'event' && row.event.id === nextEventId} onSelect={setSelected} />
             </Fragment>
           );
         })}
@@ -239,7 +242,7 @@ export function Today() {
 
       <h2 className="h2 sec sec-reminder" id="today-reminders">{t.reminders}<CountBadge kind="reminder" n={openReminders.length} /></h2>
       <section className="card flush" aria-label={t.reminders}>
-        {openReminders.length === 0 && <div className="check"><span className="sub">{t.noReminders}</span></div>}
+        {openReminders.length === 0 && <div className="check empty"><span className="sub">{t.noReminders}</span></div>}
         {openReminders.map((r) => (
           <div key={r.id} className="check">
             <button aria-label={`${t.markDone}: ${r.title}`} onClick={() => done(r.id)} />
@@ -251,6 +254,8 @@ export function Today() {
         ))}
       </section>
 
+      {facts && <StressCard stress={facts.stress} />}
+
       {upcoming.length > 0 && (
         <>
           <h2 className="h2 extra sec sec-event">{t.upcoming}<CountBadge kind="event" n={upcoming.length} /></h2>
@@ -258,7 +263,7 @@ export function Today() {
             {upcoming.map((e) => (
               <button key={e.id} type="button" className="slot slot-btn" onClick={() => setSelected(e)} aria-haspopup="dialog">
                 <div style={{ flex: 1 }}>
-                  <div className="slot-title">{e.title}</div>
+                  <div className="slot-title"><span dir="auto">{e.title}</span>{e.demo && <span className="demo-tag">{t.demoTag}</span>}</div>
                   <div className="slot-meta">{dayTime(e.start, lang)}{e.place ? ` · ${e.place}` : ''}</div>
                 </div>
               </button>
@@ -278,12 +283,12 @@ export function Today() {
 }
 
 /** One line of the day: a prayer (protected time) or an event, with a "leave by" hint when there is travel. */
-function ScheduleRow({ row, past, onSelect }: { row: Row; past: boolean; onSelect: (e: CalendarEvent) => void }) {
+function ScheduleRow({ row, past, next, onSelect }: { row: Row; past: boolean; next?: boolean; onSelect: (e: CalendarEvent) => void }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   if (row.kind === 'prayer') {
     return (
-      <div className={`slot prayer${past ? ' past' : ''}`}>
+      <div className={`slot prayer${past ? ' past' : ''}`} role="note">
         <div className="slot-time">{time(row.at, lang)}</div>
         <div className="slot-bar" />
         <div><div className="slot-title">{t.prayers[row.name]}</div><div className="slot-meta">{t.protectedTime}</div></div>
@@ -297,15 +302,17 @@ function ScheduleRow({ row, past, onSelect }: { row: Row; past: boolean; onSelec
     : [e.place, e.bookedByMaai ? t.bookedByMaai : t.minutesShort(e.minutes)].filter(Boolean).join(' · ');
   const google = e.source === 'google';
   return (
-    <button type="button" className={`slot slot-btn${leave ? ' warn' : ''}${past ? ' past' : ''}${google ? ' google' : ''}`} onClick={() => onSelect(e)} aria-haspopup="dialog">
+    <button type="button" className={`slot slot-btn${leave ? ' warn' : ''}${past ? ' past' : ''}${google ? ' google' : ''}${next ? ' next' : ''}`} onClick={() => onSelect(e)} aria-haspopup="dialog">
       <div className="slot-time">{time(e.start, lang)}</div>
       <div className="slot-bar" />
       <div style={{ flex: 1, minWidth: 0 }}>
+        {next && <div className="next-tag">{t.briefNext}</div>}
         <div className="slot-title">
-          {e.title}
+          <span dir="auto">{e.title}</span>
           {google && <span className="g-tag" title={t.fromGoogle} aria-label={t.fromGoogle}>G</span>}
+          {e.demo && <span className="demo-tag">{t.demoTag}</span>}
         </div>
-        <div className="slot-meta">{meta}</div>
+        <div className="slot-meta" dir="auto">{meta}</div>
       </div>
     </button>
   );

@@ -554,3 +554,16 @@ html[dir='rtl'] .link-row svg { transform: scaleX(-1); }
   .admin-nav a { flex: none; min-height: 40px; white-space: nowrap; border: 1px solid var(--sep); border-radius: 20px; }
   .admin-nav a[style] { margin-top: 0 !important; }
 }
+
+/* ---------- «يومك»: greeting, the next meeting, and small source tags ---------- */
+.greeting { gap: 6px; font-size: 0.9em; font-weight: 600; color: var(--text2); margin-bottom: 2px; }
+.top .eyebrow .hijri { font-weight: 500; }
+/* The next meeting stands out with the green edge and its label. */
+.card.flush > .slot.next { box-shadow: inset 0 0 0 1px var(--tint); }
+.slot.next .slot-bar { background: var(--tint) !important; }
+.next-tag { font-size: 0.7em; font-weight: 700; color: var(--tint-text); }
+.source-tag, .demo-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; margin-inline-start: 8px; border-radius: 9999px; font-size: 0.6em; font-weight: 600; vertical-align: middle; background: var(--seg-bg); color: var(--text2); border: 1px solid var(--sep); }
+.demo-tag { background: var(--warn-soft); color: var(--warn-text); border-color: #fedf89; }
+.slot.empty, .check.empty { justify-content: center; min-height: 56px; }
+.error.row { flex-wrap: wrap; }
+.error .btn { min-height: 36px; }

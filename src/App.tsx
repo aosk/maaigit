@@ -11,6 +11,7 @@ import { ProfileScreen } from './screens/Profile';
 import { Unlock } from './screens/Unlock';
 import { LOCKED_EVENT, api } from './api';
 import { AlertBanner } from './components/AlertBanner';
+import { Wordmark } from './components/Logo';
 import { worker } from './push';
 import { readRoute, type Route } from './nav';
 import { useMailCount } from './useMailCount';
@@ -83,7 +84,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    document.title = route === 'admin' ? 'MAAI Admin' : `MAAI · ${t[route]}`;
+    document.title = route === 'admin' ? 'MAAI Admin' : `${t.appName} · ${t[route]}`;
   }, [route, t]);
 
   if (locked) return <Unlock kind={locked.kind} idle={locked.face} />;
@@ -110,7 +111,7 @@ export function App() {
         {route === 'profile' && <ProfileScreen />}
       </main>
       <nav className="tabs" aria-label={t.tabsLabel}>
-        <div className="tabs-brand" aria-hidden="true">MAAI</div>
+        <div className="tabs-brand"><Wordmark width={112} title={`${t.appName} | maai`} /></div>
         {tabs.map((tab) => (
           <a key={tab.route} className="tab" href={`#/${tab.route}`} aria-current={(route === 'profile' ? 'settings' : route) === tab.route ? 'page' : undefined}>
             {tab.icon}

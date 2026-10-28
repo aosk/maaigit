@@ -41,6 +41,7 @@ export function StressCard({ stress }: { stress: Stress }) {
       <div className="gauge" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={stress.score} aria-valuetext={`${t.stressOutOf(stress.score)}, ${level}`} aria-label={t.stressTitle}>
         <i style={{ left: `${Math.min(97, Math.max(3, stress.score))}%` }} />
       </div>
+      <p className="sub">{t.stressScale}</p>
 
       <p className="sub" style={{ fontSize: '0.9em' }}>
         {drivers.length ? `${t.stressDrivers(drivers.join(lang === 'ar' ? ' و' : ' and '))}. ` : `${t.stressNone} `}
