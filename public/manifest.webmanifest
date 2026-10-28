@@ -3,8 +3,8 @@
   "short_name": "MAAI",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F2F2F7",
-  "theme_color": "#0A6E63",
+  "background_color": "#FFFFFF",
+  "theme_color": "#1B8354",
   "icons": [
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },

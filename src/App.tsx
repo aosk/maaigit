@@ -110,6 +110,7 @@ export function App() {
         {route === 'profile' && <ProfileScreen />}
       </main>
       <nav className="tabs" aria-label={t.tabsLabel}>
+        <div className="tabs-brand" aria-hidden="true">MAAI</div>
         {tabs.map((tab) => (
           <a key={tab.route} className="tab" href={`#/${tab.route}`} aria-current={(route === 'profile' ? 'settings' : route) === tab.route ? 'page' : undefined}>
             {tab.icon}
