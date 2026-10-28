@@ -666,13 +666,33 @@ export interface FeedItem {
   /** What MAAI's first reply found out from the sender (smart replies). */
   intake?: string;
   handled?: boolean;
+  /** Whether it needs an answer: MAAI's read (or the user's correction); "maybe" when there is no read to go on. */
+  needsReply: 'yes' | 'maybe' | 'no';
+  /** The user corrected MAAI's read of `needsReply`. */
+  labelled?: boolean;
+  /** Unread in Gmail (only Gmail says; for WhatsApp the app keeps track of what was opened). */
+  unread?: boolean;
+  /** The sender wrote that it is urgent (their word, not MAAI's priority). */
+  urgentSaid?: boolean;
+  /** MAAI read it (there is a gist and a category). */
+  analysed: boolean;
+  /** The sender's email address, for opening it in Gmail. */
+  address?: string;
 }
+
+/** A source of messages: not connected, working, or failing (its last messages are still shown). */
+export type SourceState = 'off' | 'ok' | 'stale' | 'failed';
 
 export interface InboxFeed {
   fetchedAt: string;
   summary: string;
   items: FeedItem[];
   bot: BotStatus;
+  /** MAAI's read of the messages: done, failed (the list still shows), or off (no Claude key). */
+  analysis: 'ok' | 'failed' | 'off';
+  sources: { email: SourceState; whatsapp: SourceState };
+  /** How far back each source goes, in days. */
+  window: { emailDays: number; whatsappDays: number };
 }
 
 /** How many contacts MAAI has: imported from a contacts file, and read from WhatsApp by the device bot. */

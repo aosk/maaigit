@@ -214,6 +214,7 @@ export const api = {
   emailReply: (id: string, mail: { to: string; subject: string; body: string }) => call<InboxMessage>('POST', `/inbox/${id}/email`, mail),
   draft: (id: string, tone: Tone, lang: Lang) => call<{ draft: string; summary: string }>('POST', `/inbox/${id}/draft`, { tone, lang }),
   inboxFeed: (lang: Lang, refresh = false, background = false) => call<InboxFeed>('GET', `/inbox/feed?lang=${lang}${refresh ? '&refresh=1' : ''}`, undefined, background),
+  labelFeedItem: (key: string, needsReply: 'yes' | 'no' | null) => call<void>('POST', '/inbox/feed/label', { key, needsReply }),
   sendWhatsApp: (id: string, body: string) => call<InboxMessage>('POST', `/inbox/${id}/whatsapp`, { body }),
   replied: (id: string) => call<InboxMessage>('POST', `/inbox/${id}/replied`, {}),
   deleteMessage: (id: string) => call<void>('DELETE', `/inbox/${id}`),

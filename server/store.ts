@@ -65,6 +65,8 @@ interface State {
   stressDays: Record<string, number>;
   /** Inbox emails the user dealt with through MAAI (a reply sent or a meeting booked), by email number. */
   handledMail: Record<string, { how: 'replied' | 'meeting'; at: string }>;
+  /** The user's corrections of "needs a reply" in the inbox, by feed key; they stop counting once the sender writes again. */
+  feedLabels: Record<string, { needsReply: 'yes' | 'no'; at: string }>;
   /** Claude's last answer for each kind of summary, with the data it was based on. */
   aiCache: Record<string, { fingerprint: string; at: string; value: unknown }>;
   /** Token use per day and feature (kept 90 days). */
@@ -182,6 +184,7 @@ function seed(): State {
     usageLog: [],
     aiCache: {},
     handledMail: {},
+    feedLabels: {},
     stressDays: {},
     passkeys: [],
     news: { items: [], sources: [] },

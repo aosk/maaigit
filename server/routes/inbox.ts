@@ -7,7 +7,7 @@ import { isEmail, sendMail } from '../mail.js';
 import { fetchInbox, inboxConfigured } from '../gmail-inbox.js';
 import { agentEnabled, audit, id, save, state } from '../store.js';
 import { canSendByBot, pruneBotMessages, queueCommand } from '../bot.js';
-import { inboxFeed } from '../inbox-feed.js';
+import { inboxFeed, labelFeedItem } from '../inbox-feed.js';
 import { signed } from '../intake.js';
 import { HttpError, find, lang, text, wrap } from './http.js';
 
@@ -109,6 +109,16 @@ inbox.delete('/inbox/:id', (req, res) => {
 // ---------- Everything in one list ----------
 
 inbox.get('/inbox/feed', wrap(async (req, res) => res.json(await inboxFeed(lang(req.query.lang), req.query.refresh === '1'))));
+
+/** The user corrects "needs a reply" for one email or conversation (null clears the correction). */
+inbox.post('/inbox/feed/label', (req, res) => {
+  const key = text(req.body.key, 300);
+  const value: unknown = req.body.needsReply;
+  if (!/^(mail|msg):/.test(key)) throw new HttpError(400, 'Unknown message');
+  if (value !== 'yes' && value !== 'no' && value !== null) throw new HttpError(400, 'needsReply is yes, no or null');
+  labelFeedItem(key, value);
+  res.status(204).end();
+});
 
 // ---------- Gmail inbox (read-only) ----------
 

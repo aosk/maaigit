@@ -1,4 +1,5 @@
 import type { InboxFeed, Lang } from '../shared/types';
+import { forgetSeen } from './inboxSeen';
 
 /**
  * The last Inbox MAAI showed, so the Inbox opens at once with it and updates quietly behind it, instead of an
@@ -12,7 +13,8 @@ export function cachedFeed(lang: Lang): InboxFeed | null {
   if (memory[lang]) return memory[lang];
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null') as { lang?: Lang; feed?: InboxFeed } | null;
-    if (saved?.lang === lang && saved.feed && Array.isArray(saved.feed.items)) return (memory[lang] = saved.feed);
+    // A feed saved by an older version (without the source states) is not shown: it would be missing fields.
+    if (saved?.lang === lang && saved.feed && Array.isArray(saved.feed.items) && saved.feed.sources) return (memory[lang] = saved.feed);
   } catch {
     // Unreadable or blocked: start empty.
   }
@@ -31,6 +33,7 @@ export function keepFeed(lang: Lang, feed: InboxFeed): void {
 /** On sign-out: nothing of the Inbox stays on this device. */
 export function forgetFeeds(): void {
   for (const lang of Object.keys(memory) as Lang[]) delete memory[lang];
+  forgetSeen();
   try {
     localStorage.removeItem(KEY);
   } catch {

@@ -42,12 +42,12 @@ export function takeArrival(): { prompt?: string; listen: boolean } {
   return { prompt, listen };
 }
 
-/** Opens the Inbox on its Email or WhatsApp tab. */
+/** Opens «رسائلك» showing only email or only WhatsApp. */
 export function openInbox(view: 'email' | 'whatsapp') {
   try {
     sessionStorage.setItem('maai.inboxView', view);
   } catch {
-    // the tab then opens on Email
+    // it then opens on every source
   }
   go('inbox');
 }

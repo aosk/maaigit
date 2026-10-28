@@ -31,3 +31,6 @@ export const Paperclip = (p: P) => <Icon {...p}><path d="m21 11-9.2 9.2a5.5 5.5 
 export const FileText = (p: P) => <Icon {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></Icon>;
 export const Person = (p: P) => <Icon {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></Icon>;
 export const Chevron = (p: P) => <Icon {...p}><path d="m9 6 6 6-6 6" className="chev" /></Icon>;
+export const Refresh = (p: P) => <Icon {...p}><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12a9 9 0 0 1 15.5-6.2" /><path d="M21 4v5h-5M3 20v-5h5" /></Icon>;
+export const Search = (p: P) => <Icon {...p}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Icon>;
+export const Mail = (p: P) => <Icon {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></Icon>;

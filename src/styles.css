@@ -567,3 +567,74 @@ html[dir='rtl'] .link-row svg { transform: scaleX(-1); }
 .slot.empty, .check.empty { justify-content: center; min-height: 56px; }
 .error.row { flex-wrap: wrap; }
 .error .btn { min-height: 36px; }
+
+/* ---------- «رسائلك»: one list, what needs attention on top, a message opens beside it on a computer ---------- */
+.inbox-list, .inbox-detail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.inbox-detail { display: none; }
+.inbox.has-detail .inbox-detail { display: flex; }
+.inbox.has-detail .inbox-list { display: none; }
+.inbox-pick { text-align: center; padding: 48px 16px; }
+.inbox-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.inbox-head .title { font-size: 1.6em; }
+.refresh-btn { background: transparent; border: 0; color: var(--tint-text); }
+.refresh-btn:disabled { opacity: 1; }
+.spinning { animation: spin 0.9s linear infinite; }
+:root[data-motion='reduce'] .spinning { animation: none; }
+.search { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; border: 1px solid var(--input-border); border-radius: 4px; background: var(--raised); color: var(--text2); }
+.search:focus-within { outline: 2px solid var(--tint); outline-offset: 1px; }
+.search input { flex: 1; min-width: 0; border: 0; background: transparent; min-height: 44px; outline: none; color: var(--text); }
+.inbox-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.inbox-filters .seg { flex: 1 1 240px; }
+.inbox-filters .seg button[aria-checked='true'] { background: var(--tint); color: var(--on-tint); }
+.source-select { flex: 1 1 160px; min-height: 46px; border: 1px solid var(--input-border); border-radius: 4px; background: var(--surface); padding: 0 12px; }
+/* What needs attention: a short green card that folds away. */
+.attention { background: var(--tint-soft); border: 1px solid #abefc6; border-radius: 12px; padding: 4px 12px 12px; }
+.attention > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; cursor: pointer; font-weight: 700; color: var(--tint-text); }
+.attention > summary::-webkit-details-marker { display: none; }
+.attention-list { list-style: none; margin: 0 0 8px; padding: 0; background: var(--surface); border-radius: 8px; }
+.attention-list li + li { border-top: 1px solid var(--sep); }
+.attention-list button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 10px 12px; border: 0; background: transparent; text-align: start; color: var(--text); font-size: 0.92em; line-height: 1.45; }
+.attention-list .chev { stroke: var(--text2); }
+html[dir='rtl'] .attention-list svg { transform: scaleX(-1); }
+.attention-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-inline-start: 6px; vertical-align: middle; }
+.attention .link-btn { display: block; margin: 4px auto 0; color: var(--tint-text); }
+.full-summary { margin-top: 10px; display: grid; gap: 8px; font-size: 0.92em; }
+.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 9999px; font-size: 0.68em; font-weight: 600; white-space: nowrap; background: var(--seg-bg); color: var(--text2); border: 1px solid var(--sep); }
+.tag.reply { background: var(--success-soft); color: var(--success); border-color: #abefc6; }
+.tag.maybe { background: var(--surface); color: var(--text2); border-style: dashed; border-color: var(--input-border); }
+.tag.urgent { background: var(--danger-soft); color: var(--danger); border-color: #fecdca; }
+/* The messages, by day: plain rows with a thin line between them. */
+.day-head { font-size: 1.05em; font-weight: 700; padding: 6px 0; border-bottom: 1px solid var(--sep); }
+.inbox-rows { list-style: none; margin: 0; padding: 0; }
+.inbox-rows li + li { border-top: 1px solid var(--sep); }
+.inbox-row { display: flex; gap: 12px; width: 100%; padding: 14px 4px; border: 0; background: transparent; text-align: start; color: var(--text); align-items: flex-start; }
+.inbox-row:hover { background: var(--raised); }
+.inbox-row[aria-current='true'] { background: var(--tint-soft); }
+.avatar { width: 44px; height: 44px; border-radius: 22px; flex: none; display: grid; place-items: center; background: var(--seg-bg); color: var(--text2); font-weight: 700; font-size: 0.95em; }
+.inbox-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.inbox-row-top { display: flex; align-items: center; gap: 8px; }
+.inbox-from { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.inbox-time { flex: none; font-size: 0.78em; color: var(--text2); font-variant-numeric: tabular-nums; }
+.inbox-subject { font-size: 0.92em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-preview { font-size: 0.84em; color: var(--text2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.inbox-source { display: inline-flex; align-items: center; gap: 6px; font-size: 0.76em; color: var(--text2); margin-top: 2px; }
+.inbox-source .dot { margin-inline-start: 4px; }
+.inbox-row.unread .inbox-from, .inbox-row.unread .inbox-subject { font-weight: 700; }
+.inbox-row.unread .inbox-preview { color: var(--text); }
+.inbox-none { display: grid; gap: 10px; justify-items: start; padding: 12px 0; }
+.inbox-empty p { font-size: 0.95em; }
+/* One message opened. */
+.detail { display: flex; flex-direction: column; gap: 14px; }
+.detail-head { display: flex; gap: 12px; align-items: center; }
+.detail-subject { font-size: 1.05em; font-weight: 700; }
+.detail-body { margin: 0; max-height: none; }
+.detail-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.detail-meta { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--sep); }
+.mini-seg { grid-auto-columns: minmax(96px, auto); }
+.mini-seg button[aria-checked='true'] { color: var(--tint-text); }
+
+/* A computer shows the list and the opened message side by side. */
+:root[data-layout='desktop'] .screen.inbox { display: grid; grid-template-columns: minmax(360px, 460px) minmax(0, 1fr); gap: 28px; padding: 32px 36px 48px; align-items: start; }
+:root[data-layout='desktop'] .inbox .inbox-list, :root[data-layout='desktop'] .inbox .inbox-detail { display: flex; }
+:root[data-layout='desktop'] .inbox-detail { position: sticky; top: 24px; max-height: calc(100dvh - 48px); overflow: auto; border: 1px solid var(--sep); border-radius: 16px; padding: 20px; }
+:root[data-layout='desktop'] .detail-back { display: none; }
