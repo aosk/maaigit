@@ -90,3 +90,39 @@ export function parseVcards(text: string): AddressCard[] {
   }
   return cards;
 }
+
+/** What to leave out of an import, chosen on the review screen before anything is sent. */
+export interface CardFilter {
+  /** Keep only Saudi mobile numbers (9665…); cards left without one are dropped. */
+  saudiMobileOnly: boolean;
+  /** A number already kept for an earlier card is not kept again. */
+  dedupe: boolean;
+  /** Toll-free, unified and short service numbers (800…, 9200…, 19…). */
+  dropServices: boolean;
+  /** Cards with an email but no number. */
+  dropEmailOnly: boolean;
+}
+
+export const DEFAULT_FILTER: CardFilter = { saudiMobileOnly: false, dedupe: true, dropServices: true, dropEmailOnly: false };
+
+/** Saudi toll-free (800), unified (9200) and short (19…) numbers, with or without 966 in front, and anything too short to dial. */
+export const isServiceNumber = (phone: string) => /^(?:966)?(?:800|9200|19)\d*$/.test(phone) || phone.length < 9;
+
+/** The cards an import would keep with these filters, in the file's order; other fields on each card are kept as they are. */
+export function filterCards<T extends AddressCard>(cards: T[], filter: CardFilter): T[] {
+  const seen = new Set<string>();
+  const kept: T[] = [];
+  for (const card of cards) {
+    let phones = card.phones;
+    if (filter.dropServices) phones = phones.filter((p) => !isServiceNumber(p));
+    if (filter.saudiMobileOnly) phones = phones.filter((p) => /^9665\d{8}$/.test(p));
+    if (filter.dedupe) phones = phones.filter((p) => !seen.has(p));
+    // A card whose numbers were all filtered out (or a duplicate) does not come back through its email.
+    const noNumber = !phones.length && (card.phones.length > 0 || filter.saudiMobileOnly || filter.dropEmailOnly);
+    const emails = noNumber ? [] : card.emails;
+    if (!phones.length && !emails.length) continue;
+    for (const p of phones) seen.add(p);
+    kept.push({ ...card, phones, emails });
+  }
+  return kept;
+}

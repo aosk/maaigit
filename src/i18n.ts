@@ -331,6 +331,19 @@ const en = {
   contactsHow: ['On a computer, open icloud.com and sign in, then open Contacts.', 'Select all contacts (Ctrl+A or ⌘A).', 'Click the ⋯ or gear button, then Export vCard. A .vcf file is saved.', 'Come back here, tap Import contacts, and choose that file.'],
   contactsPrivacy: 'The file is read on this device: only names, numbers, emails and companies are sent to MAAI (no photos, addresses or notes). Import again any time to refresh.',
   contactsRemove: 'Remove imported contacts',
+  contactsReview: 'Check before importing',
+  contactsInFile: (all: number, kept: number) => `${all} in the file · ${kept} will be imported`,
+  contactsFilters: {
+    saudiMobileOnly: 'Saudi mobile numbers only',
+    dedupe: 'Leave out repeated numbers (the first name keeps it)',
+    dropServices: 'Leave out service numbers (800, 9200, 19…)',
+    dropEmailOnly: 'Leave out contacts with an email but no number',
+  } as Record<'saudiMobileOnly' | 'dedupe' | 'dropServices' | 'dropEmailOnly', string>,
+  contactsSearch: 'Search by name or number',
+  contactsShownOf: (shown: number, total: number) => `Showing ${shown} of ${total}. Search to find the others.`,
+  contactsFilteredOut: 'Left out by a filter',
+  contactsUnticked: (n: number) => `${n} unticked by you`,
+  contactsImportN: (n: number) => `Import ${n} contacts`,
   contactsRemoveConfirm: 'Remove all imported contacts from MAAI? (Contacts from WhatsApp stay.)',
   inboxEmpty: 'No messages. Paste one below to get a reply drafted.',
   replyTo: (name: string) => `Reply to ${name}`,
@@ -543,6 +556,8 @@ const en = {
 type Strings = typeof en;
 
 const n = (x: number) => x.toLocaleString('ar-SA');
+/** «جهة اتصال» with the right Arabic plural for the count. */
+const contactsAr = (count: number) => (count === 1 ? 'جهة اتصال واحدة' : count === 2 ? 'جهتي اتصال' : `${n(count)} ${count >= 3 && count <= 10 ? 'جهات اتصال' : 'جهة اتصال'}`);
 
 const ar: Strings = {
   tabsLabel: 'الأقسام الرئيسية',
@@ -869,12 +884,25 @@ const ar: Strings = {
   contactsImport: 'استورد جهات الاتصال (ملف ‎.vcf)',
   contactsReimport: 'استورد من جديد (يستبدل الاستيراد السابق)',
   contactsReading: 'أقرأ الملف…',
-  contactsImported: (count) => `تم استيراد ${n(count)} جهة اتصال. اطلب من «معي» مراسلة أي شخص باسمه.`,
+  contactsImported: (count) => `تم استيراد ${contactsAr(count)}. اطلب من «معي» مراسلة أي شخص باسمه.`,
   contactsNoneInFile: 'ما لقيت في هذا الملف جهات اتصال فيها اسم ورقم أو إيميل.',
   contactsHowTitle: 'كيف تطلع الملف من الآيفون (iCloud)',
   contactsHow: ['من كمبيوتر افتح icloud.com وسجّل دخولك، ثم افتح Contacts (جهات الاتصال).', 'حدد كل جهات الاتصال (Ctrl+A أو ⌘A).', 'اضغط زر ⋯ أو الترس، ثم Export vCard. ينحفظ ملف ‎.vcf.', 'ارجع هنا، اضغط استورد جهات الاتصال، واختر الملف.'],
   contactsPrivacy: 'الملف يُقرأ على جهازك: يُرسل لـ«معي» الأسماء والأرقام والإيميلات والشركات فقط (بدون صور أو عناوين أو ملاحظات). تقدر تستورد من جديد أي وقت للتحديث.',
   contactsRemove: 'احذف جهات الاتصال المستوردة',
+  contactsReview: 'راجع قبل الاستيراد',
+  contactsInFile: (all, kept) => `في الملف ${n(all)} · بيُستورد ${n(kept)}`,
+  contactsFilters: {
+    saudiMobileOnly: 'الجوالات السعودية فقط',
+    dedupe: 'احذف الأرقام المكررة (يبقى الرقم مع أول اسم)',
+    dropServices: 'احذف أرقام الخدمات (800، 9200، 19…)',
+    dropEmailOnly: 'احذف اللي لهم إيميل بدون رقم',
+  },
+  contactsSearch: 'ابحث باسم أو رقم',
+  contactsShownOf: (shown, total) => `يظهر ${n(shown)} من ${n(total)}. ابحث عشان تلقى الباقي.`,
+  contactsFilteredOut: 'مستبعدة بالفلتر',
+  contactsUnticked: (count) => `شلت علامة ${n(count)}`,
+  contactsImportN: (count) => `استورد ${contactsAr(count)}`,
   contactsRemoveConfirm: 'تحذف كل جهات الاتصال المستوردة من «معي»؟ (جهات الواتساب تبقى.)',
   inboxEmpty: 'لا رسائل. الصق رسالة بالأسفل لأجهّز لك رداً.',
   replyTo: (name) => `الرد على ${name}`,

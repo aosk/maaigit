@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseVcards, phoneDigits } from './vcard';
+import { DEFAULT_FILTER, filterCards, isServiceNumber, parseVcards, phoneDigits } from './vcard';
 
 const ICLOUD = [
   'BEGIN:VCARD',
@@ -57,5 +57,36 @@ describe('contacts files', () => {
 
   it('ignores anything that is not a contacts file', () => {
     expect(parseVcards('hello\nworld')).toEqual([]);
+  });
+});
+
+describe('filtering contacts before an import', () => {
+  const card = (name: string, phones: string[], emails: string[] = []) => ({ name, phones, emails });
+  const off = { saudiMobileOnly: false, dedupe: false, dropServices: false, dropEmailOnly: false };
+
+  it('knows service numbers: toll-free, unified, short codes, and anything too short', () => {
+    expect(['8001234567', '966800123456', '920012345', '19911', '1234']).toSatisfy((list: string[]) => list.every(isServiceNumber));
+    expect(isServiceNumber('966501234567')).toBe(false);
+    expect(isServiceNumber('966112345678')).toBe(false);
+  });
+
+  it('by default drops repeated and service numbers, keeping the first name for a number', () => {
+    const kept = filterCards([card('أحمد', ['966501234567']), card('Ahmed work', ['966501234567']), card('STC', ['900']), card('Bank', ['920012345'])], DEFAULT_FILTER);
+    expect(kept.map((c) => c.name)).toEqual(['أحمد']);
+  });
+
+  it('keeps only Saudi mobiles when asked, and a card with none left goes, email and all', () => {
+    const kept = filterCards([card('سارة', ['966551112222', '442071234567'], ['s@x.com']), card('London', ['442071234567'], ['l@x.com']), card('Mail only', [], ['m@x.com'])], { ...off, saudiMobileOnly: true });
+    expect(kept).toEqual([card('سارة', ['966551112222'], ['s@x.com'])]);
+  });
+
+  it('keeps email-only contacts unless told to leave them out', () => {
+    const cards = [card('Mail only', [], ['m@x.com'])];
+    expect(filterCards(cards, off)).toHaveLength(1);
+    expect(filterCards(cards, { ...off, dropEmailOnly: true })).toHaveLength(0);
+  });
+
+  it('keeps extra fields on each card (the review screen tracks rows by them)', () => {
+    expect(filterCards([{ ...card('x', ['966501234567']), index: 7 }], DEFAULT_FILTER)[0].index).toBe(7);
   });
 });

@@ -638,3 +638,13 @@ html[dir='rtl'] .attention-list svg { transform: scaleX(-1); }
 :root[data-layout='desktop'] .inbox .inbox-list, :root[data-layout='desktop'] .inbox .inbox-detail { display: flex; }
 :root[data-layout='desktop'] .inbox-detail { position: sticky; top: 24px; max-height: calc(100dvh - 48px); overflow: auto; border: 1px solid var(--sep); border-radius: 16px; padding: 20px; }
 :root[data-layout='desktop'] .detail-back { display: none; }
+
+/* ---------- Contacts import: check the file before sending it ---------- */
+.contacts-review { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.contacts-filters { border: 0; margin: 0; padding: 0; display: grid; gap: 4px; }
+.check-label { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 0.9em; cursor: pointer; }
+.check-label input { width: 20px; height: 20px; accent-color: var(--tint); flex: none; }
+.check-label.muted { color: var(--text2); cursor: default; }
+.contacts-list { list-style: none; margin: 0; padding: 0 4px; max-height: 420px; overflow-y: auto; border: 1px solid var(--sep); border-radius: 8px; }
+.contacts-list li + li { border-top: 1px solid var(--sep); }
+.contact-name { font-weight: 600; }
