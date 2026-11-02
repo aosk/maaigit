@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ChatEvent } from '../../shared/types';
 import { useSettings } from '../settings';
-import { NajizLoader } from './NajizLoader';
+import { MaaiLoader } from './MaaiLoader';
 
 export interface Progress {
   thinking: string;
@@ -34,7 +34,7 @@ export function WorkingBubble({ progress }: { progress: Progress }) {
     <div className="bubble assistant working" aria-live="polite" aria-busy="true">
       <div className="working-head">
         <span>{headline}</span>
-        <NajizLoader />
+        <MaaiLoader />
       </div>
 
       {progress.steps.length > 0 && (

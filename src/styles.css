@@ -317,18 +317,17 @@ a { color: var(--tint-text); }
 .conn-dot.off { background: var(--switch-off); }
 .conn-dot.bad { background: var(--danger); }
 
-/* While MAAI works: the Najiz checkmark (no background, so it sits on the chat bubble) and the typing phrase. */
-.najiz-loader { display: flex; align-items: center; gap: 8px; }
-.najiz-logo { flex: none; display: inline-flex; animation: najiz-fade 1.6s ease-in-out infinite; }
-.najiz-logo img { display: block; width: auto; height: 1.15em; }
-.najiz-phrase { font-family: 'Almarai', var(--font); font-weight: 700; color: #008d55; min-height: 1.4em; display: inline-flex; align-items: center; white-space: nowrap; }
-.najiz-caret { display: inline-block; width: 1.5px; height: 1em; margin-inline-start: 2px; background: #F6B221; animation: najiz-blink 0.8s steps(1) infinite; }
-/* Like Claude's thinking mark: fades out completely, then comes back. */
-@keyframes najiz-fade { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-@keyframes najiz-blink { 50% { opacity: 0; } }
-:root[data-motion='reduce'] .najiz-logo, :root[data-motion='reduce'] .najiz-caret { animation: none; }
-@media (prefers-color-scheme: dark) { :root:not([data-look='light']) .najiz-phrase { color: #00AD68; } }
-:root[data-look='dark'] .najiz-phrase { color: #00AD68; }
+/* While maai works: the «م» mark breathing on the chat bubble, its dot pulsing just after, and the typing phrase. */
+.maai-loader { display: flex; align-items: center; gap: 10px; }
+.maai-mark { position: relative; flex: none; display: inline-flex; color: var(--tint-text); }
+.maai-mark svg { animation: maai-breathe 1.6s ease-in-out infinite; }
+.maai-dot { position: absolute; top: 0; left: -2px; width: 7px; height: 7px; border-radius: 50%; background: #54c08a; animation: maai-pulse 1.6s ease-in-out 0.4s infinite; }
+.maai-phrase { font-weight: 700; font-size: 1.05em; color: var(--tint-text); min-height: 1.4em; display: inline-flex; align-items: center; white-space: nowrap; }
+.maai-caret { display: inline-block; width: 2px; height: 1em; margin-inline-start: 2px; background: #75e0a7; animation: maai-blink 0.8s steps(1) infinite; }
+@keyframes maai-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@keyframes maai-pulse { 0%, 50%, 100% { transform: scale(1); } 25% { transform: scale(1.45); } }
+@keyframes maai-blink { 50% { opacity: 0; } }
+:root[data-motion='reduce'] .maai-mark svg, :root[data-motion='reduce'] .maai-dot, :root[data-motion='reduce'] .maai-caret { animation: none; }
 
 /* Asana tasks on Today: a tick to finish, tap the name for status and date. */
 .task { border-bottom: 1px solid var(--sep); }
