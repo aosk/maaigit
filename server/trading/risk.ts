@@ -38,7 +38,7 @@ export interface Verdict {
 }
 
 /** A price older than this is not traded on (delayed feeds run about 15 minutes behind). */
-const STALE_QUOTE_MS = 40 * 60_000;
+export const STALE_QUOTE_MS = 40 * 60_000;
 /** A buy may not chase more than 1% above the price, nor a sale undercut it by more. */
 const CHASE = 0.01;
 

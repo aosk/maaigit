@@ -175,6 +175,22 @@ export interface TradingState {
   agentsCanDecide: boolean;
 }
 
+/** StockSmart in Settings → Connections: the desk, its prices and agents, and the SNB desktop bot. */
+export interface TradingSummary {
+  mode: TradeMode;
+  halted: boolean;
+  haltReason?: string;
+  marketOpen: boolean;
+  quotesAsOf?: string;
+  quotesSource?: Quote['source'];
+  /** Recent enough to trade on. */
+  quotesFresh: boolean;
+  agentsCanDecide: boolean;
+  lastRoundAt?: string;
+  agentErrors: string[];
+  bot: { connected: boolean; stale: boolean; brokerSession: boolean; lastSeen?: string };
+}
+
 /** The log's categories, for filtering and counting: what the agents read, what they decided, the risk gate, orders, alerts, and you. */
 export type LogCategory = 'analysis' | 'decisions' | 'risk' | 'orders' | 'alerts' | 'you';
 export const LOG_CATEGORIES: LogCategory[] = ['analysis', 'decisions', 'risk', 'orders', 'alerts', 'you'];

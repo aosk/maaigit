@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import type { Lang, ReplyMode, StatusInfo } from '../../shared/types';
+import type { TradingSummary } from '../../shared/trading';
 import { api } from '../api';
 import { forgetFeeds } from '../inboxCache';
 import { dayTime } from '../format';
@@ -120,6 +121,7 @@ export function SettingsScreen() {
               <Conn state={status.bot?.stale ? 'bad' : status.bot?.connected ? 'on' : 'off'} name={t.botConn}>
                 {status.bot?.connected ? (status.bot.stale ? t.botStale : t.botConnected(status.bot.device ?? '', status.bot.lastSync ? dayTime(status.bot.lastSync, settings.lang) : '')) : t.botOff}
               </Conn>
+              {status.trading && <TradingConns s={status.trading} />}
               <Conn state={status.whatsapp?.configured ? 'on' : 'off'} name={t.whatsappConn}>
                 {status.whatsapp?.configured ? t.whatsappConnected(status.whatsapp.number ?? '', status.whatsapp.keepDays) : t.whatsappOff}
               </Conn>
@@ -216,6 +218,26 @@ function ReplyModeCard({ mode, onChanged }: { mode: ReplyMode; onChanged: () => 
       <p className="sub">{t.replyModeHint[current]}</p>
       {error && <div className="error" role="alert">{error}</div>}
     </section>
+  );
+}
+
+/** StockSmart and its SNB desktop bot: whether the desk runs, on what prices, and what (if anything) needs connecting. */
+function TradingConns({ s }: { s: TradingSummary }) {
+  const { t, settings } = useSettings();
+  const stalePrices = s.marketOpen && !s.quotesFresh;
+  const bot = s.bot;
+  const live = s.mode === 'live';
+  const seen = bot.lastSeen ? dayTime(bot.lastSeen, settings.lang) : '';
+  return (
+    <>
+      <Conn state={s.halted || stalePrices ? 'bad' : 'on'} name={t.ssConn}>
+        {s.halted ? t.ssConnHalted(s.haltReason ?? '') : `${t.ssConnState(live, s.marketOpen)} · ${stalePrices ? t.ssConnStale : t.ssConnPrices[s.quotesSource ?? 'none']} · ${t.ssConnAgents(s.agentsCanDecide)}. `}
+        {!s.halted && t.ssConnKeys} <a href="#/stocks">{t.ss.open}</a>
+      </Conn>
+      <Conn state={!bot.connected ? (live ? 'bad' : 'off') : bot.stale || !bot.brokerSession ? 'bad' : 'on'} name={t.snbConn}>
+        {!bot.connected ? t.snbOff : bot.stale ? t.snbStale : !bot.brokerSession ? t.snbLoggedOut : t.snbOn(seen)}
+      </Conn>
+    </>
   );
 }
 

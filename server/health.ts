@@ -9,6 +9,7 @@ import { status } from './status.js';
 import { dataIsPersistent } from './storage.js';
 import { state } from './store.js';
 import { alertHealth } from './notify.js';
+import { tradingChecks } from './trading/health.js';
 
 /**
  * Reads how every part of MAAI is doing right now: the server itself, the saved data, Claude, the device bot
@@ -168,7 +169,7 @@ function connections(): HealthCheck[] {
 const RANK: Record<HealthLevel, number> = { off: 0, ok: 0, warn: 1, fail: 2 };
 
 export function healthReport(): HealthReport {
-  const checks = [server(), storage(), claude(), ...deviceBot(), ...connections()];
+  const checks = [server(), storage(), claude(), ...deviceBot(), ...connections(), ...tradingChecks()];
   const worst = Math.max(...checks.map((c) => RANK[c.status]));
   return {
     status: worst === 2 ? 'fail' : worst === 1 ? 'warn' : 'ok',
