@@ -4,7 +4,7 @@ import { api } from '../api';
 import { ago, time } from '../format';
 import { useOnRefresh } from '../refresh';
 import { useSettings } from '../settings';
-import { ChartUp, Send, Stop } from '../components/Icons';
+import { ChartUp, Chevron, Send, Stop } from '../components/Icons';
 import { TradeLog } from '../components/TradeLog';
 
 /**
@@ -187,8 +187,7 @@ function Positions({ st, t }: { st: TradingState; t: T }) {
   return (
     <>
       <h2 className="h2 sec ss-sec-pos">{t.ss.positions}</h2>
-      <section className="card flush">
-        {st.positions.length === 0 && <div className="slot empty"><span className="sub">{t.ss.noPositions}</span></div>}
+      {st.positions.length === 0 ? <p className="sub ss-empty">{t.ss.noPositions}</p> : <section className="card flush">
         {st.positions.map((p) => {
           const price = p.price ?? p.avgCost;
           const pnl = (price - p.avgCost) * p.qty;
@@ -207,7 +206,7 @@ function Positions({ st, t }: { st: TradingState; t: T }) {
             </div>
           );
         })}
-      </section>
+      </section>}
     </>
   );
 }
@@ -290,7 +289,7 @@ function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boo
 
   return (
     <details className="group ss-settings">
-      <summary className="group-head"><span className="h2" style={{ fontSize: '1.05em' }}>{t.ss.settings}</span></summary>
+      <summary className="group-head"><span className="h2" style={{ fontSize: '1.05em' }}>{t.ss.settings}</span><Chevron size={20} /></summary>
       <div className="group-body" style={{ padding: '0 16px 16px', gap: 16 }}>
         <form className="ss-limits" onSubmit={saveLimits}>
           {LIMIT_KEYS.map((k) => (

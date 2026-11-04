@@ -807,3 +807,16 @@ html[dir='rtl'] .ss-chev svg { transform: scaleX(-1); }
 .load .gauge i { top: -4px; height: 16px; }
 .brief-text { cursor: pointer; }
 .brief-text[data-full='true'] { -webkit-line-clamp: unset; display: block; }
+
+/* StockSmart on a phone: the four numbers as two rows (they ran into each other in four columns), a short empty chart,
+   one box for "no positions", and a single clear focus ring on text fields. */
+.ss-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
+@media (min-width: 560px) { .ss-kv { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ss-kv b { overflow-wrap: anywhere; }
+.ss-spark-empty { height: 14px !important; }
+.ss-empty { margin: 0; padding: 14px; text-align: center; border: 1px dashed var(--border, var(--sep)); border-radius: 12px; }
+.ss-ask input { font-size: 16px; }
+input:not([type='checkbox']):not([type='radio']):focus-visible, textarea:focus-visible { outline: none; border-color: var(--tint); box-shadow: 0 0 0 3px rgba(27, 131, 84, 0.28); }
+/* iPhone: the strip behind the clock and battery, so the page never scrolls under them. */
+body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe-area-inset-top); background: var(--bg); z-index: 70; pointer-events: none; }
+:root[dir='rtl'] .ss-kv b { text-align: right; }

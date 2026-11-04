@@ -59,7 +59,7 @@ type T = ReturnType<typeof useSettings>['t'];
 function Line({ e, t, lang }: { e: TradeEvent; t: T; lang: 'ar' | 'en' }) {
   return (
     <li className={`ss-ev ag-${e.actor} cat-${categoryOf(e)} ev-${e.type.replace('.', '-')}`}>
-      <div className="ss-ev-head"><b>{t.ss.agentNames[e.actor] ?? e.actor}</b><span className="tl-tag">{t.ss.cats[categoryOf(e)]}</span><time dateTime={e.ts}>{time(e.ts, lang)}</time></div>
+      <div className="ss-ev-head"><b>{t.ss.agentNames[e.actor] ?? e.actor}</b>{categoryOf(e) !== 'you' && <span className="tl-tag">{t.ss.cats[categoryOf(e)]}</span>}<time dateTime={e.ts}>{time(e.ts, lang)}</time></div>
       <div dir="auto">{e.text}</div>
     </li>
   );
