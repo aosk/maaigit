@@ -1,4 +1,5 @@
 import type { AddressCard } from '../shared/vcard';
+import type { AgentId, TradeLimits, TradeMode, TradingState } from '../shared/trading';
 import type { AuthenticationResponseJSON, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
 import type {
   AdminOverview,
@@ -77,7 +78,7 @@ async function request(method: string, url: string, body?: unknown, background =
 
 /** In the app's language: MAAI is restarting (an update), not broken. */
 const restartingMessage = () =>
-  document.documentElement.lang === 'ar' ? 'مساعد يُعاد تشغيله بعد تحديث. جرّب بعد دقيقة.' : 'MAAI is restarting after an update. Try again in a minute.';
+  document.documentElement.lang === 'ar' ? '«معي» يُعاد تشغيله بعد تحديث. جرّب بعد دقيقة.' : 'MAAI is restarting after an update. Try again in a minute.';
 
 async function call<T>(method: string, url: string, body?: unknown, background = false): Promise<T> {
   const res = await request(method, url, body, background);
@@ -183,6 +184,20 @@ export const api = {
     return ((await res.json()) as { text: string }).text;
   },
   contacts: () => call<ContactCount>('GET', '/contacts'),
+  // StockSmart
+  trading: (background = false) => call<TradingState>('GET', '/trading', undefined, background),
+  tradingHalt: (reason?: string) => call<TradingState>('POST', '/trading/halt', { reason }),
+  tradingResume: () => call<TradingState>('POST', '/trading/resume', {}),
+  tradingMode: (mode: TradeMode, confirm?: string) => call<TradingState>('POST', '/trading/mode', { mode, confirm }),
+  tradingLimits: (limits: Partial<TradeLimits>) => call<TradingState>('PUT', '/trading/limits', limits),
+  tradingDirective: (text: string) => call<TradingState>('POST', '/trading/directives', { text }),
+  tradingRemoveDirective: (id: string) => call<TradingState>('DELETE', `/trading/directives/${id}`),
+  tradingExcluded: (excluded: string[]) => call<TradingState>('PUT', '/trading/excluded', { excluded }),
+  tradingAgent: (id: AgentId, enabled: boolean) => call<TradingState>('POST', `/trading/agents/${id}`, { enabled }),
+  tradingAsk: (question: string, lang: Lang) => call<{ answer: string }>('POST', '/trading/ask', { question, lang }),
+  tradingRound: () => call<TradingState>('POST', '/trading/round', {}),
+  tradingBotKey: () => call<{ key: string; signSecret: string }>('POST', '/trading/bot/key', {}),
+  tradingRevokeBot: () => call<TradingState>('DELETE', '/trading/bot/key'),
   /** The cards were read from the file in the browser; only names, numbers, emails and companies are sent. */
   importContacts: async (cards: AddressCard[]): Promise<ContactCount> => {
     const res = await fetch('/api/contacts/import', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(cards) });

@@ -350,7 +350,7 @@ export interface StatusInfo {
 }
 
 /** What a Claude request was for, so token use can be split by feature. */
-export type UsagePurpose = 'chat' | 'briefing' | 'email-digest' | 'email-draft' | 'whatsapp' | 'news';
+export type UsagePurpose = 'chat' | 'briefing' | 'email-digest' | 'email-draft' | 'whatsapp' | 'news' | 'trading';
 
 /** One day's Claude use for one feature. `input` excludes tokens read from the cache, which are in `cached`. */
 export interface UsageRow {
@@ -432,7 +432,7 @@ export interface NotifyPrefs {
 export interface AppAlert {
   id: string;
   at: string;
-  kind: 'reminder' | 'leave' | 'event' | 'prayer' | 'briefing' | 'message' | 'health' | 'test';
+  kind: 'reminder' | 'leave' | 'event' | 'prayer' | 'briefing' | 'message' | 'health' | 'test' | 'trade';
   title: string;
   body: string;
 }

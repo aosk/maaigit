@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useSettings } from './settings';
-import { Calendar, Chat, Gear, Inbox as InboxIcon, Newspaper } from './components/Icons';
+import { Calendar, ChartUp, Chat, Gear, Inbox as InboxIcon } from './components/Icons';
 import { Today } from './screens/Today';
 import { Assistant } from './screens/Assistant';
 import { Inbox } from './screens/Inbox';
 import { News } from './screens/News';
+import { StockSmart } from './screens/StockSmart';
 import { SettingsScreen } from './screens/Settings';
 import { Admin } from './admin/Admin';
 import { ProfileScreen } from './screens/Profile';
@@ -94,7 +95,8 @@ export function App() {
     { route: 'today', label: t.today, icon: <Calendar size={26} /> },
     { route: 'assistant', label: t.assistant, icon: <Chat size={26} /> },
     { route: 'inbox', label: t.inbox, icon: <InboxIcon size={26} /> },
-    { route: 'news', label: t.news, icon: <Newspaper size={26} /> },
+    // StockSmart takes the news's place in the bar; the news opens from «يومك».
+    { route: 'stocks', label: t.stocks, icon: <ChartUp size={26} /> },
     { route: 'settings', label: t.settings, icon: <Gear size={26} /> },
   ];
 
@@ -107,6 +109,7 @@ export function App() {
         {route === 'assistant' && <Assistant />}
         {route === 'inbox' && <Inbox />}
         {route === 'news' && <News />}
+        {route === 'stocks' && <StockSmart />}
         {route === 'settings' && <SettingsScreen />}
         {route === 'profile' && <ProfileScreen />}
       </main>

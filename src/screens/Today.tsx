@@ -7,7 +7,7 @@ import { api } from '../api';
 import { dayHeading, dayTime, hijri, sameDay, time } from '../format';
 import { useSettings } from '../settings';
 import { speak, stopSpeaking } from '../speech';
-import { Bell, Mic } from '../components/Icons';
+import { Bell, Chevron, Mic, Newspaper } from '../components/Icons';
 import { BriefingCard } from '../components/BriefingCard';
 import { StressCard } from '../components/StressCard';
 import { CountBadge } from '../components/CountBadge';
@@ -15,6 +15,7 @@ import { askAssistant, talkToAssistant } from '../nav';
 import { Logo } from '../components/Logo';
 import { AsanaTasks } from '../components/AsanaTasks';
 import { EventSheet } from '../components/EventSheet';
+import { StockStrip } from '../components/StockStrip';
 import { useOnRefresh } from '../refresh';
 
 type Row =
@@ -170,6 +171,8 @@ export function Today() {
         </button>
       </div>
 
+      <StockStrip />
+
       {error && (
         <div className="error row between" role="alert">
           <span>{t.loadFailed}</span>
@@ -275,6 +278,11 @@ export function Today() {
       {settings.toggles.simple && (
         <a className="sub" href="#/settings" style={{ textAlign: 'center' }}>{t.simpleHides}</a>
       )}
+
+      <a className="card link-row extra" href="#/news">
+        <span className="row" style={{ gap: 10 }}><Newspaper size={20} /><span><b>{t.newsLink}</b><span className="sub" style={{ display: 'block' }}>{t.newsLinkHint}</span></span></span>
+        <Chevron size={18} />
+      </a>
 
       {data?.syncedAt && <div className="updated-at">{t.updatedAt(time(data.syncedAt, lang))}</div>}
       {selected && <EventSheet event={selected} onClose={closeSheet} />}

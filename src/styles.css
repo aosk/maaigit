@@ -647,3 +647,84 @@ html[dir='rtl'] .attention-list svg { transform: scaleX(-1); }
 .contacts-list { list-style: none; margin: 0; padding: 0 4px; max-height: 420px; overflow-y: auto; border: 1px solid var(--sep); border-radius: 8px; }
 .contacts-list li + li { border-top: 1px solid var(--sep); }
 .contact-name { font-weight: 600; }
+
+/* ---------- StockSmart ---------- */
+/* Each participant keeps one colour for life, so «التحليل الفني is blue» holds everywhere. */
+.ag-technical { --ag: #1570ef; } .ag-news { --ag: #7c3aed; } .ag-decision { --ag: #dc6803; } .ag-risk { --ag: #b42318; }
+.ag-executor { --ag: #079455; } .ag-system { --ag: #4d5761; } .ag-user { --ag: var(--text); }
+.up { color: var(--success); } .down { color: var(--danger); }
+.ss-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+/* Real money: the whole header band turns red, so paper and live can never be confused. */
+.ss-live .ss-head { background: #b42318; color: #fff; border-radius: 16px; padding: 14px 16px; }
+.ss-live .ss-head .eyebrow { color: rgba(255, 255, 255, 0.85); }
+.ss-mode { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 9999px; font-size: 0.72em; font-weight: 700; white-space: nowrap; }
+.ss-mode.paper { background: var(--warn-soft); color: var(--warn-text); border: 1px solid #fedf89; }
+.ss-mode.live { background: #fef3f2; color: #b42318; border: 1px solid #fecdca; }
+.ss-stop { background: var(--surface); color: var(--danger); border: 1.5px solid var(--danger); font-weight: 700; }
+.ss-stop:hover:not(:disabled) { background: var(--danger-soft); }
+.ss-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.ss-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ss-hero { background: var(--hero); color: #fff; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.ss-hero .up { color: #75e0a7; } .ss-hero .down { color: #fda29b; }
+.ss-muted { font-size: 0.75em; color: rgba(255, 255, 255, 0.82); }
+.ss-pnl { font-size: 2em; font-weight: 700; line-height: 1.1; text-align: end; font-variant-numeric: tabular-nums; }
+.ss-pnl small { font-size: 0.45em; font-weight: 600; }
+.ss-spark { width: 100%; height: 56px; display: block; }
+.ss-spark .line { fill: none; stroke: #75e0a7; stroke-width: 2.2; vector-effect: non-scaling-stroke; }
+.ss-spark .area { fill: #75e0a7; opacity: 0.16; }
+.ss-spark-empty { border-bottom: 1px dashed rgba(255, 255, 255, 0.25); }
+.ss-kv { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; font-size: 0.72em; color: rgba(255, 255, 255, 0.85); }
+.ss-kv b { display: block; font-size: 1.25em; color: #fff; font-variant-numeric: tabular-nums; text-align: start; }
+.ss-bar { height: 6px; border-radius: 9999px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
+.ss-bar i { display: block; height: 100%; background: #fdb022; border-radius: 9999px; }
+.ss-agents { display: flex; flex-wrap: wrap; gap: 6px; }
+.ss-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 9999px; border: 1px solid var(--sep); background: var(--surface); font-size: 0.76em; }
+.ss-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--ag); }
+.ss-chip.off { opacity: 0.5; text-decoration: line-through; }
+.ss-chip.bad { border-color: #fecdca; background: var(--danger-soft); }
+.ss-sec-pos { --dot: #079455; }
+.ss-pos { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.ss-sym { font-weight: 700; font-size: 0.95em; }
+.ss-num { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ss-orders summary { cursor: pointer; padding: 4px 0; }
+.ss-orders ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; font-size: 0.85em; }
+.ss-status { font-size: 0.85em; color: var(--text2); }
+.ss-status.filled { color: var(--success); } .ss-status.rejected, .ss-status.failed { color: var(--danger); }
+.ss-feedbox { display: flex; flex-direction: column; gap: 10px; }
+.ss-sec-live::before { display: none; }
+.ss-pulse { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #079455; box-shadow: 0 0 0 4px rgba(7, 148, 85, 0.18); margin-inline-end: 8px; vertical-align: middle; animation: ss-pulse 1.8s ease-in-out infinite; }
+@keyframes ss-pulse { 50% { box-shadow: 0 0 0 8px rgba(7, 148, 85, 0); } }
+:root[data-motion='reduce'] .ss-pulse { animation: none; }
+.ss-ask { display: flex; gap: 8px; align-items: center; }
+.ss-ask input { flex: 1; min-width: 0; min-height: 46px; border: 1px solid var(--input-border); border-radius: 4px; padding: 0 12px; background: var(--surface); }
+.ss-feed, .ss-thread { list-style: none; margin: 0; padding: 0; }
+.ss-feed { border-inline-start: 2px solid var(--sep); margin-inline-start: 6px; padding-inline-start: 14px; }
+.ss-ev { position: relative; padding: 6px 0 10px; font-size: 0.88em; }
+.ss-ev::before { content: ''; position: absolute; inset-inline-start: -20px; top: 12px; width: 10px; height: 10px; border-radius: 50%; background: var(--ag); box-shadow: 0 0 0 3px var(--bg); }
+.ss-ev-head { display: flex; gap: 8px; align-items: baseline; }
+.ss-ev-head b { color: var(--ag); }
+.ss-ev-head time { font-size: 0.8em; color: var(--text2); }
+.ss-ev.ev-system-halted, .ss-ev.ev-position-drift { background: var(--danger-soft); border-radius: 8px; padding-inline: 8px; }
+.ss-ev.ev-order-filled > div:not(.ss-ev-head) { font-weight: 600; }
+.ss-thread { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--raised); display: grid; gap: 8px; }
+.ss-thread b { color: var(--ag); }
+.ss-settings .section-label { padding-inline: 0; }
+.ss-limits { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end; }
+.ss-toggle { min-height: 36px; padding: 0 12px; border-radius: 9999px; border: 1px solid var(--border); background: var(--surface); color: var(--text2); font-size: 0.82em; }
+.ss-toggle.on { background: var(--tint-soft); border-color: var(--tint); color: var(--tint-text); font-weight: 700; }
+.ss-directives { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 0.88em; }
+.ss-confirm { min-height: 44px; width: 150px; border: 1px solid var(--input-border); border-radius: 4px; padding: 0 10px; background: var(--surface); }
+.ss-live-btn { background: #b42318; color: #fff; }
+.ss-secret { display: grid; gap: 2px; margin-top: 6px; font-size: 0.82em; }
+.ss-secret code { user-select: all; overflow-wrap: anywhere; background: var(--surface); padding: 6px 8px; border-radius: 4px; }
+/* The strip on «يومك». */
+.ss-strip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--sep); border-radius: 12px; background: var(--surface); color: var(--text); text-decoration: none; }
+.ss-strip.halted { border-color: #fecdca; background: var(--danger-soft); }
+.ss-strip-icon { color: var(--tint-text); display: inline-flex; }
+.ss-strip-last { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-chev { color: var(--text2); display: inline-flex; }
+html[dir='rtl'] .ss-chev svg { transform: scaleX(-1); }
+/* A computer: the numbers and controls on one side, the agents' live log on the other. */
+:root[data-layout='desktop'] .ss { padding: 32px 36px 48px; }
+:root[data-layout='desktop'] .ss-grid, :root[data-layout='tablet'] .ss-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; gap: 24px; }
+:root[data-layout='desktop'] .ss-side, :root[data-layout='tablet'] .ss-side { position: sticky; top: 16px; max-height: calc(100dvh - 32px); overflow-y: auto; border: 1px solid var(--sep); border-radius: 16px; padding: 16px; }

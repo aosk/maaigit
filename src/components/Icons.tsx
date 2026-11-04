@@ -34,3 +34,5 @@ export const Chevron = (p: P) => <Icon {...p}><path d="m9 6 6 6-6 6" className="
 export const Refresh = (p: P) => <Icon {...p}><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12a9 9 0 0 1 15.5-6.2" /><path d="M21 4v5h-5M3 20v-5h5" /></Icon>;
 export const Search = (p: P) => <Icon {...p}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Icon>;
 export const Mail = (p: P) => <Icon {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></Icon>;
+export const ChartUp = (p: P) => <Icon {...p}><path d="M3 3v18h18" /><path d="m7 15 4-4 3 3 6-7" /></Icon>;
+export const Stop = (p: P) => <Icon {...p}><rect x="6" y="6" width="12" height="12" rx="2" /></Icon>;

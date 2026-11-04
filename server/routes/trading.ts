@@ -1,0 +1,158 @@
+import { Router } from 'express';
+import type { AgentId, TradeLimits } from '../../shared/trading.js';
+import { askAgents } from '../trading/agents.js';
+import { round, tradingView } from '../trading/engine.js';
+import { botStale, createBotKey, halt, resume, revokeBotKey, setMode } from '../trading/executor.js';
+import { emit, eventsSince, onTradeEvent, saveTrading, trading } from '../trading/store.js';
+import { marketClock, UNIVERSE } from '../trading/tadawul.js';
+import { HttpError, lang, text, wrap } from './http.js';
+
+/**
+ * StockSmart for the signed-in user: the state for the first paint, the live stream of the log, and the controls.
+ * Stopping is one tap; starting again, going live and changing the limits are the user's alone and always logged.
+ */
+export const tradingRoutes = Router();
+
+tradingRoutes.get('/trading', (_req, res) => res.json(tradingView()));
+
+/** The log as it happens (Server-Sent Events). Resumes from the last event the browser saw, so a dropped line loses nothing. */
+tradingRoutes.get('/trading/stream', (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.flushHeaders();
+  const since = Number(req.get('last-event-id') ?? req.query.since ?? 0);
+  const send = (e: { id: number }) => res.write(`id: ${e.id}\nevent: trade\ndata: ${JSON.stringify(e)}\n\n`);
+  res.write('retry: 5000\n\n');
+  for (const e of Number.isFinite(since) && since > 0 ? eventsSince(since).slice(-200) : []) send(e);
+  const off = onTradeEvent(send);
+  const keepAlive = setInterval(() => res.write(': ok\n\n'), 25_000);
+  req.on('close', () => {
+    off();
+    clearInterval(keepAlive);
+  });
+});
+
+tradingRoutes.post('/trading/halt', (req, res) => {
+  halt(text(req.body?.reason, 200) || 'أوقفته أنت', 'user');
+  saveTrading();
+  res.json(tradingView());
+});
+
+tradingRoutes.post('/trading/resume', (_req, res) => {
+  resume();
+  saveTrading();
+  res.json(tradingView());
+});
+
+/** Real money needs the desktop bot connected and logged in at SNB, and the word LIVE typed to confirm. */
+tradingRoutes.post('/trading/mode', (req, res) => {
+  const mode = req.body?.mode;
+  if (mode === 'paper') setMode('paper', 'user', 'رجعت للوضع التجريبي');
+  else if (mode === 'live') {
+    if (req.body?.confirm !== 'LIVE') throw new HttpError(400, 'Type LIVE to confirm trading with real money.');
+    if (!trading.bot.keyHash) throw new HttpError(409, 'Connect the SNB desktop bot first.');
+    if (botStale()) throw new HttpError(409, 'The SNB desktop bot is not running.');
+    if (!trading.bot.brokerSession) throw new HttpError(409, 'The SNB desktop bot is not logged in at SNB Capital.');
+    setMode('live', 'user', 'بدأ التداول الحقيقي عبر بوت SNB');
+  } else throw new HttpError(400, 'mode is paper or live');
+  saveTrading();
+  res.json(tradingView());
+});
+
+/** Each limit within a sensible range; every change is logged with what it was. */
+const RANGES: Record<keyof TradeLimits, [number, number]> = {
+  capital: [1_000, 10_000_000],
+  maxOrder: [100, 1_000_000],
+  maxPerSymbolPct: [1, 100],
+  maxPerSectorPct: [1, 100],
+  maxOrdersPerDay: [1, 100],
+  dailyLossPct: [0.1, 20],
+  cycleMinutes: [5, 120],
+};
+
+tradingRoutes.put('/trading/limits', (req, res) => {
+  const changes: string[] = [];
+  for (const [key, [min, max]] of Object.entries(RANGES) as [keyof TradeLimits, [number, number]][]) {
+    const value = req.body?.[key];
+    if (value === undefined) continue;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < min || n > max) throw new HttpError(400, `${key} must be between ${min} and ${max}.`);
+    if (trading.limits[key] !== n) {
+      changes.push(`${key}: ${trading.limits[key]} → ${n}`);
+      trading.limits[key] = n;
+    }
+  }
+  if (changes.length) emit('system.limits', 'user', `غيّرت الحدود: ${changes.join(' · ')}`);
+  // Paper money follows the capital while nothing is invested.
+  const paper = trading.books.paper;
+  if (paper.positions.length === 0 && trading.orders.every((o) => o.mode !== 'paper' || !['queued', 'sent', 'partial'].includes(o.status))) {
+    paper.cash = trading.limits.capital;
+    paper.dayStart.value = paper.cash;
+  }
+  saveTrading();
+  res.json(tradingView());
+});
+
+/** A standing instruction to the agents ("no banks today"). */
+tradingRoutes.post('/trading/directives', (req, res) => {
+  const said = text(req.body?.text, 300);
+  if (!said) throw new HttpError(400, 'Write the instruction.');
+  if (trading.directives.length >= 20) throw new HttpError(400, 'At most 20 instructions. Remove one first.');
+  trading.directives.push({ id: `dir_${Date.now().toString(36)}`, text: said, at: new Date().toISOString() });
+  emit('user.directive', 'user', `توجيه جديد: ${said}`);
+  saveTrading();
+  res.json(tradingView());
+});
+
+tradingRoutes.delete('/trading/directives/:id', (req, res) => {
+  const gone = trading.directives.find((d) => d.id === req.params.id);
+  if (!gone) throw new HttpError(404, 'Not found');
+  trading.directives = trading.directives.filter((d) => d !== gone);
+  emit('user.directive', 'user', `ألغيت التوجيه: ${gone.text}`);
+  saveTrading();
+  res.json(tradingView());
+});
+
+/** Stocks or sectors the agents must leave alone (the risk gate refuses them). */
+tradingRoutes.put('/trading/excluded', (req, res) => {
+  const list: unknown = req.body?.excluded;
+  if (!Array.isArray(list)) throw new HttpError(400, 'excluded is a list');
+  const allowed = new Set([...UNIVERSE.map((i) => i.symbol), ...UNIVERSE.map((i) => i.sector)]);
+  trading.excluded = [...new Set(list.filter((x): x is string => typeof x === 'string' && allowed.has(x)))];
+  emit('user.directive', 'user', trading.excluded.length ? `استبعدت: ${trading.excluded.join('، ')}` : 'ما فيه استبعاد');
+  saveTrading();
+  res.json(tradingView());
+});
+
+const AGENTS: AgentId[] = ['technical', 'news', 'decision'];
+
+tradingRoutes.post('/trading/agents/:id', (req, res) => {
+  const id = req.params.id as AgentId;
+  if (!AGENTS.includes(id)) throw new HttpError(404, 'Not found');
+  const enabled = req.body?.enabled === true;
+  trading.agents[id] = { ...trading.agents[id], enabled };
+  emit('system.limits', 'user', `${enabled ? 'شغّلت' : 'أوقفت'} وكيل ${id === 'technical' ? 'التحليل الفني' : id === 'news' ? 'الأخبار' : 'القرار'}`);
+  saveTrading();
+  res.json(tradingView());
+});
+
+tradingRoutes.post('/trading/ask', wrap(async (req, res) => {
+  const question = text(req.body?.question, 500);
+  if (!question) throw new HttpError(400, 'Write your question.');
+  res.json({ answer: await askAgents(question, lang(req.body?.lang)) });
+}));
+
+/** A round now, without waiting for the next one (only while the market is open and trading is on). */
+tradingRoutes.post('/trading/round', wrap(async (_req, res) => {
+  if (!marketClock(new Date()).open) throw new HttpError(409, 'The market is closed.');
+  if (trading.halted) throw new HttpError(409, 'Trading is halted.');
+  await round();
+  res.json(tradingView());
+}));
+
+/** The desktop bot's key and signing secret, shown once. A new one stops the old. */
+tradingRoutes.post('/trading/bot/key', (_req, res) => res.json(createBotKey()));
+tradingRoutes.delete('/trading/bot/key', (_req, res) => {
+  revokeBotKey();
+  saveTrading();
+  res.json(tradingView());
+});

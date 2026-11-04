@@ -210,7 +210,7 @@ export function dueAlerts(
 // ---------- Sending ----------
 
 /** A small picture at the front of each title, so an alert reads as a reminder at a glance. */
-const ICONS: Record<AppAlert['kind'], string> = { reminder: '⏰', leave: '🚗', event: '📅', prayer: '🕌', briefing: '🗓️', message: '💬', health: '🩺', test: '🔔' };
+const ICONS: Record<AppAlert['kind'], string> = { reminder: '⏰', leave: '🚗', event: '📅', prayer: '🕌', briefing: '🗓️', message: '💬', health: '🩺', test: '🔔', trade: '📈' };
 
 async function deliver(due: Pick<Due, 'key' | 'kind' | 'text'>, url = '/#/today') {
   // Written once per language, even with several devices (a briefing costs an AI call).
@@ -256,6 +256,11 @@ export async function alertMessage(key: string, text: (lang: Lang) => Text): Pro
 export async function alertHealth(key: string, text: (lang: Lang) => Text): Promise<void> {
   if (!state.notifyPrefs.health) return;
   await deliver({ key, kind: 'health', text }, '/#/admin');
+}
+
+/** StockSmart: a fill, a halt, the broker account not matching, the bot needing the user. Always told; opens StockSmart. */
+export async function alertTrade(key: string, body: string): Promise<void> {
+  await deliver({ key, kind: 'trade', text: () => ({ title: 'StockSmart', body }) }, '/#/stocks');
 }
 
 /** An order from the user's WhatsApp number made approval cards: always told, opening the assistant where they wait. */

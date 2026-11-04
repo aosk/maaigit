@@ -18,11 +18,14 @@ import { createApp, createInnerApp, createOnlineSite } from './site.js';
 import { writePrivate } from './secure-fs.js';
 import { flushSave } from './store.js';
 import { dataIsPersistent } from './storage.js';
+import { startTrading } from './trading/engine.js';
+import { flushTrading } from './trading/store.js';
 
 // Render stops the server on every deploy: write what is still waiting to be saved first.
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     flushSave();
+    flushTrading();
     process.exit(0);
   });
 }
@@ -66,6 +69,7 @@ startGoogleWrite();
 startBackgroundSync();
 startLiveCalendar();
 startNews();
+startTrading();
 
 const ai = process.env.ANTHROPIC_API_KEY ? 'Claude connected' : 'demo mode (no ANTHROPIC_API_KEY in .env)';
 
