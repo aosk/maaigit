@@ -8,8 +8,8 @@ import { noteRateLimits } from '../anthropic-limits.js';
 
 export type MessageParam = Anthropic.Beta.Messages.BetaMessageParam;
 export type Tool = Anthropic.Beta.Messages.BetaTool;
-/** A tool Anthropic runs itself (web search): declared like the others, with no code of ours behind it. */
-export type ServerTool = Anthropic.Beta.Messages.BetaWebSearchTool20260209;
+/** A tool Anthropic runs itself (web search, reading a page): declared like the others, with no code of ours behind it. */
+export type ServerTool = Anthropic.Beta.Messages.BetaWebSearchTool20260209 | Anthropic.Beta.Messages.BetaWebFetchTool20260209;
 export type ToolUse = Anthropic.Beta.Messages.BetaToolUseBlock;
 export type ToolResult = Anthropic.Beta.Messages.BetaToolResultBlockParam;
 type Message = Anthropic.Beta.Messages.BetaMessage;

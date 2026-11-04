@@ -2,6 +2,7 @@ import type { HealthCheck } from '../../shared/types.js';
 import type { TradingSummary } from '../../shared/trading.js';
 import { client } from '../ai/claude.js';
 import type { StressInputs } from '../stress.js';
+import { officialAnnouncements } from './agents.js';
 import { botStale } from './executor.js';
 import { dayPnl } from './portfolio.js';
 import { currentQuotes } from './market.js';
@@ -73,7 +74,7 @@ export function tradingChecks(now = new Date()): HealthCheck[] {
       ? { id: 'stocksmart-agents', name: 'StockSmart agents', status: 'warn', detail: 'No Claude key: the decision agent follows a plain momentum rule.', fix: 'ANTHROPIC_API_KEY in Render → Environment.' }
       : s.agentErrors.length
         ? { id: 'stocksmart-agents', name: 'StockSmart agents', status: 'warn', detail: `Last error — ${s.agentErrors.join('; ')}`, fix: 'Usually Claude (credit or a busy moment); see Claude AI above.' }
-        : { id: 'stocksmart-agents', name: 'StockSmart agents', status: 'ok', detail: `Technical, news and decision agents working; last round ${ago(s.lastRoundAt, now)}.` },
+        : { id: 'stocksmart-agents', name: 'StockSmart agents', status: 'ok', detail: `Technical, news and decision agents working; last round ${ago(s.lastRoundAt, now)}. Saudi Exchange announcements: ${officialAnnouncements().detail}${officialAnnouncements().at ? ` (${ago(officialAnnouncements().at, now)})` : ''}.` },
   );
   const bot = s.bot;
   if (!bot.connected) checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: live ? 'fail' : 'off', detail: 'Not connected. Needed only for real money.', fix: 'StockSmart → Limits and settings → Connect the SNB bot (a key and a signing secret, shown once).' });

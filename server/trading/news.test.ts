@@ -1,0 +1,56 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.hoisted(() => {
+  Object.assign(process.env, { MAAI_DATA_DIR: '/tmp/claude-0/trading-news', MAAI_TRADING_FILE: '/tmp/claude-0/trading-news/trading.json', MAAI_TRADING_QUOTES: 'sim' });
+});
+
+/** Claude, replaced by what it would answer after reading the exchange's announcements page. */
+const create = vi.hoisted(() => vi.fn());
+vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof import('../ai/claude')>()), client: {}, create }));
+
+import { newsRound, officialAnnouncements } from './agents';
+import { resetTrading, trading } from './store';
+
+const OPEN = new Date('2026-11-01T08:00:00Z');
+const reply = (fetched: unknown[], items: unknown[]) => ({
+  content: [...fetched, { type: 'text', text: JSON.stringify({ items }) }],
+});
+const page = (url: string) => ({ type: 'web_fetch_tool_result', tool_use_id: 't1', content: { type: 'web_fetch_result', url, content: {} } });
+const refused = (url: string) => ({ type: 'web_fetch_tool_result', tool_use_id: 't2', content: { type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible' }, url });
+
+beforeEach(() => {
+  resetTrading();
+  create.mockReset();
+});
+
+describe('the news agent and the Saudi Exchange announcements', () => {
+  it('reads the official announcements page first, only from the exchange and Argaam, and marks official items', async () => {
+    create.mockResolvedValue(reply([page('https://www.saudiexchange.sa/wps/portal/saudiexchange/newsandreports/issuer-news?locale=ar')], [
+      { symbol: '2222', headline: 'أرامكو تعلن نتائج الربع الثالث', tone: 'positive', source: 'saudiexchange.sa', official: true },
+      { symbol: '1120', headline: 'تقرير عن الراجحي', tone: 'neutral', source: 'Argaam', official: false },
+      { symbol: '9999', headline: 'سهم غير متابع', tone: 'neutral', source: 'x', official: true },
+    ]));
+    const items = await newsRound(OPEN);
+    const req = create.mock.calls[0][0] as { system: string; tools: { name: string; allowed_domains?: string[] }[] };
+    expect(req.system).toMatch(/FIRST read the official company announcements/);
+    expect(req.tools.map((t) => t.name)).toEqual(['web_fetch', 'web_search']);
+    expect(req.tools[0].allowed_domains).toEqual(['saudiexchange.sa', 'www.saudiexchange.sa', 'argaam.com', 'www.argaam.com']);
+    expect(items.map((i) => [i.symbol, i.official])).toEqual([['2222', true], ['1120', false]]); // a stock not followed is dropped
+    expect(trading.events.find((e) => e.text.includes('أرامكو'))?.text).toMatch(/^📢 إعلان رسمي/);
+    expect(trading.events.find((e) => e.text.includes('الراجحي'))?.text).not.toMatch(/إعلان رسمي/);
+    expect(officialAnnouncements()).toMatchObject({ ok: true, detail: '1 page(s) read' });
+  });
+
+  it('says so when the exchange page could not be read (the agent then relies on searching)', async () => {
+    create.mockResolvedValue(reply([{ ...refused('https://www.saudiexchange.sa/x'), content: { type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible', note: 'https://www.saudiexchange.sa/x' } }], []));
+    await newsRound(new Date(OPEN.getTime() + 2 * 3_600_000));
+    expect(officialAnnouncements()).toMatchObject({ ok: false, detail: 'not read (url_not_accessible)' });
+  });
+
+  it('treats a missing "official" as not official', async () => {
+    create.mockResolvedValue(reply([], [{ symbol: '2222', headline: 'خبر', tone: 'neutral', source: 'Reuters' }]));
+    const items = await newsRound(new Date(OPEN.getTime() + 4 * 3_600_000));
+    expect(items[0].official).toBe(false);
+    expect(officialAnnouncements().detail).toBe('not tried');
+  });
+});
