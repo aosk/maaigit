@@ -728,3 +728,33 @@ html[dir='rtl'] .ss-chev svg { transform: scaleX(-1); }
 :root[data-layout='desktop'] .ss { padding: 32px 36px 48px; }
 :root[data-layout='desktop'] .ss-grid, :root[data-layout='tablet'] .ss-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; gap: 24px; }
 :root[data-layout='desktop'] .ss-side, :root[data-layout='tablet'] .ss-side { position: sticky; top: 16px; max-height: calc(100dvh - 32px); overflow-y: auto; border: 1px solid var(--sep); border-radius: 16px; padding: 16px; }
+
+/* ---------- StockSmart log: categories, rounds and trade cards ---------- */
+.cat-analysis { --cat: #1570ef; } .cat-decisions { --cat: #dc6803; } .cat-risk { --cat: #b42318; }
+.cat-orders { --cat: #079455; } .cat-alerts { --cat: #7a2e0e; } .cat-you { --cat: #4d5761; }
+.tl { display: flex; flex-direction: column; gap: 10px; }
+.tl-view { width: 100%; }
+.tl-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.tl-cat { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border-radius: 9999px; border: 1px solid var(--sep); background: var(--surface); color: var(--text2); font-size: 0.78em; opacity: 0.55; }
+.tl-cat.on { opacity: 1; border-color: var(--cat); color: var(--text); }
+.tl-cat i, .tl-mini i { width: 8px; height: 8px; border-radius: 50%; background: var(--cat); display: inline-block; }
+.tl-cat b { font-variant-numeric: tabular-nums; }
+.tl-tag { font-size: 0.72em; color: var(--cat); border: 1px solid var(--cat); border-radius: 9999px; padding: 0 6px; }
+.tl-round { border: 1px solid var(--sep); border-radius: 12px; padding: 4px 10px; }
+.tl-round > summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; font-weight: 700; font-size: 0.9em; list-style: none; }
+.tl-round > summary::-webkit-details-marker { display: none; }
+.tl-round .ss-feed { margin-bottom: 8px; }
+.tl-summary { display: inline-flex; gap: 8px; font-weight: 500; font-size: 0.85em; color: var(--text2); }
+.tl-mini { display: inline-flex; align-items: center; gap: 4px; }
+.tl-out { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 9999px; font-size: 0.72em; font-weight: 700; white-space: nowrap; background: var(--seg-bg); color: var(--text2); }
+.out-filled, .out-partial { background: var(--success-soft); color: var(--success); }
+.out-vetoed, .out-rejected, .out-failed { background: var(--danger-soft); color: var(--danger); }
+.out-open { background: var(--c-event-soft); color: var(--c-event); }
+.tl-trades { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.tl-trade { border: 1px solid var(--sep); border-radius: 12px; padding: 10px 12px; border-inline-start: 4px solid #079455; }
+.tl-trade.side-sell { border-inline-start-color: #b42318; }
+.tl-trade-head { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; padding: 0; text-align: start; color: var(--text); font-weight: 600; font-size: 0.9em; }
+.tl-side { color: #079455; } .side-sell .tl-side { color: #b42318; }
+.tl-steps { list-style: none; margin: 8px 0 0; padding: 0 0 0 0; display: grid; gap: 6px; font-size: 0.82em; border-inline-start: 2px solid var(--sep); padding-inline-start: 10px; }
+.tl-steps b, .tl-why b { color: var(--ag); }
+.tl-why { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--raised); display: grid; gap: 6px; font-size: 0.82em; }

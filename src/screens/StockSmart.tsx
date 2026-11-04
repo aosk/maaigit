@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TradeEvent, TradeLimits, TradingState } from '../../shared/trading';
 import { api } from '../api';
 import { ago, time } from '../format';
 import { useOnRefresh } from '../refresh';
 import { useSettings } from '../settings';
 import { ChartUp, Send, Stop } from '../components/Icons';
+import { TradeLog } from '../components/TradeLog';
 
 /**
  * StockSmart: what the trading agents hold and earn today, what they are doing right now (the desk's log, live), and the
@@ -230,23 +231,9 @@ function Orders({ st, t, lang }: { st: TradingState; t: T; lang: 'ar' | 'en' }) 
 }
 
 function Feed({ st, t, lang, onAsk, onKeep }: { st: TradingState; t: T; lang: 'ar' | 'en'; onAsk: (q: string) => Promise<string>; onKeep: (text: string) => void }) {
-  const [open, setOpen] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState('');
-  // The newest first, a screenful at a time.
-  const [limit, setLimit] = useState(15);
-  const all = useMemo(() => st.events.filter((e) => e.type !== 'executor.heartbeat').reverse(), [st.events]);
-  const shown = all.slice(0, limit);
-
-  /** The deliberation behind a decision: its own events, and what the agents said about that stock in the half hour before. */
-  function discussion(e: TradeEvent): TradeEvent[] {
-    const symbol = (e.data as { symbol?: string } | undefined)?.symbol;
-    const since = Date.parse(e.ts) - 30 * 60_000;
-    return st.events.filter(
-      (x) => x.id !== e.id && ((e.correlationId && x.correlationId === e.correlationId) || (symbol && (x.data as { symbol?: string } | undefined)?.symbol === symbol && Date.parse(x.ts) >= since && Date.parse(x.ts) <= Date.parse(e.ts))),
-    );
-  }
 
   async function ask(e: FormEvent) {
     e.preventDefault();
@@ -276,28 +263,7 @@ function Feed({ st, t, lang, onAsk, onKeep }: { st: TradingState; t: T; lang: 'a
           {question.trim() && !asking && <button className="link-btn" onClick={() => { onKeep(question.trim()); setQuestion(''); }}>{t.ss.keepInstruction}</button>}
         </div>
       )}
-      {shown.length === 0 && <p className="sub">{t.ss.noEvents}</p>}
-      <ol className="ss-feed">
-        {shown.map((e) => (
-          <li key={e.id} className={`ss-ev ag-${e.actor} ev-${e.type.replace('.', '-')}`}>
-            <div className="ss-ev-head"><b>{t.ss.agentNames[e.actor] ?? e.actor}</b><time dateTime={e.ts}>{time(e.ts, lang)}</time></div>
-            <div dir="auto">{e.text}</div>
-            {e.type === 'decision.created' && (
-              <>
-                <button className="link-btn" aria-expanded={open === e.correlationId} onClick={() => setOpen(open === e.correlationId ? null : e.correlationId ?? null)}>{open === e.correlationId ? t.ss.hideWhy : t.ss.why}</button>
-                {open === e.correlationId && (
-                  <ol className="ss-thread">
-                    {discussion(e).map((x) => (
-                      <li key={x.id} className={`ag-${x.actor}`}><b>{t.ss.agentNames[x.actor] ?? x.actor}</b> <span className="sub">{time(x.ts, lang)}</span><div dir="auto">{x.text}</div></li>
-                    ))}
-                  </ol>
-                )}
-              </>
-            )}
-          </li>
-        ))}
-      </ol>
-      {all.length > limit && <button className="btn ghost" onClick={() => setLimit(limit + 25)}>{t.ss.more(all.length - limit)}</button>}
+      <TradeLog st={st} />
       {st.quotesAsOf && st.quotesSource && <p className="sub">{t.ss.prices(t.ss.sources[st.quotesSource], ago(st.quotesAsOf, lang))}</p>}
       {!st.agentsCanDecide && <p className="sub">{t.ss.noClaude}</p>}
     </section>

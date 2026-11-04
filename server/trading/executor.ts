@@ -234,6 +234,11 @@ export function reconcile(report: { cash: number; positions: Position[] }, now =
   const firstReport = live.positions.length === 0 && live.cash === 0;
   live.cash = round2(report.cash);
   live.positions = report.positions.filter((p) => p.qty > 0).map((p) => ({ symbol: p.symbol, qty: p.qty, avgCost: p.avgCost > 0 ? p.avgCost : live.positions.find((x) => x.symbol === p.symbol)?.avgCost ?? 0 }));
+  // The broker's first report is where the live day starts: before it the book was empty, not worth zero.
+  if (firstReport) {
+    live.dayStart = { day: tradingDay(now), value: round2(live.cash + live.positions.reduce((sum, p) => sum + p.qty * p.avgCost, 0)), realized: live.realized };
+    live.curve = [];
+  }
   saveTrading();
   if (diffs.length && !firstReport) {
     emit('position.drift', 'system', `حساب SNB يختلف عن المتوقع في: ${diffs.map((s) => `${s} (متوقع ${expected.get(s) ?? 0}، فعلي ${reported.get(s) ?? 0})`).join('، ')}`, { data: { diffs } }, now);

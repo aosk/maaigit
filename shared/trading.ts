@@ -174,3 +174,27 @@ export interface TradingState {
   /** Claude is set up (without it the agents only watch). */
   agentsCanDecide: boolean;
 }
+
+/** The log's categories, for filtering and counting: what the agents read, what they decided, the risk gate, orders, alerts, and you. */
+export type LogCategory = 'analysis' | 'decisions' | 'risk' | 'orders' | 'alerts' | 'you';
+export const LOG_CATEGORIES: LogCategory[] = ['analysis', 'decisions', 'risk', 'orders', 'alerts', 'you'];
+
+export function categoryOf(e: Pick<TradeEvent, 'type'>): LogCategory {
+  if (e.type === 'decision.created') return 'decisions';
+  if (e.type === 'risk.verdict') return 'risk';
+  if (e.type.startsWith('order.')) return 'orders';
+  if (e.type === 'agent.observation') return 'analysis';
+  if (e.type.startsWith('user.') || e.type === 'agent.answer' || e.type === 'system.limits') return 'you';
+  return 'alerts';
+}
+
+/** How one decision ended, from its events on the log. */
+export type TradeOutcome = 'filled' | 'partial' | 'vetoed' | 'open' | 'expired' | 'rejected' | 'failed' | 'cancelled';
+
+export function outcomeOf(thread: Pick<TradeEvent, 'type' | 'data'>[]): TradeOutcome {
+  const last = [...thread].reverse().find((e) => e.type.startsWith('order.') && e.type !== 'order.progress' && e.type !== 'order.sent' && e.type !== 'order.queued');
+  if (last) return last.type === 'order.filled' ? 'filled' : (last.type.slice(6) as TradeOutcome);
+  const verdict = thread.find((e) => e.type === 'risk.verdict');
+  if ((verdict?.data as { verdict?: string } | undefined)?.verdict === 'veto') return 'vetoed';
+  return 'open';
+}

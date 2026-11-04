@@ -125,6 +125,12 @@ describe('the SNB desktop bot', () => {
     expect(trading.books.live.positions[0].qty).toBe(20);
   });
 
+  it('starts the live day from the broker’s first report, not from an empty book', () => {
+    reconcile({ cash: 25_000, positions: [{ symbol: '2222', qty: 100, avgCost: 27 }] }, OPEN);
+    expect(trading.books.live.dayStart.value).toBe(27_700);
+    expect(trading.halted).toBe(false);
+  });
+
   it('never carries paper orders into live, or the other way', () => {
     const paper = submit('d11', '1120', 'buy', 1, 1, OPEN); // a limit far below the price: stays open
     expect(paper.status).toBe('sent');
