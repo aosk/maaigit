@@ -6,6 +6,7 @@ import { handledOf } from '../mail-handled.js';
 import { allEvents, save, state } from '../store.js';
 import { dayKey } from '../usage.js';
 import { computeStress, weekOf } from '../stress.js';
+import { stocksLoad } from '../trading/health.js';
 import type { MailItem } from '../../shared/types.js';
 
 /**
@@ -71,6 +72,7 @@ export function briefingFacts(lang: Lang, now = new Date()): BriefingFacts {
     whatsapp: { waiting: wa.size, important: waImportant },
     reminders: { dueToday: dueToday.length, late: dueToday.filter((r) => Date.parse(r.at!) < now.getTime()).length },
     minutesToNext,
+    stocks: stocksLoad(now),
   });
   // The day's highest score is kept, so the week shows how loaded each day got.
   if (stress.score > (state.stressDays[today] ?? 0)) {

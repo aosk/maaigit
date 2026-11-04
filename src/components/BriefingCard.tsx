@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Briefing, BriefingFacts } from '../../shared/types';
 import type { DayPeriod } from '../../shared/schedule';
 import { dayTime, time } from '../format';
@@ -51,6 +51,7 @@ export function BriefingCard({
 }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
+  const [full, setFull] = useState(false);
   const shown = brief?.period ?? period;
   const fmt = (x: number) => x.toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-GB');
 
@@ -83,21 +84,18 @@ export function BriefingCard({
       </svg>
       <div className="brief-head">
         <span className="brief-icon" aria-hidden="true">{PERIOD_ICON[shown]}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 className="brief-title">{t.briefingTitle[shown]}</h2>
-          <div className="brief-sub">{t.briefingSub[shown]}</div>
-        </div>
+        <h2 className="brief-title" title={t.briefingSub[shown]}>{t.briefingTitle[shown]}</h2>
       </div>
 
-      {brief ? <p className="brief-text" aria-live="polite" dir="auto">{brief.text}</p> : <div className="skeleton" aria-label={t.loading}><span /><span /></div>}
+      {brief ? <p className="brief-text" aria-live="polite" dir="auto" data-full={full} onClick={() => setFull(!full)} title={full ? undefined : t.briefMore}>{brief.text}</p> : <div className="skeleton" aria-label={t.loading}><span /><span /></div>}
 
       {next && (
         <button type="button" className="brief-next" onClick={() => onOpenEvent(next.id)} aria-haspopup="dialog">
           <span className="bar" aria-hidden="true" />
           <span style={{ flex: 1, minWidth: 0 }}>
-            <span className="label" style={{ display: 'block' }}>{t.briefNext}</span>
-            <span className="what" style={{ display: 'block' }} dir="auto">{next.title}</span>
-            <span className="when" style={{ display: 'block' }}>{when}</span>
+            <span className="label">{t.briefNext}</span>
+            <span className="what" dir="auto">{next.title}</span>
+            <span className="when">{when}</span>
           </span>
         </button>
       )}
@@ -114,10 +112,9 @@ export function BriefingCard({
           <ul className="brief-tiles" aria-label={t.briefJump}>
             {tiles.map((c) => (
               <li key={c.key}>
-                <button type="button" className={`brief-tile ${c.kind}${c.urgent ? ' urgent' : ''}`} onClick={c.go}>
-                  <span className="tile-label"><i aria-hidden="true" />{c.label}</span>
+                <button type="button" className={`brief-tile ${c.kind}${c.urgent ? ' urgent' : ''}`} onClick={c.go} title={c.meta} aria-label={`${c.label}: ${fmt(c.value)}${c.meta ? `, ${c.meta}` : ''}`}>
                   <span className="tile-value">{fmt(c.value)}</span>
-                  {c.meta && <span className="tile-meta">{c.meta}</span>}
+                  <span className="tile-label"><i aria-hidden="true" />{c.label}</span>
                 </button>
               </li>
             ))}
@@ -127,8 +124,8 @@ export function BriefingCard({
 
       <div className="row brief-actions">
         <button className="btn on-dark grow" onClick={onPlan}>{t.planMyDay}</button>
-        <button className="btn on-dark-outline grow" onClick={onListen} disabled={!brief}>
-          <Speaker size={18} />{speaking ? t.stop : t.listen}
+        <button className="btn on-dark-outline" onClick={onListen} disabled={!brief} aria-label={speaking ? t.stop : t.listen} title={speaking ? t.stop : t.listen}>
+          <Speaker size={18} />
         </button>
       </div>
     </section>

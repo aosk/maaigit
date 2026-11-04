@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { Stress, StressFactor } from '../../shared/types';
 import { askAssistant } from '../nav';
 import { useSettings } from '../settings';
-import { Bell, Calendar, Chat, Check, Clock, Inbox } from './Icons';
+import { Bell, Calendar, ChartUp, Chat, Check, Clock, Inbox } from './Icons';
 
 const ICON: Record<StressFactor, ReactNode> = {
   schedule: <Calendar size={18} />,
@@ -11,6 +11,7 @@ const ICON: Record<StressFactor, ReactNode> = {
   whatsapp: <Chat size={18} />,
   reminders: <Bell size={18} />,
   time: <Clock size={18} />,
+  stocks: <ChartUp size={18} />,
 };
 
 const levelOf = (score: number) => (score < 25 ? 'calm' : score < 50 ? 'steady' : score < 75 ? 'busy' : 'heavy');
@@ -31,19 +32,17 @@ export function StressCard({ stress }: { stress: Stress }) {
   return (
     <section className="card load" data-level={stress.level} aria-label={t.stressTitle}>
       <div className="load-head">
-        <div>
-          <div className="eyebrow">{t.stressTitle}</div>
+        <div className="row" style={{ gap: 8, minWidth: 0 }}>
+          <span className="eyebrow" style={{ margin: 0 }}>{t.stressTitle}</span>
           <span className="load-level">{level}</span>
         </div>
-        <div className="load-score" aria-hidden="true">{num(stress.score)}<span style={{ fontSize: '0.4em', fontWeight: 600, color: 'var(--text2)' }}> /{num(100)}</span></div>
+        <div className="load-score" aria-hidden="true">{num(stress.score)}<span style={{ fontSize: '0.45em', fontWeight: 600, color: 'var(--text2)' }}> /{num(100)}</span></div>
       </div>
 
       <div className="gauge" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={stress.score} aria-valuetext={`${t.stressOutOf(stress.score)}, ${level}`} aria-label={t.stressTitle}>
         <i style={{ left: `${Math.min(97, Math.max(3, stress.score))}%` }} />
       </div>
-      <p className="sub">{t.stressScale}</p>
-
-      <p className="sub" style={{ fontSize: '0.9em' }}>
+      <p className="sub" style={{ fontSize: '0.88em' }}>
         {drivers.length ? `${t.stressDrivers(drivers.join(lang === 'ar' ? ' و' : ' and '))}. ` : `${t.stressNone} `}
         {t.stressAdvice[stress.level]}
       </p>
@@ -53,13 +52,14 @@ export function StressCard({ stress }: { stress: Stress }) {
 
       <details className="load-why">
         <summary>{t.stressWhy}</summary>
+        <p className="sub" style={{ marginTop: 6 }}>{t.stressScale}</p>
         <div style={{ marginTop: 8 }}>
           {stress.factors.map((f) => (
             <div key={f.key} className={`factor ${f.key}`}>
               <span className="ic" aria-hidden="true">{ICON[f.key]}</span>
               <span>
                 <div className="name">{t.stressFactor[f.key]}</div>
-                <div className="what">{f.count > 0 || f.points > 0 ? t.stressCount[f.key](f.count) : '—'}</div>
+                <div className="what">{f.count !== 0 || f.points > 0 ? t.stressCount[f.key](f.count) : '—'}</div>
               </span>
               <span className="pts">{num(f.points)}/{num(f.max)}</span>
               <span className="bar" aria-hidden="true"><span style={{ width: `${(f.points / f.max) * 100}%` }} /></span>

@@ -1,7 +1,9 @@
 import type { HealthCheck } from '../../shared/types.js';
 import type { TradingSummary } from '../../shared/trading.js';
 import { client } from '../ai/claude.js';
+import type { StressInputs } from '../stress.js';
 import { botStale } from './executor.js';
+import { dayPnl } from './portfolio.js';
 import { currentQuotes } from './market.js';
 import { STALE_QUOTE_MS } from './risk.js';
 import { trading } from './store.js';
@@ -11,6 +13,23 @@ import { marketClock } from './tadawul.js';
  * StockSmart's part in Settings → Connections and the server health checks: the desk (paper or live, stopped or not),
  * its prices, its agents, and the SNB desktop bot. It reads what the desk already knows, so checking costs nothing.
  */
+
+/** StockSmart's part in the day's load (see server/stress.ts). */
+export function stocksLoad(now = new Date()): NonNullable<StressInputs['stocks']> {
+  const book = trading.books[trading.mode];
+  const prices = new Map([...currentQuotes()].map(([s, q]) => [s, q.price]));
+  const pnl = dayPnl(book, prices);
+  const live = trading.mode === 'live';
+  const base = live ? book.dayStart.value : trading.limits.capital;
+  return {
+    dayPnl: pnl,
+    dayPnlPct: base > 0 ? (pnl / base) * 100 : 0,
+    lossLimitPct: trading.limits.dailyLossPct,
+    live,
+    halted: trading.halted,
+    botProblem: live && (!trading.bot.keyHash || botStale(now.getTime()) || !trading.bot.brokerSession),
+  };
+}
 
 export function tradingSummary(now = new Date()): TradingSummary {
   const newest = [...currentQuotes().values()].sort((a, b) => b.asOf.localeCompare(a.asOf))[0];

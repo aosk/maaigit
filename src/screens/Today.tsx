@@ -194,6 +194,8 @@ export function Today() {
         }}
       />
 
+      {facts && <StressCard stress={facts.stress} />}
+
       <div className="between" id="today-schedule">
         <h2 className="h2 sec sec-event">{t.schedule}{facts && facts.events.total > 0 && <CountBadge kind="event" n={facts.events.left} of={facts.events.total} />}</h2>
         {next && (
@@ -256,8 +258,6 @@ export function Today() {
           </div>
         ))}
       </section>
-
-      {facts && <StressCard stress={facts.stress} />}
 
       {upcoming.length > 0 && (
         <>

@@ -270,7 +270,7 @@ export interface BriefingFacts {
   stress: Stress;
 }
 
-export type StressFactor = 'schedule' | 'tasks' | 'email' | 'whatsapp' | 'reminders' | 'time';
+export type StressFactor = 'schedule' | 'tasks' | 'email' | 'whatsapp' | 'reminders' | 'time' | 'stocks';
 export type StressLevel = 'calm' | 'steady' | 'busy' | 'heavy';
 
 /** The day's load as a score out of 100, with what it is made of. Every point has a visible cause. */

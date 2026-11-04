@@ -17,7 +17,7 @@ describe('the day\'s load score', () => {
 
   it('is made of visible parts that add up to the score', () => {
     const s = computeStress(with_({ tasks: { overdue: 2, dueToday: 1 }, email: { toDecide: 2, toReply: 1, important: 1, unreadUnsorted: 0 }, whatsapp: { waiting: 2, important: 0 }, events: { left: 3, backToBack: 1, hoursLeft: 4 } }));
-    expect(s.factors.map((f) => f.key)).toEqual(['schedule', 'tasks', 'email', 'whatsapp', 'reminders', 'time']);
+    expect(s.factors.map((f) => f.key)).toEqual(['schedule', 'tasks', 'email', 'whatsapp', 'reminders', 'time', 'stocks']);
     expect(s.score).toBe(s.factors.reduce((a, f) => a + f.points, 0));
     expect(s.factors.find((f) => f.key === 'tasks')).toMatchObject({ count: 3, points: 13 }); // 2 overdue x5 + 1 due today x3
     expect(s.factors.find((f) => f.key === 'email')).toMatchObject({ count: 3, points: 13 }); // 2x4 + 1x2 + 1 important x3
@@ -25,13 +25,13 @@ describe('the day\'s load score', () => {
   });
 
   it('never lets one part count for more than its ceiling, and tops out at 100', () => {
-    const worst = computeStress({ events: { left: 40, backToBack: 30, hoursLeft: 20 }, tasks: { overdue: 99, dueToday: 99 }, email: { toDecide: 99, toReply: 99, important: 99, unreadUnsorted: 99 }, whatsapp: { waiting: 99, important: 99 }, reminders: { dueToday: 99, late: 99 }, minutesToNext: 5 });
+    const worst = computeStress({ events: { left: 40, backToBack: 30, hoursLeft: 20 }, tasks: { overdue: 99, dueToday: 99 }, email: { toDecide: 99, toReply: 99, important: 99, unreadUnsorted: 99 }, whatsapp: { waiting: 99, important: 99 }, reminders: { dueToday: 99, late: 99 }, minutesToNext: 5, stocks: { dayPnl: -9000, dayPnlPct: -9, lossLimitPct: 2, live: true, halted: true, botProblem: true } });
     expect(worst.score).toBe(100);
     expect(worst.level).toBe('heavy');
     for (const f of worst.factors) expect(f.points).toBeLessThanOrEqual(f.max);
     expect(worst.factors.reduce((a, f) => a + f.max, 0)).toBe(100);
     // a pile of emails alone cannot make the whole day look terrible
-    expect(computeStress(with_({ email: { toDecide: 99, toReply: 99, important: 99, unreadUnsorted: 99 } })).score).toBe(20);
+    expect(computeStress(with_({ email: { toDecide: 99, toReply: 99, important: 99, unreadUnsorted: 99 } })).score).toBe(18);
   });
 
   it('counts an overdue task more than one due today, and a late reminder more than one due later', () => {
@@ -84,5 +84,28 @@ describe('the day\'s load score', () => {
     expect(week).toHaveLength(7);
     expect(week.map((d) => d.day)).toEqual(['2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15']);
     expect(week.map((d) => d.score)).toEqual([0, 0, 0, 0, 40, 0, 62]);
+  });
+
+  describe('StockSmart', () => {
+    const stocks = (patch: Partial<NonNullable<StressInputs['stocks']>>) => with_({ stocks: { dayPnl: 0, dayPnlPct: 0, lossLimitPct: 2, live: true, halted: false, botProblem: false, ...patch } });
+    const pts = (i: StressInputs) => computeStress(i).factors.find((f) => f.key === 'stocks')!;
+
+    it('adds nothing on a gain or a flat day', () => {
+      expect(pts(stocks({ dayPnl: 1500, dayPnlPct: 1.5 })).points).toBe(0);
+      expect(pts(stocks({})).points).toBe(0);
+    });
+
+    it('grows with a loss toward the daily loss limit, half as much on paper', () => {
+      expect(pts(stocks({ dayPnl: -1000, dayPnlPct: -1 }))).toMatchObject({ points: 5, count: -1000, max: 10 });
+      expect(pts(stocks({ dayPnl: -2000, dayPnlPct: -2 })).points).toBe(10);
+      expect(pts(stocks({ dayPnl: -5000, dayPnlPct: -5 })).points).toBe(10); // capped
+      expect(pts(stocks({ dayPnl: -2000, dayPnlPct: -2, live: false })).points).toBe(5);
+    });
+
+    it('counts a stop, and a failing SNB bot only when real money is on', () => {
+      expect(pts(stocks({ halted: true })).points).toBe(6);
+      expect(pts(stocks({ botProblem: true })).points).toBe(4);
+      expect(pts(stocks({ botProblem: true, live: false })).points).toBe(0);
+    });
   });
 });

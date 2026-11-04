@@ -782,3 +782,28 @@ html[dir='rtl'] .ss-chev svg { transform: scaleX(-1); }
 .tl-steps { list-style: none; margin: 8px 0 0; padding: 0 0 0 0; display: grid; gap: 6px; font-size: 0.82em; border-inline-start: 2px solid var(--sep); padding-inline-start: 10px; }
 .tl-steps b, .tl-why b { color: var(--ag); }
 .tl-why { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--raised); display: grid; gap: 6px; font-size: 0.82em; }
+
+/* The briefing and the day's pace, compact: the summary, the next meeting on one line, the counts as a row of small tiles. */
+.brief { gap: 10px; padding: 14px 16px; }
+.brief-head { gap: 10px; }
+.brief-icon { width: 30px; height: 30px; }
+.brief-icon svg { width: 18px; height: 18px; }
+.brief-title { font-size: 1em; flex: 1; min-width: 0; }
+.brief-text { font-size: 0.92em; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.brief-next { padding: 8px 10px; gap: 10px; border-radius: 10px; }
+.brief-next > span:last-child { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 0; }
+.brief-next .label { font-size: 0.7em; width: 100%; }
+.brief-next .what { font-size: 0.92em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.brief-next .when { font-size: 0.8em; }
+.brief-bar { height: 4px; }
+.brief-tiles { grid-template-columns: repeat(auto-fit, minmax(58px, 1fr)); gap: 6px; }
+.brief-tile { gap: 2px; padding: 8px 6px; align-items: center; text-align: center; border-radius: 10px; }
+.brief-tile .tile-value { font-size: 1.25em; line-height: 1.1; }
+.brief-tile .tile-label { font-size: 0.68em; white-space: nowrap; }
+.brief-actions .btn { min-height: 40px; padding-block: 6px; font-size: 0.9em; }
+.load { gap: 8px; padding: 14px 16px; }
+.load-score { font-size: 1.6em; }
+.load .gauge { height: 8px; }
+.load .gauge i { top: -4px; height: 16px; }
+.brief-text { cursor: pointer; }
+.brief-text[data-full='true'] { -webkit-line-clamp: unset; display: block; }
