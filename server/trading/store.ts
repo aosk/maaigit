@@ -38,7 +38,7 @@ export interface TradingData {
   ordersToday: { day: string; count: number };
   agents: Partial<Record<AgentId, { enabled: boolean; lastRunAt?: string; lastError?: string }>>;
   /** The desktop bot: its key (only the hash), the secret commands are signed with, and what it last said. */
-  bot: { keyHash?: string; keyHint?: string; signSecret?: string; lastSeen?: string; brokerSession?: boolean; expiresInSec?: number };
+  bot: { keyHash?: string; keyHint?: string; signSecret?: string; lastSeen?: string; brokerSession?: boolean; expiresInSec?: number; practice?: boolean };
 }
 
 export const DEFAULT_LIMITS: TradeLimits = { capital: 100_000, maxOrder: 10_000, maxPerSymbolPct: 20, maxPerSectorPct: 35, maxOrdersPerDay: 8, dailyLossPct: 2, cycleMinutes: 15 };

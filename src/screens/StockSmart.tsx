@@ -169,7 +169,7 @@ function Hero({ st, t }: { st: TradingState; t: T }) {
 
 function AgentChips({ st, t }: { st: TradingState; t: T }) {
   const ex = st.executor;
-  const exec = st.mode === 'paper' ? t.ss.paperExecutor : !ex.connected ? t.ss.botOff : ex.stale ? t.ss.botStale : !ex.brokerSession ? t.ss.botLoggedOut : t.ss.botOn;
+  const exec = st.mode === 'paper' ? t.ss.paperExecutor : !ex.connected ? t.ss.botOff : ex.stale ? t.ss.botStale : !ex.brokerSession ? t.ss.botLoggedOut : ex.practice ? t.ss.botPractice : t.ss.botOn;
   return (
     <div className="ss-agents">
       {st.agents.filter((a) => a.id !== 'executor').map((a) => (

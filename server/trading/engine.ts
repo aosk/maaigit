@@ -193,7 +193,7 @@ export function tradingView(now = new Date()): TradingState {
     orders: trading.orders.slice(-40).reverse(),
     events: trading.events.slice(-150),
     agents: (['technical', 'news', 'decision', 'risk', 'executor'] as const).map((id) => ({ id, enabled: trading.agents[id]?.enabled !== false, lastRunAt: trading.agents[id]?.lastRunAt, lastError: trading.agents[id]?.lastError })),
-    executor: { connected: Boolean(trading.bot.keyHash), keyHint: trading.bot.keyHint, lastSeen: trading.bot.lastSeen, brokerSession: Boolean(trading.bot.brokerSession), stale: Boolean(trading.bot.keyHash) && botStale(now.getTime()) },
+    executor: { connected: Boolean(trading.bot.keyHash), keyHint: trading.bot.keyHint, lastSeen: trading.bot.lastSeen, brokerSession: Boolean(trading.bot.brokerSession), practice: Boolean(trading.bot.practice), stale: Boolean(trading.bot.keyHash) && botStale(now.getTime()) },
     clock: marketClock(now),
     quotesAsOf: newest,
     quotesSource: newest ? [...quotes.values()].find((q) => q.asOf === newest)?.source : undefined,

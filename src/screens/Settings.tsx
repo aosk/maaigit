@@ -235,7 +235,7 @@ function TradingConns({ s }: { s: TradingSummary }) {
         {!s.halted && t.ssConnKeys} <a href="#/stocks">{t.ss.open}</a>
       </Conn>
       <Conn state={!bot.connected ? (live ? 'bad' : 'off') : bot.stale || !bot.brokerSession ? 'bad' : 'on'} name={t.snbConn}>
-        {!bot.connected ? t.snbOff : bot.stale ? t.snbStale : !bot.brokerSession ? t.snbLoggedOut : t.snbOn(seen)}
+        {!bot.connected ? t.snbOff : bot.stale ? t.snbStale : !bot.brokerSession ? t.snbLoggedOut : bot.practice ? t.snbPractice : t.snbOn(seen)}
       </Conn>
     </>
   );

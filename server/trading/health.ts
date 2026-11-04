@@ -27,7 +27,7 @@ export function tradingSummary(now = new Date()): TradingSummary {
     agentsCanDecide: Boolean(client),
     lastRoundAt: runs.map((r) => r!.lastRunAt).filter((x): x is string => Boolean(x)).sort().pop(),
     agentErrors: (['technical', 'news', 'decision'] as const).filter((id) => trading.agents[id]?.lastError).map((id) => `${id}: ${trading.agents[id]!.lastError}`),
-    bot: { connected: Boolean(trading.bot.keyHash), stale: Boolean(trading.bot.keyHash) && botStale(now.getTime()), brokerSession: Boolean(trading.bot.brokerSession), lastSeen: trading.bot.lastSeen },
+    bot: { connected: Boolean(trading.bot.keyHash), stale: Boolean(trading.bot.keyHash) && botStale(now.getTime()), brokerSession: Boolean(trading.bot.brokerSession), practice: Boolean(trading.bot.practice), lastSeen: trading.bot.lastSeen },
   };
 }
 
@@ -60,6 +60,7 @@ export function tradingChecks(now = new Date()): HealthCheck[] {
   if (!bot.connected) checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: live ? 'fail' : 'off', detail: 'Not connected. Needed only for real money.', fix: 'StockSmart → Limits and settings → Connect the SNB bot (a key and a signing secret, shown once).' });
   else if (bot.stale) checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: live ? 'fail' : 'warn', detail: `Not heard from since ${ago(bot.lastSeen, now)}.`, fix: 'Start the bot on your computer and keep it awake; real orders wait until it is back.' });
   else if (!bot.brokerSession) checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: live ? 'fail' : 'warn', detail: 'Running, but logged out at SNB Capital.', fix: 'Log in again on the bot (the OTP comes to your phone).' });
+  else if (bot.practice) checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: live ? 'warn' : 'ok', detail: `Running in practice mode: it goes through each order and places nothing; heard from ${ago(bot.lastSeen, now)}.`, fix: live ? 'Trading is LIVE but the bot only practises, so no order reaches SNB.' : undefined });
   else checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: 'ok', detail: `Running and logged in at SNB; heard from ${ago(bot.lastSeen, now)}.` });
   return checks;
 }

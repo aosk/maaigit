@@ -115,6 +115,8 @@ tradeBotApi.post('/heartbeat', (req, res) => {
   const was = trading.bot.brokerSession;
   trading.bot.brokerSession = req.body?.brokerSession === true;
   trading.bot.expiresInSec = num(req.body?.expiresInSec) >= 0 ? num(req.body.expiresInSec) : undefined;
+  // A bot in practice mode goes through every step and places nothing: shown everywhere so it is never mistaken for live.
+  trading.bot.practice = req.body?.practice === true;
   const quotes: unknown = req.body?.quotes;
   if (Array.isArray(quotes)) for (const q of quotes.slice(0, 50) as Record<string, unknown>[]) noteBotQuote(typeof q?.symbol === 'string' ? q.symbol : '', num(q?.price), num(q?.prevClose));
   // Logged out while trading real money: stop, and ask the user to log in again (the OTP is theirs).

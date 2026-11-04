@@ -1,5 +1,7 @@
 # StockSmart — the SNB desktop bot protocol
 
+The bot itself is in `snb-bot/` (its README says how to set it up). This page is the protocol it speaks.
+
 The desktop bot runs on your own computer, logs in to SNB Capital, and places **only** the orders StockSmart sends it.
 It can fetch commands and report what happened; it cannot propose, approve or change anything. Your broker login, OTP
 and session cookies never leave the computer: the server has no endpoint that asks for them.
@@ -21,7 +23,7 @@ GET  /trade/v1/go/:commandId        { go, reason? }                     ask righ
 POST /trade/v1/progress             { commandId, stage }                "logging in", "form filled", "submitted"
 POST /trade/v1/result               { commandId, status, filledQty?, avgPrice?, brokerOrderId?, error? }
 POST /trade/v1/positions            { cash, positions: [{ symbol, qty, avgCost }] }   every few minutes
-POST /trade/v1/heartbeat            { brokerSession, expiresInSec?, quotes?: [{ symbol, price, prevClose }] }  every minute
+POST /trade/v1/heartbeat            { brokerSession, expiresInSec?, practice?, quotes?: [{ symbol, price, prevClose }] }  every minute
 ```
 
 `status` is `filled`, `partial`, `rejected` (the broker refused it) or `failed` (the bot could not place it).
@@ -49,7 +51,7 @@ POST /trade/v1/heartbeat            { brokerSession, expiresInSec?, quotes?: [{ 
 7. **Dead-man switch:** if the server has not answered for 3 minutes, stop placing anything until it answers again.
 8. **Report the account** (`/positions`) every few minutes from the broker's own portfolio screen. If it differs from
    what StockSmart expected, trading halts and you get a notification.
-9. **Heartbeat** with `brokerSession: false` when you are logged out; the server halts real trading and asks the user
+9. **Heartbeat** with `practice: true` while it only practises (shown in maai), and `brokerSession: false` when you are logged out; the server halts real trading and asks the user
    to log in again (the OTP is on their phone).
 
 ## Before real money

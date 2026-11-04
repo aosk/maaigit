@@ -136,6 +136,8 @@ interface ExecutorHealth {
   brokerSession: boolean;
   /** Not heard from for longer than the dead-man interval. */
   stale: boolean;
+  /** The bot runs in practice mode: it places nothing at the broker. */
+  practice: boolean;
 }
 
 export interface MarketClock {
@@ -189,7 +191,7 @@ export interface TradingSummary {
   agentsCanDecide: boolean;
   lastRoundAt?: string;
   agentErrors: string[];
-  bot: { connected: boolean; stale: boolean; brokerSession: boolean; lastSeen?: string };
+  bot: { connected: boolean; stale: boolean; brokerSession: boolean; practice: boolean; lastSeen?: string };
 }
 
 /** The log's categories, for filtering and counting: what the agents read, what they decided, the risk gate, orders, alerts, and you. */

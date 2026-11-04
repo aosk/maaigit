@@ -10,7 +10,7 @@ const when = (iso?: string) =>
 export function SnbBot({ s }: { s: TradingSummary }) {
   const b = s.bot;
   const live = s.mode === 'live';
-  const state = !b.connected ? 'Not connected' : b.stale ? 'Not heard from' : b.brokerSession ? 'Running, logged in at SNB' : 'Running, logged out at SNB';
+  const state = !b.connected ? 'Not connected' : b.stale ? 'Not heard from' : !b.brokerSession ? 'Running, logged out at SNB' : b.practice ? 'Practice mode (places nothing)' : 'Running, logged in at SNB';
   const bad = (b.connected && (b.stale || !b.brokerSession)) || (live && !b.connected);
   return (
     <section aria-label="SNB bot" className="admin-card">
