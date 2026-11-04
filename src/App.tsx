@@ -14,7 +14,7 @@ import { LOCKED_EVENT, api } from './api';
 import { AlertBanner } from './components/AlertBanner';
 import { Wordmark } from './components/Logo';
 import { worker } from './push';
-import { readRoute, type Route } from './nav';
+import { readRoute, retap, type Route } from './nav';
 import { useMailCount } from './useMailCount';
 import { PullToRefresh } from './components/PullToRefresh';
 import { refreshAll } from './refresh';
@@ -116,7 +116,18 @@ export function App() {
       <nav className="tabs" aria-label={t.tabsLabel}>
         <div className="tabs-brand"><Wordmark width={112} title={`${t.appName} | maai`} /></div>
         {tabs.map((tab) => (
-          <a key={tab.route} className="tab" href={`#/${tab.route}`} aria-current={(route === 'profile' ? 'settings' : route) === tab.route ? 'page' : undefined}>
+          <a
+            key={tab.route}
+            className="tab"
+            href={`#/${tab.route}`}
+            onClick={(e) => {
+              // Already here: no navigation happens, so tell the screen to go back to its start, and scroll up.
+              if (route !== tab.route) return;
+              e.preventDefault();
+              retap(tab.route);
+              window.scrollTo({ top: 0, behavior: document.documentElement.dataset.motion === 'reduce' ? 'auto' : 'smooth' });
+            }}
+            aria-current={(route === 'profile' ? 'settings' : route) === tab.route ? 'page' : undefined}>
             {tab.icon}
             {tab.label}
             {tab.route === 'inbox' && unread ? <span className="tab-badge" aria-label={t.unreadEmails(unread)}>{unread > 99 ? '99+' : unread}</span> : null}

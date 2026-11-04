@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 /** Moving between screens. Hash routes (#/assistant) so links work without any server setup. */
 
 export type Route = 'today' | 'assistant' | 'inbox' | 'stocks' | 'news' | 'settings' | 'profile' | 'admin';
@@ -50,4 +52,23 @@ export function openInbox(view: 'email' | 'whatsapp') {
     // it then opens on every source
   }
   go('inbox');
+}
+
+/** Tapping the tab of the screen you are on: the screen goes back to its start (e.g. «رسائلك» back to the list). */
+const RETAP = 'maai:retap';
+
+export function retap(route: Route) {
+  window.dispatchEvent(new CustomEvent<Route>(RETAP, { detail: route }));
+}
+
+export function useOnRetap(route: Route, run: () => void) {
+  const latest = useRef(run);
+  useEffect(() => {
+    latest.current = run;
+  });
+  useEffect(() => {
+    const on = (e: Event) => (e as CustomEvent<Route>).detail === route && latest.current();
+    window.addEventListener(RETAP, on);
+    return () => window.removeEventListener(RETAP, on);
+  }, [route]);
 }

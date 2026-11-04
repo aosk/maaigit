@@ -4,7 +4,7 @@ import { api } from '../api';
 import { cachedFeed, keepFeed } from '../inboxCache';
 import { isUnread, markSeen } from '../inboxSeen';
 import { ago, dayHeading, dayTime, sameDay, time } from '../format';
-import { askAssistant } from '../nav';
+import { askAssistant, useOnRetap } from '../nav';
 import { useSettings } from '../settings';
 import { useAction } from '../useAction';
 import { useOnRefresh } from '../refresh';
@@ -236,6 +236,12 @@ export function Inbox() {
     }
   });
   const [showSummary, setShowSummary] = useState(false);
+  // Tapping «رسائلك» while a message is open goes back to the list.
+  useOnRetap('inbox', () => {
+    setOpenKey(null);
+    setReplying(null);
+    setAdding(false);
+  });
   const [now, setNow] = useState(() => Date.now());
   // Read and unread live on this device; this makes the list show a change at once.
   const [, setReadTick] = useState(0);
