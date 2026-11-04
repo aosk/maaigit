@@ -82,9 +82,9 @@ tradingRoutes.put('/trading/limits', (req, res) => {
     }
   }
   if (changes.length) emit('system.limits', 'user', `غيّرت الحدود: ${changes.join(' · ')}`);
-  // Paper money follows the capital while nothing is invested.
+  // Paper money follows the capital while nothing is invested (only when the capital itself changed).
   const paper = trading.books.paper;
-  if (paper.positions.length === 0 && trading.orders.every((o) => o.mode !== 'paper' || !['queued', 'sent', 'partial'].includes(o.status))) {
+  if (changes.some((c) => c.startsWith('capital:')) && paper.positions.length === 0 && trading.orders.every((o) => o.mode !== 'paper' || !['queued', 'sent', 'partial'].includes(o.status))) {
     paper.cash = trading.limits.capital;
     paper.dayStart.value = paper.cash;
   }

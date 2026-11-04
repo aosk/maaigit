@@ -83,7 +83,10 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
     const prices = new Map([...ctx.quotes].map(([s, q]) => [s, q.price]));
     const reserved = ctx.openOrders.filter((o) => o.side === 'buy').reduce((sum, o) => sum + (o.qty - o.filledQty) * o.limitPrice, 0);
     const { total, bySymbol } = exposure(ctx.book.positions, prices);
-    const sectorNow = ctx.book.positions.filter((x) => ctx.universe.find((i) => i.symbol === x.symbol)?.sector === stock.sector).reduce((sum, x) => sum + (bySymbol.get(x.symbol) ?? 0), 0);
+    const sectorOf = (symbol: string) => ctx.universe.find((i) => i.symbol === symbol)?.sector;
+    // Buys still waiting in the same sector count too, or several in one round could pass the limit together.
+    const sectorReserved = ctx.openOrders.filter((o) => o.side === 'buy' && sectorOf(o.symbol) === stock.sector).reduce((sum, o) => sum + (o.qty - o.filledQty) * o.limitPrice, 0);
+    const sectorNow = ctx.book.positions.filter((x) => sectorOf(x.symbol) === stock.sector).reduce((sum, x) => sum + (bySymbol.get(x.symbol) ?? 0), 0) + sectorReserved;
     const price = limitPrice * 1.002; // with fees
     cut(ctx.limits.maxOrder / price, `Reduced to the ${ctx.limits.maxOrder} SAR limit per order.`);
     cut((ctx.book.cash - reserved) / price, 'Reduced to the cash available.');

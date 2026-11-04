@@ -109,6 +109,7 @@ export type TradeEventType =
   | 'order.rejected'
   | 'order.expired'
   | 'order.failed'
+  | 'order.cancelled'
   | 'position.drift'
   | 'system.halted'
   | 'system.resumed'

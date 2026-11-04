@@ -44,11 +44,14 @@ export async function refreshQuotes(now = new Date(), fetcher: typeof fetch = fe
         const meta = chart.meta;
         const price = Number(meta?.regularMarketPrice);
         if (!(price > 0)) throw new Error('no price');
-        const closes = (chart.indicators?.quote?.[0]?.close ?? []).filter((x): x is number => typeof x === 'number');
-        const volumes = (chart.indicators?.quote?.[0]?.volume ?? []).filter((x): x is number => typeof x === 'number');
+        // Closes and volumes kept in step: a bar missing either is dropped from both.
+        const bars = chart.indicators?.quote?.[0];
+        const days = (bars?.close ?? []).map((c, i) => [c, bars?.volume?.[i]] as const).filter((d): d is readonly [number, number] => typeof d[0] === 'number' && typeof d[1] === 'number');
+        const closes = days.map((d) => d[0]);
+        const volumes = days.map((d) => d[1]);
         // The last daily bar is today's: the history is the days before it.
         const prevClose = Number(meta?.chartPreviousClose ?? meta?.previousClose) || closes[closes.length - 2] || price;
-        histories.set(symbol, { day, history: { closes: closes.slice(0, -1), volumes } });
+        histories.set(symbol, { day, history: { closes: closes.slice(0, -1), volumes: volumes.slice(0, -1) } });
         const at = Number(meta?.regularMarketTime) * 1000;
         quotes.set(symbol, { symbol, price, prevClose: closes.length > 1 ? closes[closes.length - 2] : prevClose, asOf: new Date(at > 0 ? at : now.getTime()).toISOString(), source: 'yahoo' });
       } catch (error) {

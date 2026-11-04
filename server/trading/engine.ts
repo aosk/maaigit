@@ -58,8 +58,20 @@ async function tick(now = new Date()): Promise<void> {
   }
 }
 
-/** One round of the agents. */
+let rounding = false;
+
+/** One round of the agents; a round asked for while one is running is skipped (the route and the timer share it). */
 export async function round(now = new Date()): Promise<void> {
+  if (rounding) return;
+  rounding = true;
+  try {
+    await runRound(now);
+  } finally {
+    rounding = false;
+  }
+}
+
+async function runRound(now: Date): Promise<void> {
   const clock = marketClock(now);
   const reads = technicalRound(now);
   const news = await newsRound(now);

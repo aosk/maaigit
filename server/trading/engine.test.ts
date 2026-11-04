@@ -9,7 +9,7 @@ vi.hoisted(() => {
 vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof import('../ai/claude')>()), client: null }));
 
 import { checkDailyLoss, gate, round, tradingView } from './engine';
-import { ackCommand, botKeyMatches, commandResult, createBotKey, halt, reconcile, resume, setMode, stillGo, submit, takeCommands } from './executor';
+import { ackCommand, botKeyMatches, commandResult, createBotKey, halt, processOrders, reconcile, resume, setMode, stillGo, submit, takeCommands } from './executor';
 import { currentQuotes, refreshQuotes, resetQuotes } from './market';
 import { applyFill } from './portfolio';
 import { resetTrading, trading } from './store';
@@ -57,6 +57,15 @@ describe('the daily loss limit', () => {
     checkDailyLoss(OPEN);
     expect(trading.halted).toBe(true);
     expect(trading.events.at(-1)?.type).toBe('system.halted');
+  });
+
+  it('fills nothing that was waiting while trading is stopped', () => {
+    const order = submit('d3', '2222', 'buy', 10, price('2222') * 0.9, OPEN); // below the price: waits
+    halt('test', 'user', OPEN);
+    currentQuotes().set('2222', { ...currentQuotes().get('2222')!, price: price('2222') * 0.85 });
+    processOrders(later(60_000));
+    expect(order.status).toBe('sent');
+    expect(trading.books.paper.positions).toEqual([]);
   });
 
   it('can be started again only by the user', () => {
@@ -129,6 +138,26 @@ describe('the SNB desktop bot', () => {
     reconcile({ cash: 25_000, positions: [{ symbol: '2222', qty: 100, avgCost: 27 }] }, OPEN);
     expect(trading.books.live.dayStart.value).toBe(27_700);
     expect(trading.halted).toBe(false);
+  });
+
+  it('lets go of an order the bot took but never finished, and stops trading until the user checks SNB', () => {
+    const order = liveOrder();
+    takeCommands(OPEN);
+    ackCommand(order.id, OPEN);
+    processOrders(new Date(Date.parse(order.expiresAt) + 5 * 60_000));
+    expect(order.status).toBe('sent'); // still the bot's
+    processOrders(new Date(Date.parse(order.expiresAt) + 31 * 60_000));
+    expect(order.status).toBe('failed');
+    expect(trading.halted).toBe(true);
+  });
+
+  it('ignores a repeated or late fill report instead of booking it again', () => {
+    const order = liveOrder();
+    commandResult({ commandId: order.id, status: 'partial', filledQty: 6, avgPrice: 27.4 }, OPEN);
+    commandResult({ commandId: order.id, status: 'partial', filledQty: 4, avgPrice: 27.4 }, OPEN);
+    commandResult({ commandId: order.id, status: 'partial', filledQty: 6, avgPrice: 27.4 }, OPEN);
+    expect(order.filledQty).toBe(6);
+    expect(trading.books.live.positions[0].qty).toBe(6);
   });
 
   it('never carries paper orders into live, or the other way', () => {

@@ -164,7 +164,8 @@ export async function decisionRound(reads: TechRead[], news: NewsItem[], minutes
   const quotes = currentQuotes();
   const held = book.positions.map((p) => {
     const price = quotes.get(p.symbol)?.price ?? p.avgCost;
-    return { symbol: p.symbol, qty: p.qty, avgCost: p.avgCost, price, pnlPct: ((price - p.avgCost) / p.avgCost) * 100 };
+    // A holding the broker reported without a cost has no profit to measure (not an infinite one to take).
+    return { symbol: p.symbol, qty: p.qty, avgCost: p.avgCost, price, pnlPct: p.avgCost > 0 ? ((price - p.avgCost) / p.avgCost) * 100 : 0 };
   });
   let decisions: Omit<Decision, 'id'>[];
   let summary: string;

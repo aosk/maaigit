@@ -74,13 +74,15 @@ export function StockSmart() {
   }, [load]);
   useOnRefresh(() => load());
 
-  async function act(run: () => Promise<TradingState>) {
+  async function act(run: () => Promise<TradingState>): Promise<boolean> {
     setBusy(true);
     try {
       setSt(await run());
       setError('');
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -190,7 +192,7 @@ function Positions({ st, t }: { st: TradingState; t: T }) {
         {st.positions.map((p) => {
           const price = p.price ?? p.avgCost;
           const pnl = (price - p.avgCost) * p.qty;
-          const pct = ((price - p.avgCost) / p.avgCost) * 100;
+          const pct = p.avgCost > 0 ? ((price - p.avgCost) / p.avgCost) * 100 : 0;
           const i = name(p.symbol);
           return (
             <div key={p.symbol} className="ss-pos">
@@ -272,7 +274,7 @@ function Feed({ st, t, lang, onAsk, onKeep }: { st: TradingState; t: T; lang: 'a
 
 const LIMIT_KEYS: (keyof TradeLimits)[] = ['capital', 'maxOrder', 'maxPerSymbolPct', 'maxPerSectorPct', 'maxOrdersPerDay', 'dailyLossPct', 'cycleMinutes'];
 
-function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boolean; act: (run: () => Promise<TradingState>) => Promise<void> }) {
+function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boolean; act: (run: () => Promise<TradingState>) => Promise<boolean> }) {
   const [limits, setLimits] = useState<Record<string, string>>(() => Object.fromEntries(LIMIT_KEYS.map((k) => [k, String(st.limits[k])])));
   const [saved, setSaved] = useState(false);
   const [confirmLive, setConfirmLive] = useState('');
@@ -281,7 +283,7 @@ function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boo
 
   async function saveLimits(e: FormEvent) {
     e.preventDefault();
-    await act(() => api.tradingLimits(Object.fromEntries(LIMIT_KEYS.map((k) => [k, Number(limits[k])]))));
+    if (!(await act(() => api.tradingLimits(Object.fromEntries(LIMIT_KEYS.map((k) => [k, Number(limits[k])])))))) return;
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }

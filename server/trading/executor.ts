@@ -70,13 +70,27 @@ function fill(order: TradeOrder, qty: number, price: number, now: Date, profit: 
   emit('order.filled', 'executor', `تم التنفيذ: ${sideAr(order.side)} ${qty} × ${label(order.symbol)} بسعر ${price}${taken}`, { correlationId: order.decisionId, data: { orderId: order.id, qty, price, profit } }, now);
 }
 
-/** Every minute: paper orders fill when their price comes, and any order past its time is let go. */
+/** How long past its expiry a live order the bot took may go without a result before it is treated as lost. */
+const LOST_AFTER_MS = 30 * 60_000;
+
+/**
+ * Every minute: paper orders fill when their price comes, and any order past its time is let go. A live order the
+ * bot took is the bot's to finish; if no result comes long after it expired, it is marked failed (so it stops
+ * blocking the stock and holding cash) and trading stops until the user checks SNB: the broker may have filled it,
+ * and the next account report sets the book right.
+ */
 export function processOrders(now = new Date()): void {
   for (const order of trading.orders.filter((o) => OPEN.includes(o.status))) {
-    if (now.getTime() > Date.parse(order.expiresAt) && !(order.mode === 'live' && order.ackedAt && order.status !== 'queued')) {
+    const botHasIt = order.mode === 'live' && Boolean(order.ackedAt) && order.status !== 'queued';
+    if (botHasIt && now.getTime() > Date.parse(order.expiresAt) + LOST_AFTER_MS) {
+      order.status = 'failed';
+      order.error = 'No result from the SNB bot long after the order expired.';
+      emit('order.failed', 'executor', `لا نتيجة من بوت SNB لأمر ${sideAr(order.side)} ${label(order.symbol)}: تأكّد منه في تطبيق SNB`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
+      halt(`أمر ${label(order.symbol)} بلا نتيجة من البوت — تأكّد في SNB ثم استأنف`, 'system', now);
+    } else if (now.getTime() > Date.parse(order.expiresAt) && !botHasIt) {
       order.status = 'expired';
       emit('order.expired', 'executor', `انتهت مهلة أمر ${sideAr(order.side)} ${label(order.symbol)} قبل تنفيذه`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
-    } else if (order.mode === 'paper') tryPaperFill(order, now);
+    } else if (order.mode === 'paper' && !trading.halted) tryPaperFill(order, now);
   }
   saveTrading();
 }
@@ -84,12 +98,15 @@ export function processOrders(now = new Date()): void {
 /** At the close every order still waiting is cancelled: tomorrow is a new decision. (A live order the bot already has is left to it.) */
 export function cancelAllOpen(reason: string, now = new Date()): void {
   const waiting = trading.orders.filter((o) => OPEN.includes(o.status) && !(o.mode === 'live' && o.ackedAt));
-  for (const order of waiting) {
-    order.status = 'cancelled';
-    order.error = reason;
-  }
-  if (waiting.length) emit('order.expired', 'executor', `${reason}: أُلغي ${waiting.length} أمر`, {}, now);
+  for (const order of waiting) cancel(order, reason, now);
   saveTrading();
+}
+
+/** One order let go before it was placed, on the log under its decision so the trade shows how it ended. */
+function cancel(order: TradeOrder, reason: string, now: Date): void {
+  order.status = 'cancelled';
+  order.error = reason;
+  emit('order.cancelled', 'executor', `${reason}: أُلغي أمر ${sideAr(order.side)} ${label(order.symbol)}`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
 }
 
 // ---------- The desktop bot ----------
@@ -199,6 +216,12 @@ export function commandResult(r: BotResult, now = new Date()): boolean {
   if (r.status === 'filled' || r.status === 'partial') {
     const qty = Math.min(order.qty, Math.max(0, Math.floor(r.filledQty ?? 0)));
     const price = Number(r.avgPrice);
+    // A repeated or out-of-order report (no more filled than already booked) changes nothing.
+    if (qty > 0 && price > 0 && qty <= order.filledQty) {
+      if (r.status === 'filled' && qty >= order.qty) order.status = 'filled';
+      saveTrading();
+      return true;
+    }
     if (!(qty > 0) || !(price > 0)) {
       order.status = 'failed';
       order.error = 'The bot reported a fill without a quantity or price.';
@@ -269,7 +292,7 @@ export function resume(now = new Date()): void {
 export function setMode(mode: TradeMode, by: 'user' | 'system', text: string, now = new Date()): void {
   if (trading.mode === mode) return;
   // Orders of the other mode never carry over.
-  for (const order of trading.orders.filter((o) => OPEN.includes(o.status) && o.mode !== mode && !o.ackedAt)) order.status = 'cancelled';
+  for (const order of trading.orders.filter((o) => OPEN.includes(o.status) && o.mode !== mode && !o.ackedAt)) cancel(order, 'تغيّر وضع التداول', now);
   trading.mode = mode;
   emit('system.mode', by, text, { data: { mode } }, now);
 }
