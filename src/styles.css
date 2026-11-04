@@ -252,7 +252,7 @@ a { color: var(--tint-text); }
 :root[data-simple='true'] .extra { display: none !important; }
 
 /* ---------- Admin portal (desktop first, stacks on phones) ---------- */
-.admin { min-height: 100dvh; display: flex; flex-wrap: wrap; font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; }
+.admin { min-height: 100dvh; display: flex; flex-wrap: wrap; font-size: 15px; font-family: var(--font); background: var(--raised); }
 .admin-nav { flex: 1 1 232px; max-width: 100%; background: var(--surface); border-inline-end: 1px solid var(--sep); padding: 24px 16px; display: flex; flex-direction: column; gap: 4px; }
 .admin-nav a { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; font-size: 14px; text-decoration: none; color: var(--text); }
 .admin-nav a[aria-current='page'] { background: var(--tint-soft); color: var(--tint-text); font-weight: 600; }
@@ -260,7 +260,31 @@ a { color: var(--tint-text); }
 .admin-main { flex: 999 1 560px; min-width: 0; padding: 28px 32px 40px; display: flex; flex-direction: column; gap: 24px; }
 @media (max-width: 600px) { .admin-main { padding: 20px 16px; } }
 .admin-card { background: var(--surface); border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }
-.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
+.admin-count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--danger); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-inline-start: 8px; }
+.admin-card { border: 1px solid var(--sep); border-radius: 16px; }
+.admin-main .metric { display: flex; flex-direction: column; gap: 2px; }
+.admin-chip { min-height: 32px; padding: 0 12px; border: 1px solid var(--border, var(--sep)); border-radius: 16px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.admin-chip[aria-pressed='true'] { background: var(--tint-soft); border-color: var(--tint); color: var(--tint-text); font-weight: 600; }
+.hl-dot { display: inline-block; flex: none; border-radius: 50%; }
+.hl-banner { border-inline-start: 4px solid var(--success); }
+.hl-banner.hl-warn { border-inline-start-color: var(--warn-bar, var(--warn-text)); background: var(--warn-soft); }
+.hl-banner.hl-fail { border-inline-start-color: var(--danger); background: var(--danger-soft); }
+.hl-issue { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 8px; border-inline-start: 3px solid var(--warn-text); background: var(--raised); }
+.hl-issue.hl-fail { border-inline-start-color: var(--danger); }
+.hl-word { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.hl-go { font-size: 13px; font-weight: 600; color: var(--tint-text); white-space: nowrap; }
+.hl-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; }
+.hl-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.hl-row { border-bottom: 1px solid var(--sep); }
+.hl-row > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; list-style: none; }
+.hl-row > summary::-webkit-details-marker { display: none; }
+.hl-row[open] { padding-bottom: 10px; }
+.hl-row[open] > div { padding-inline-start: 20px; }
+.hl-name { flex: 1; min-width: 0; font-weight: 600; }
+.hl-off { font-size: 13px; color: var(--text2); }
+.hl-off > summary { cursor: pointer; padding: 8px 0; }
+.hl-off-row { padding: 6px 0 6px 12px; border-inline-start: 2px solid var(--sep); margin-bottom: 4px; color: var(--text); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; }
 .admin-input { min-height: 40px; width: 260px; max-width: 100%; border-radius: 10px; border: 1px solid var(--border); padding: 0 12px; background: var(--surface); }
 .admin-btn { min-height: 40px; min-width: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); display: inline-flex; align-items: center; justify-content: center; }
 .admin-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 520px; }
