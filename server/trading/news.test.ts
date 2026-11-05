@@ -16,7 +16,9 @@ const reply = (fetched: unknown[], items: unknown[]) => ({
   content: [...fetched, { type: 'text', text: JSON.stringify({ items }) }],
 });
 const page = (url: string) => ({ type: 'web_fetch_tool_result', tool_use_id: 't1', content: { type: 'web_fetch_result', url, content: {} } });
-const refused = (url: string) => ({ type: 'web_fetch_tool_result', tool_use_id: 't2', content: { type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible' }, url });
+const asked = (url: string, id = 't2') => ({ type: 'server_tool_use', id, name: 'web_fetch', input: { url } });
+/** As the API really answers a failed fetch: an error code only, the address being in the request before it. */
+const refused = (id = 't2') => ({ type: 'web_fetch_tool_result', tool_use_id: id, content: { type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible' } });
 
 beforeEach(() => {
   resetTrading();
@@ -42,7 +44,7 @@ describe('the news agent and the Saudi Exchange announcements', () => {
   });
 
   it('says so when the exchange page could not be read (the agent then relies on searching)', async () => {
-    create.mockResolvedValue(reply([{ ...refused('https://www.saudiexchange.sa/x'), content: { type: 'web_fetch_tool_result_error', error_code: 'url_not_accessible', note: 'https://www.saudiexchange.sa/x' } }], []));
+    create.mockResolvedValue(reply([asked('https://www.saudiexchange.sa/x'), refused(), asked('https://www.argaam.com/ar/company/announcements', 't3'), { ...page('https://www.argaam.com/ar/company/announcements'), tool_use_id: 't3' }], []));
     await newsRound(new Date(OPEN.getTime() + 2 * 3_600_000));
     expect(officialAnnouncements()).toMatchObject({ ok: false, detail: 'not read (url_not_accessible)' });
   });

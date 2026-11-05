@@ -144,12 +144,19 @@ const NEWS_SCHEMA = {
  * change on the exchange's site shows up instead of the agent quietly falling back to searching.
  */
 function noteOfficialRead(content: Anthropic.Beta.Messages.BetaContentBlock[]): void {
-  const fetches = content.filter((b) => b.type === 'web_fetch_tool_result');
-  const exchange = fetches.filter((b) => JSON.stringify(b).includes('saudiexchange.sa'));
-  const read = exchange.filter((b) => (b as { content?: { type?: string } }).content?.type === 'web_fetch_result');
-  const why = exchange.map((b) => (b as { content?: { error_code?: string } }).content?.error_code).filter(Boolean);
+  // A failed fetch carries only an error code, not the address: the address is in the request that asked for it.
+  const asked = new Map<string, string>();
+  for (const b of content) {
+    if (b.type === 'server_tool_use' && b.name === 'web_fetch') asked.set(b.id, String((b.input as { url?: unknown })?.url ?? ''));
+  }
+  const fetches = content.filter((b): b is Anthropic.Beta.Messages.BetaWebFetchToolResultBlock => b.type === 'web_fetch_tool_result');
+  const urlOf = (b: Anthropic.Beta.Messages.BetaWebFetchToolResultBlock) => (b.content.type === 'web_fetch_result' ? b.content.url : '') || asked.get(b.tool_use_id) || '';
+  const exchange = fetches.filter((b) => urlOf(b).includes('saudiexchange.sa'));
+  const read = exchange.filter((b) => b.content.type === 'web_fetch_result');
+  const why = exchange.map((b) => (b.content.type === 'web_fetch_tool_result_error' ? b.content.error_code : '')).filter(Boolean);
   officialRead = { at: new Date().toISOString(), ok: read.length > 0, detail: read.length ? `${read.length} page(s) read` : exchange.length ? `not read (${why.join(', ') || 'no content'})` : 'not tried' };
-  console.log(`StockSmart news: Saudi Exchange announcements ${officialRead.detail}; ${fetches.length} page(s) fetched in all.`);
+  const hosts = fetches.map((b) => urlOf(b).replace(/^https?:\/\/(www\.)?/, '').split(/[/?]/)[0] || '?');
+  console.log(`StockSmart news: Saudi Exchange announcements ${officialRead.detail}; ${fetches.length} page(s) fetched in all${hosts.length ? ` (${hosts.join(', ')})` : ''}.`);
 }
 
 let officialRead: { at?: string; ok: boolean; detail: string } = { ok: false, detail: 'not tried yet' };
