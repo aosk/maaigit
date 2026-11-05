@@ -829,6 +829,13 @@ html[dir='rtl'] .ss-chev svg { transform: scaleX(-1); }
 :root[data-layout='desktop'] .ss { padding: 32px 36px 48px; }
 :root[data-layout='desktop'] .ss-grid, :root[data-layout='tablet'] .ss-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; gap: 24px; }
 :root[data-layout='desktop'] .ss-side, :root[data-layout='tablet'] .ss-side { position: sticky; top: 16px; max-height: calc(100dvh - 32px); overflow-y: auto; border: 1px solid var(--sep); border-radius: 16px; padding: 16px; }
+/* The office always keeps its full size (a capped flex column would otherwise squeeze it to nothing when the log grows);
+   the log under it scrolls on its own, so the office stays in view whichever way the log is grouped. */
+.ss-side > * { flex-shrink: 0; }
+/* On a computer the office takes at most about 40% of the screen's height, so the log keeps room under it. */
+:root[data-layout='desktop'] .ss-side .ss-office:not(.full) .ss-office-stage { width: min(100%, calc(40dvh * 256 / 176)); margin-inline: auto; }
+:root[data-layout='desktop'] .ss-side .ss-feedbox, :root[data-layout='tablet'] .ss-side .ss-feedbox { flex: 0 1 auto; min-height: 280px; overflow-y: auto; overscroll-behavior: contain; margin-inline-end: -8px; padding-inline-end: 8px; }
+@media (min-height: 720px) { :root[data-layout='desktop'] .ss-side, :root[data-layout='tablet'] .ss-side { display: flex; flex-direction: column; overflow: hidden; } }
 
 /* ---------- StockSmart log: categories, rounds and trade cards ---------- */
 .cat-analysis { --cat: #1570ef; } .cat-decisions { --cat: #dc6803; } .cat-risk { --cat: #b42318; }

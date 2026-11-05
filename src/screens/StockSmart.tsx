@@ -26,11 +26,12 @@ function Spark({ points, width = 320, height = 56 }: { points: number[]; width?:
   const lo = Math.min(...points);
   const hi = Math.max(...points);
   const span = hi - lo || 1;
-  const xy = points.map((v, i) => [(i / (points.length - 1)) * width, height - 3 - ((v - lo) / span) * (height - 8)]);
+  // A day that has not moved is a flat line through the middle, not along the bottom.
+  const xy = points.map((v, i) => [(i / (points.length - 1)) * width, hi === lo ? height / 2 : height - 3 - ((v - lo) / span) * (height - 8)]);
   const line = `M${xy.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(' L')}`;
   return (
     <svg className="ss-spark" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-hidden="true">
-      <path d={`${line} L${width} ${height} L0 ${height} Z`} className="area" />
+      {hi !== lo && <path d={`${line} L${width} ${height} L0 ${height} Z`} className="area" />}
       <path d={line} className="line" />
     </svg>
   );
