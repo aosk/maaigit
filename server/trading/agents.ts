@@ -147,7 +147,10 @@ function noteOfficialRead(content: Anthropic.Beta.Messages.BetaContentBlock[]): 
   // A failed fetch carries only an error code, not the address: the address is in the request that asked for it.
   const asked = new Map<string, string>();
   for (const b of content) {
-    if (b.type === 'server_tool_use' && b.name === 'web_fetch') asked.set(b.id, String((b.input as { url?: unknown })?.url ?? ''));
+    if (b.type === 'server_tool_use' && b.name === 'web_fetch') {
+      const url = (b.input as { url?: unknown } | undefined)?.url;
+      asked.set(b.id, typeof url === 'string' ? url : '');
+    }
   }
   const fetches = content.filter((b): b is Anthropic.Beta.Messages.BetaWebFetchToolResultBlock => b.type === 'web_fetch_tool_result');
   const urlOf = (b: Anthropic.Beta.Messages.BetaWebFetchToolResultBlock) => (b.content.type === 'web_fetch_result' ? b.content.url : '') || asked.get(b.tool_use_id) || '';
