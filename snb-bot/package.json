@@ -2,7 +2,7 @@
   "name": "stocksmart-snb-bot",
   "private": true,
   "type": "module",
-  "description": "Places the orders Istithmari (maai) sends at SNB Capital, from your own computer, and reports back. Practice mode (places nothing) by default.",
+  "description": "Places the orders maai Stocks sends at SNB Capital, from your own computer, and reports back. Practice mode (places nothing) by default.",
   "scripts": { "start": "node start.mjs", "check": "node bot.mjs --check" },
   "engines": { "node": ">=22" }
 }

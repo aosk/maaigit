@@ -377,7 +377,7 @@ export function reconcile(report: { cash: number; positions: Position[] }, now =
   saveTrading();
   if (diffs.length && !firstReport) {
     emit('position.drift', 'system', `حساب SNB يختلف عن المتوقع في: ${diffs.map((s) => `${s} (متوقع ${expected.get(s) ?? 0}، فعلي ${reported.get(s) ?? 0})`).join('، ')}`, { data: { diffs } }, now);
-    halt('اختلاف بين حساب SNB وسجل استثماري', 'system', now);
+    halt('اختلاف بين حساب SNB وسجل أسهمي', 'system', now);
     return { drift: true };
   }
   return { drift: false };

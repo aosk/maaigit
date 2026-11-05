@@ -15,8 +15,8 @@ export function SnbBot({ s }: { s: TradingSummary }) {
   return (
     <section aria-label="SNB bot" className="admin-card">
       <div className="between wrap">
-        <h2 className="h2" style={{ fontSize: 18 }}>SNB bot (Istithmari)</h2>
-        <a href="#/stocks" className="admin-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>{b.connected ? 'Manage in Istithmari' : 'Connect in Istithmari'}</a>
+        <h2 className="h2" style={{ fontSize: 18 }}>SNB bot (maai Stocks)</h2>
+        <a href="#/stocks" className="admin-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>{b.connected ? 'Manage in maai Stocks' : 'Connect in maai Stocks'}</a>
       </div>
       <span className="sub">
         Places real orders at SNB Capital from your computer. Needed only for real money; paper trading runs without it. It signs in with its own
@@ -27,7 +27,7 @@ export function SnbBot({ s }: { s: TradingSummary }) {
         <span className="sub">Last seen <strong>{when(b.lastSeen)}</strong></span>
         <span className="sub">Desk <strong>{live ? 'LIVE' : 'Paper'}{s.halted ? ' · stopped' : ''}</strong></span>
       </div>
-      {!b.connected && <div style={{ fontSize: 13 }}>→ Istithmari → Limits and settings → Connect the SNB bot: a key and a signing secret, shown once, go into the bot as STOCKSMART_KEY and STOCKSMART_SECRET.</div>}
+      {!b.connected && <div style={{ fontSize: 13 }}>→ maai Stocks → Limits and settings → Connect the SNB bot: a key and a signing secret, shown once, go into the bot as STOCKSMART_KEY and STOCKSMART_SECRET.</div>}
     </section>
   );
 }

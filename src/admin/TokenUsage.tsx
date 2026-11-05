@@ -7,7 +7,7 @@ const LABELS: Record<UsagePurpose, string> = {
   'email-draft': 'Reply drafts',
   whatsapp: 'WhatsApp summary',
   news: 'News picks',
-  trading: 'Istithmari agents',
+  trading: 'maai Stocks agents',
 };
 
 const total = (r: Pick<UsageRow, 'input' | 'cached' | 'output'>) => r.input + r.cached + r.output;

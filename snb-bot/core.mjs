@@ -1,4 +1,4 @@
-// The Istithmari side of the SNB bot: fetching commands, checking them, asking before submitting, reporting back.
+// The maai Stocks side of the SNB bot: fetching commands, checking them, asking before submitting, reporting back.
 // Everything SNB-specific (its screens) lives in a broker (brokers/*.mjs); this file never touches the browser.
 //
 // The rules from docs/stocksmart-bot.md, and where each one is kept:
@@ -23,13 +23,13 @@ const RESULTS = ['accepted', 'filled', 'partial', 'cancelled', 'rejected', 'fail
 const FINAL = ['filled', 'cancelled', 'rejected', 'failed'];
 const REQUEST_TIMEOUT_MS = 40_000;
 
-/** The signature Istithmari puts on each command (HMAC-SHA256 of its fields with the signing secret). */
+/** The signature maai Stocks puts on each command (HMAC-SHA256 of its fields with the signing secret). */
 export function signature(cmd, secret) {
   const text = [cmd.commandId, cmd.symbol, cmd.side, cmd.qty, Number(cmd.limitPrice).toFixed(2), cmd.issuedAt, cmd.expiresAt].join('|');
   return createHmac('sha256', secret).update(text).digest('hex');
 }
 
-/** Rule 2: a command is placed only if it is well formed, signed by Istithmari, and not expired. */
+/** Rule 2: a command is placed only if it is well formed, signed by maai Stocks, and not expired. */
 export function verify(cmd, secret, nowMs) {
   if (!cmd || typeof cmd !== 'object') return 'not a command';
   if (!/^ord_[0-9a-f]{16}$/.test(cmd.commandId ?? '')) return 'bad command id';
@@ -69,7 +69,7 @@ export function sameOrder(cmd, shown) {
 export function createBot({ url, key, secret, broker, ledger, log = console.log, fetchImpl = fetch, now = () => Date.now() }) {
   const base = url.replace(/\/+$/, '') + '/trade/v1';
   let lastOk = 0;
-  let clockOffset = 0; // server time minus ours, so expiry is judged by Istithmari's clock
+  let clockOffset = 0; // server time minus ours, so expiry is judged by maai Stocks's clock
   let halted = false;
   let mode = 'paper';
   let stopped = false;
@@ -92,14 +92,14 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
         signal: controller.signal,
       });
       if (res.status === 401 || res.status === 404) {
-        // 404 on every path means Istithmari has no bot key any more (revoked); 401, a wrong key.
-        const err = new Error(res.status === 401 ? 'Istithmari refused the bot key (wrong key, or a new one was made).' : 'Istithmari has no bot connected (the key was revoked).');
+        // 404 on every path means maai Stocks has no bot key any more (revoked); 401, a wrong key.
+        const err = new Error(res.status === 401 ? 'maai Stocks refused the bot key (wrong key, or a new one was made).' : 'maai Stocks has no bot connected (the key was revoked).');
         err.fatal = path === '/heartbeat';
         err.status = res.status;
         throw err;
       }
-      if (res.status === 429) throw new Error('Istithmari says slow down (too many requests).');
-      if (res.status >= 400) throw new Error(`Istithmari answered ${res.status} to ${path}.`);
+      if (res.status === 429) throw new Error('maai Stocks says slow down (too many requests).');
+      if (res.status >= 400) throw new Error(`maai Stocks answered ${res.status} to ${path}.`);
       lastOk = now();
       const data = res.status === 204 ? null : await res.json().catch(() => null);
       if (data && typeof data.serverTime === 'string') {
@@ -115,14 +115,14 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
     }
   }
 
-  /** A result is kept in the ledger until Istithmari accepts it, then marked reported. */
+  /** A result is kept in the ledger until maai Stocks accepts it, then marked reported. */
   async function report(commandId, result) {
     ledger.write(commandId, { state: 'done', result });
     try {
       await call('POST', '/result', { commandId, ...result });
       ledger.write(commandId, { state: 'reported' });
     } catch (error) {
-      if (error.status === 404) ledger.write(commandId, { state: 'reported', note: 'Istithmari no longer knows this command' });
+      if (error.status === 404) ledger.write(commandId, { state: 'reported', note: 'maai Stocks no longer knows this command' });
       else log(`! Could not report ${commandId} yet (${error.message}); will send it again.`);
     }
   }
@@ -139,7 +139,7 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
   async function beforeSubmit(cmd) {
     if (stopped) return false;
     if (deadManTripped()) {
-      log(`! Not submitting ${cmd.commandId}: Istithmari has not answered for 3 minutes.`);
+      log(`! Not submitting ${cmd.commandId}: maai Stocks has not answered for 3 minutes.`);
       return false;
     }
     if (serverNow() >= Date.parse(cmd.expiresAt)) {
@@ -150,11 +150,11 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
     try {
       answer = await call('GET', `/go/${cmd.commandId}`);
     } catch (error) {
-      log(`! Not submitting ${cmd.commandId}: could not ask Istithmari (${error.message}).`);
+      log(`! Not submitting ${cmd.commandId}: could not ask maai Stocks (${error.message}).`);
       return false;
     }
     if (!answer?.go) {
-      log(`! Not submitting ${cmd.commandId}: Istithmari says no (${answer?.reason ?? 'no reason'}).`);
+      log(`! Not submitting ${cmd.commandId}: maai Stocks says no (${answer?.reason ?? 'no reason'}).`);
       return false;
     }
     // From here the order may reach SNB: a crash after this line must never lead to a second try.
@@ -165,7 +165,7 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
   async function handle(cmd) {
     const id = typeof cmd?.commandId === 'string' ? cmd.commandId : '';
     if (id && ledger.has(id)) {
-      // Rule 1: seen before (Istithmari sends again until it hears "received"). Say it again, do nothing else.
+      // Rule 1: seen before (maai Stocks sends again until it hears "received"). Say it again, do nothing else.
       await call('POST', '/ack', { commandId: id }).catch(() => {});
       return;
     }
@@ -191,7 +191,7 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
       result = { status: submitted ? 'unknown' : 'failed', error: `The bot stopped${submitted ? ' after Submit' : ''}: ${error?.message ?? error}` };
     }
     // After Submit only the broker knows: a result the broker part cannot give is "unknown", never "failed" (which
-    // would tell Istithmari the order never reached SNB, and free its cash and stock).
+    // would tell maai Stocks the order never reached SNB, and free its cash and stock).
     const submitted = ledger.get(id)?.state === 'submitting';
     if (!result || !RESULTS.includes(result.status)) result = { status: submitted ? 'unknown' : 'failed', error: 'The broker part gave no clear result.' };
     if (submitted && result.status === 'failed' && !result.beforeSubmit) result = { ...result, status: 'unknown' };
@@ -201,7 +201,7 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
     await report(id, sent);
   }
 
-  /** After a restart: results Istithmari has not heard yet, and commands a crash cut off. */
+  /** After a restart: results maai Stocks has not heard yet, and commands a crash cut off. */
   async function recover() {
     for (const e of ledger.unreported()) await report(e.commandId, e.result);
     for (const e of ledger.interrupted()) {
@@ -213,7 +213,7 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
   }
 
   /**
-   * A cancel from Istithmari (Stop, or the order expired while resting at SNB). Checked like a command; an order the
+   * A cancel from maai Stocks (Stop, or the order expired while resting at SNB). Checked like a command; an order the
    * bot never received is noted so it can never be placed later; one that reached SNB and is not finished is
    * cancelled there. A cancel the broker part cannot confirm is "unknown": the order might still fill.
    */
@@ -272,7 +272,7 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
     const account = await broker.account();
     if (!account) return;
     const answer = await call('POST', '/positions', account);
-    if (answer?.drift) log('! Your SNB account differs from what Istithmari expected: Istithmari stopped trading. Check it in the app.');
+    if (answer?.drift) log('! Your SNB account differs from what maai Stocks expected: maai Stocks stopped trading. Check it in the app.');
   }
 
   /** Runs `job` every `ms`, never two at once, logging failures (a fatal one stops the bot). */

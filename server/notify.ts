@@ -260,7 +260,7 @@ export async function alertHealth(key: string, text: (lang: Lang) => Text): Prom
 
 /** StockSmart: a fill, a halt, the broker account not matching, the bot needing the user. Always told; opens StockSmart. */
 export async function alertTrade(key: string, body: string): Promise<void> {
-  await deliver({ key, kind: 'trade', text: () => ({ title: 'استثماري', body }) }, '/#/stocks');
+  await deliver({ key, kind: 'trade', text: () => ({ title: 'أسهمي', body }) }, '/#/stocks');
 }
 
 /** An order from the user's WhatsApp number made approval cards: always told, opening the assistant where they wait. */

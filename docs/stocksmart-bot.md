@@ -1,14 +1,14 @@
-# Istithmari — the SNB desktop bot protocol
+# maai Stocks — the SNB desktop bot protocol
 
 The bot itself is in `snb-bot/` (its README says how to set it up). This page is the protocol it speaks.
 
-The desktop bot runs on your own computer, logs in to SNB Capital, and places **only** the orders Istithmari sends it.
+The desktop bot runs on your own computer, logs in to SNB Capital, and places **only** the orders maai Stocks sends it.
 It can fetch commands and report what happened; it cannot propose, approve or change anything. Your broker login, OTP
 and session cookies never leave the computer: the server has no endpoint that asks for them.
 
 ## Connecting
 
-1. In maai: Istithmari → Settings → **Connect the SNB bot**. You get a **key** (`stk_…`) and a **signing secret**, shown once.
+1. In maai: maai Stocks → Settings → **Connect the SNB bot**. You get a **key** (`stk_…`) and a **signing secret**, shown once.
 2. Give both to the bot (environment variables, never in code): `STOCKSMART_URL=https://maaigit.onrender.com`,
    `STOCKSMART_KEY=stk_…`, `STOCKSMART_SECRET=…`.
 3. Every request carries `Authorization: Bearer <key>`. A new key stops the old one.
@@ -73,7 +73,7 @@ cancel for an order the bot never received is noted, so that order is refused if
 6. **Screenshot every submission** and keep it locally with the `commandId` and `brokerOrderId`.
 7. **Dead-man switch:** if the server has not answered for 3 minutes, stop placing anything until it answers again.
 8. **Report the account** (`/positions`) every few minutes from the broker's own portfolio screen. If it differs from
-   what Istithmari expected, trading halts and you get a notification.
+   what maai Stocks expected, trading halts and you get a notification.
 9. **Heartbeat** with `practice: true` while it only practises (shown in maai), and `brokerSession: false` when you are logged out; the server halts real trading and asks the user
    to log in again (the OTP is on their phone).
 

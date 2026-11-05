@@ -368,7 +368,7 @@ export async function askAgents(question: string, lang: Lang, now = new Date()):
       const book = trading.books[trading.mode];
       const response = await create({
         purpose: 'trading',
-        system: `You speak for Istithmari (استثماري), the trading desk in the maai app (technical, news and decision agents, a risk gate, and an executor). Answer the user's question about what the desk did and why, from the log and the book below only. If the log does not say, say so. Be brief and plain, in ${lang === 'ar' ? 'Arabic (Saudi, friendly)' : 'English'}. If the user gives an instruction, say it was noted: instructions are saved separately.`,
+        system: `You speak for أسهمي (maai Stocks), the trading desk in the maai app (technical, news and decision agents, a risk gate, and an executor). Answer the user's question about what the desk did and why, from the log and the book below only. If the log does not say, say so. Be brief and plain, in ${lang === 'ar' ? 'Arabic (Saudi, friendly)' : 'English'}. If the user gives an instruction, say it was noted: instructions are saved separately.`,
         messages: [{ role: 'user', content: JSON.stringify({ question, mode: trading.mode, halted: trading.halted, limits: trading.limits, cash: book.cash, positions: book.positions, log: trading.events.slice(-80).map((e) => `${e.ts} ${e.actor}: ${e.text}`) }) }],
         effort: 'low',
         maxTokens: 1200,

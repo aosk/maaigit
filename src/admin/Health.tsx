@@ -15,7 +15,7 @@ const GROUPS = [
   { id: 'core', title: 'MAAI core', ids: ['server', 'storage', 'claude', 'push', 'news'], link: undefined },
   { id: 'messages', title: 'Messages & WhatsApp', ids: ['bot', 'replies', 'gmail', 'whatsapp'], link: '#/admin/bots' },
   { id: 'calendar', title: 'Calendar & tasks', ids: ['calendar', 'asana'], link: '#/settings' },
-  { id: 'stocks', title: 'Istithmari', ids: ['stocksmart', 'stocksmart-prices', 'stocksmart-agents', 'snb-bot'], link: '#/stocks' },
+  { id: 'stocks', title: 'maai Stocks', ids: ['stocksmart', 'stocksmart-prices', 'stocksmart-agents', 'snb-bot'], link: '#/stocks' },
 ] as const;
 
 const groupOf = (c: HealthCheck) => GROUPS.find((g) => (g.ids as readonly string[]).includes(c.id)) ?? GROUPS[0];
@@ -119,7 +119,7 @@ export function Health({ report, error, reload }: { report: HealthReport | null;
                   ))}
                 </details>
               )}
-              {g.link && <a href={g.link} className="hl-go" style={{ alignSelf: 'flex-start' }}>{g.id === 'stocks' ? 'Open Istithmari' : g.id === 'messages' ? 'Manage the bots' : 'Open Settings'}</a>}
+              {g.link && <a href={g.link} className="hl-go" style={{ alignSelf: 'flex-start' }}>{g.id === 'stocks' ? 'Open maai Stocks' : g.id === 'messages' ? 'Manage the bots' : 'Open Settings'}</a>}
             </div>
           );
         })}

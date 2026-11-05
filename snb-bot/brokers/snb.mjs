@@ -4,8 +4,8 @@
 //
 // What it will do, so you know what to expect:
 //   session()  → is the SNB session still logged in (and for how long)
-//   quotes()   → the live prices on your SNB screen for Istithmari's stocks
-//   account()  → cash and holdings from SNB's own portfolio screen (Istithmari checks its book against this)
+//   quotes()   → the live prices on your SNB screen for maai Stocks's stocks
+//   account()  → cash and holdings from SNB's own portfolio screen (maai Stocks checks its book against this)
 //   place(cmd, { beforeSubmit, sameOrder, progress })
 //       open the order ticket → fill symbol, side, quantity, limit price → read the confirmation screen →
 //       sameOrder(what it shows) must be true → await beforeSubmit() must be true → press Submit →
