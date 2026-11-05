@@ -8,7 +8,7 @@ vi.hoisted(() => {
 const create = vi.hoisted(() => vi.fn());
 vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof import('../ai/claude')>()), client: {}, create }));
 
-import { DECISION_PROMPT_VERSION, decisionRound, lastDecisionRecord, newsRound, officialAnnouncements } from './agents';
+import { DECISION_PROMPT_VERSION, decisionRound, lastDecisionRecord, marketContext, newsRound, officialAnnouncements } from './agents';
 import { resetTrading, trading } from './store';
 
 const OPEN = new Date('2026-11-01T08:00:00Z');
@@ -71,5 +71,22 @@ describe('the decision agent with Claude', () => {
     const made = await decisionRound(reads, [], 200, OPEN);
     expect(made).toHaveLength(1);
     expect(lastDecisionRecord()).toMatchObject({ source: 'claude', model: 'test-model', raw: answer, summary: 'اختراق مع حجم', decisions: [{ id: made[0].id }] });
+  });
+});
+
+describe('market-wide developments', () => {
+  it('are reported apart from company news, and an unconfirmed "high" counts as medium', async () => {
+    create.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ items: [], market: [
+      { headline: 'هجوم على منشأة', severity: 'high', sectors: ['energy', 'nonsense'], source: 'Reuters', confirmed: true },
+      { headline: 'مصادر: تصعيد محتمل', severity: 'high', sectors: [], source: 'X', confirmed: false },
+    ] }) }] });
+    await newsRound(new Date(OPEN.getTime() + 8 * 3_600_000));
+    expect(marketContext()).toEqual([
+      expect.objectContaining({ severity: 'high', sectors: ['energy'], confirmed: true }),
+      expect.objectContaining({ severity: 'medium', confirmed: false }),
+    ]);
+    const req = create.mock.calls.at(-1)![0] as { system: string };
+    expect(req.system).toMatch(/market-wide developments/);
+    expect(trading.events.some((e) => e.text.startsWith('سياق السوق · خطورة عالية'))).toBe(true);
   });
 });

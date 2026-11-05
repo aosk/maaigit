@@ -118,6 +118,14 @@ export function StockSmart() {
 
       {st.halted && <div className="error" role="alert">{t.ss.halted(st.haltReason ?? '')}</div>}
       <UnknownOrders st={st} t={t} busy={busy} act={act} />
+      {st.caution && (
+        <section className="card ss-caution" role="status">
+          <b>{t.ss.cautionTitle}</b>
+          <p className="sub" dir="auto">{st.caution.reason} · {st.caution.source}</p>
+          <p className="sub">{t.ss.cautionRules(st.caution.sectors.map((s) => t.ss.sectorNames[s] ?? s).join('، '), time(st.caution.until, lang))}</p>
+          <button type="button" className="btn secondary" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={() => act(api.tradingCautionEnd)}>{t.ss.cautionEnd}</button>
+        </section>
+      )}
       {error && <div className="error" role="alert">{error}</div>}
 
       <div className="ss-grid">
@@ -339,6 +347,15 @@ function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boo
               );
             })}
           </div>
+        </div>
+
+        <div>
+          <div className="section-label">{t.ss.cautionAutoTitle}</div>
+          <div className="seg" role="radiogroup" aria-label={t.ss.cautionAutoTitle}>
+            <button type="button" role="radio" aria-checked={st.cautionAuto} disabled={busy} onClick={() => act(() => api.tradingCautionAuto(true))}>{t.ss.on}</button>
+            <button type="button" role="radio" aria-checked={!st.cautionAuto} disabled={busy} onClick={() => act(() => api.tradingCautionAuto(false))}>{t.ss.off}</button>
+          </div>
+          <p className="sub">{t.ss.cautionAutoHint}</p>
         </div>
 
         <div>

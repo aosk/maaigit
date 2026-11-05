@@ -837,3 +837,4 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .ss-office.full .ss-office-stage { width: min(100%, calc((100dvh - 80px) * 256 / 176)); margin: 0 auto; }
 .ss-office.full .ss-office-foot { color: #c7cbd1; background: transparent; text-align: center; }
 :root[data-layout='phone'] .ss-office:not(.full) { margin-inline: -16px; border-radius: 0; border-inline: 0; }
+.ss-caution { border: 1px solid var(--warn-bar, #f79009); background: var(--warn-soft); display: flex; flex-direction: column; gap: 6px; }

@@ -188,6 +188,8 @@ export const api = {
   trading: (background = false) => call<TradingState>('GET', '/trading', undefined, background),
   tradingHalt: (reason?: string) => call<TradingState>('POST', '/trading/halt', { reason }),
   tradingResume: () => call<TradingState>('POST', '/trading/resume', {}),
+  tradingCautionEnd: () => call<TradingState>('POST', '/trading/caution/end', {}),
+  tradingCautionAuto: (on: boolean) => call<TradingState>('PUT', '/trading/caution-auto', { on }),
   tradingDecider: (decider: Decider) => call<TradingState>('PUT', '/trading/decider', { decider }),
   tradingResolve: (orderId: string, executed: boolean) => call<TradingState>('POST', `/trading/orders/${encodeURIComponent(orderId)}/resolve`, { executed }),
   tradingMode: (mode: TradeMode, confirm?: string) => call<TradingState>('POST', '/trading/mode', { mode, confirm }),

@@ -2,7 +2,7 @@ import type { TradingState } from '../../shared/trading.js';
 import { client } from '../ai/claude.js';
 import { alertTrade } from '../notify.js';
 import { randomBytes } from 'node:crypto';
-import { decisionRound, lastDecisionRecord, newsFetchedAt, newsRound, technicalRound, type Decision } from './agents.js';
+import { decisionRound, lastDecisionRecord, marketContext, newsFetchedAt, newsRound, technicalRound, type Decision, type MarketItem } from './agents.js';
 import { archiveRound, type RoundRecord } from './archive.js';
 import { botStale, cancelAllOpen, halt, openOrders, processOrders, submit } from './executor.js';
 import { currentQuotes, refreshQuotes } from './market.js';
@@ -50,6 +50,7 @@ async function tick(now = new Date()): Promise<void> {
       saveTrading();
     }
     checkDailyLoss(now);
+    if (trading.caution && Date.parse(trading.caution.until) <= now.getTime()) endCaution('system', now);
     if (!clock.open && openOrders(trading.mode).length) cancelAllOpen('أقفل السوق', now);
     if (clock.open && !trading.halted && now.getTime() - lastRound >= trading.limits.cycleMinutes * 60_000) {
       lastRound = now.getTime();
@@ -95,8 +96,10 @@ async function runRound(now: Date): Promise<void> {
   };
   const reads = technicalRound(now);
   const news = await newsRound(now);
+  noteMarket(marketContext(), now);
   record.technical = reads;
-  record.news = { fetchedAt: newsFetchedAt(), items: news };
+  record.news = { fetchedAt: newsFetchedAt(), items: news, market: marketContext() };
+  record.caution = cautionNow(now) ? { ...trading.caution } : null;
   if (clock.minutesToChange <= NO_NEW_ORDERS_MIN) {
     emit('agent.observation', 'risk', `باقي ${clock.minutesToChange} دقيقة على الإقفال: ما فيه أوامر جديدة اليوم`, {}, now);
     archiveRound({ ...record, skipped: 'closing' });
@@ -106,6 +109,38 @@ async function runRound(now: Date): Promise<void> {
   record.decision = { ...lastDecisionRecord() };
   record.verdicts = decisions.map((d) => gate(d, now));
   archiveRound(record);
+}
+
+/** How long caution mode lasts after the last serious development. */
+const CAUTION_MS = 24 * 3_600_000;
+
+/** Caution in force now (it ends by itself 24 hours after the last serious development). */
+export function cautionNow(now = new Date()): { sectors: string[] } | undefined {
+  return trading.caution && Date.parse(trading.caution.until) > now.getTime() ? { sectors: trading.caution.sectors } : undefined;
+}
+
+/**
+ * A confirmed, high-severity market development turns caution mode on (or keeps it on, adding its sectors), when the
+ * user allows it. Seen again later, the same development extends it; it ends 24 hours after the last one.
+ */
+export function noteMarket(items: MarketItem[], now = new Date()): void {
+  const serious = items.filter((m) => m.severity === 'high' && m.confirmed);
+  if (!serious.length || !trading.cautionAuto) return;
+  const current = cautionNow(now) ? trading.caution : undefined;
+  const sectors = [...new Set([...(current?.sectors ?? []), ...serious.flatMap((m) => m.sectors)])];
+  const lead = serious[0];
+  const changed = !current || sectors.length !== current.sectors.length || current.reason !== lead.headline;
+  trading.caution = { since: current?.since ?? now.toISOString(), until: new Date(now.getTime() + CAUTION_MS).toISOString(), sectors, reason: lead.headline, source: lead.source };
+  if (changed) emit('system.caution', 'risk', `وضع الحذر ${current ? 'تحدّث' : 'اشتغل'}: ${lead.headline} (${lead.source}) · نص حد الشراء${sectors.length ? ` وما فيه شراء جديد في: ${sectors.join('، ')}` : ''} · ينتهي بعد ٢٤ ساعة`, { data: { on: true, sectors, source: lead.source } }, now);
+  saveTrading();
+}
+
+/** Caution ends by itself, or because the user ended it. */
+export function endCaution(by: 'user' | 'system', now = new Date()): void {
+  if (!trading.caution) return;
+  trading.caution = undefined;
+  emit('system.caution', by, by === 'user' ? 'أنهيت وضع الحذر' : 'انتهى وضع الحذر: مرّت ٢٤ ساعة بدون تطورات خطيرة', { data: { on: false } }, now);
+  saveTrading();
 }
 
 /** The risk gate on one decision: its verdict goes on the log, and only a pass or a smaller order goes on. */
@@ -124,6 +159,7 @@ export function gate(d: Decision, now = new Date()): { decisionId: string; verdi
           halted: trading.halted,
           clock,
           live: trading.mode === 'live',
+          caution: cautionNow(now),
           ordersToday: trading.ordersToday.day === day ? trading.ordersToday.count : 0,
           openOrders: openOrders(trading.mode),
           now,
@@ -160,6 +196,8 @@ function arabicReason(reason: string): string {
     [/within (\d+)% of the capital/, (m) => (reason.includes('sector') ? `حد القطاع ${m[1]}٪` : `حد السهم ${m[1]}٪`)],
     [/SNB bot is not connected/, () => 'بوت SNB غير متصل'],
     [/last 20 minutes/, () => 'ما فيه مراكز جديدة في آخر ٢٠ دقيقة'],
+    [/Caution mode: no new buys/, () => 'وضع الحذر: ما فيه شراء جديد في هالقطاع'],
+    [/Caution mode: half/, () => 'وضع الحذر: نص حد الأمر'],
     [/live SNB price/, () => 'ما فيه سعر لحظي من SNB'],
     [/Nothing left/, () => 'ما بقي شي بعد تطبيق الحدود'],
   ];
@@ -183,7 +221,7 @@ export function checkDailyLoss(now = new Date()): void {
 
 let timer: NodeJS.Timeout | undefined;
 /** The events worth a notification on the phone. */
-const TOLD = new Set(['order.filled', 'order.failed', 'system.halted', 'position.drift']);
+const TOLD = new Set(['order.filled', 'order.failed', 'system.halted', 'position.drift', 'order.unknown', 'system.caution']);
 
 export function startTrading(): void {
   if (timer) return;
@@ -229,5 +267,7 @@ export function tradingView(now = new Date()): TradingState {
     quotesSource: newest ? [...quotes.values()].find((q) => q.asOf === newest)?.source : undefined,
     agentsCanDecide: trading.decider === 'rules' || Boolean(client),
     decider: trading.decider,
+    caution: cautionNow(now) ? trading.caution : undefined,
+    cautionAuto: trading.cautionAuto,
   };
 }

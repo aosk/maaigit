@@ -744,6 +744,14 @@ export function createOffice(canvas: HTMLCanvasElement, opts: { reduced: () => b
           await say(exec, 'حالته في SNB غير معروفة!', 2200, my);
         });
         return;
+      case 'system.caution':
+        add(async (my) => {
+          const on = (e.data as { on?: boolean } | undefined)?.on;
+          gateLight = on ? 'alarm' : 'idle';
+          await say(risk, on ? 'وضع الحذر!' : 'انتهى الحذر', 1800, my);
+          if (on) gateLight = 'idle';
+        });
+        return;
       case 'system.resumed':
         add(async (my) => {
           for (const p of everyone()) p.jump = 1;

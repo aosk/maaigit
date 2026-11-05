@@ -26,6 +26,8 @@ export interface RiskContext {
   clock: MarketClock;
   /** Real money: prices must come from SNB itself, fresh. */
   live?: boolean;
+  /** Caution mode: new buys at half the per-order limit, and none in these sectors. */
+  caution?: { sectors: string[] };
   ordersToday: number;
   openOrders: TradeOrder[];
   now: Date;
@@ -60,6 +62,7 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
   if (!quote || ctx.now.getTime() - Date.parse(quote.asOf) > STALE_QUOTE_MS) return veto(`No fresh price for ${p.symbol}.`);
   if (ctx.live && (quote.source !== 'bot' || ctx.now.getTime() - Date.parse(quote.asOf) > LIVE_QUOTE_MS)) return veto(`No live SNB price for ${p.symbol} in the last 2 minutes.`);
   if (p.side === 'buy' && ctx.clock.minutesToChange <= NO_NEW_POSITIONS_MIN) return veto('No new positions in the last 20 minutes before the close.');
+  if (p.side === 'buy' && ctx.caution?.sectors.includes(stock.sector)) return veto(`Caution mode: no new buys in the ${stock.sector} sector.`);
   if (ctx.ordersToday >= ctx.limits.maxOrdersPerDay) return veto(`Today's limit of ${ctx.limits.maxOrdersPerDay} orders is used up.`);
   if (ctx.openOrders.some((o) => o.symbol === p.symbol)) return veto(`An order for ${p.symbol} is still open.`);
 
@@ -97,6 +100,7 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
     const sectorNow = ctx.book.positions.filter((x) => sectorOf(x.symbol) === stock.sector).reduce((sum, x) => sum + (bySymbol.get(x.symbol) ?? 0), 0) + sectorReserved;
     const price = limitPrice * 1.002; // with fees
     cut(ctx.limits.maxOrder / price, `Reduced to the ${ctx.limits.maxOrder} SAR limit per order.`);
+    if (ctx.caution) cut(ctx.limits.maxOrder / 2 / price, 'Caution mode: half the per-order limit.');
     cut((ctx.book.cash - reserved) / price, 'Reduced to the cash available.');
     cut((ctx.limits.capital - total - reserved) / price, `Reduced to keep within the ${ctx.limits.capital} SAR you allowed.`);
     cut((ctx.limits.capital * ctx.limits.maxPerSymbolPct / 100 - (bySymbol.get(p.symbol) ?? 0)) / price, `Reduced to keep ${p.symbol} within ${ctx.limits.maxPerSymbolPct}% of the capital.`);

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { AgentId, TradeLimits } from '../../shared/trading.js';
 import { askAgents } from '../trading/agents.js';
-import { round, tradingView } from '../trading/engine.js';
+import { endCaution, round, tradingView } from '../trading/engine.js';
 import { roundsOf } from '../trading/archive.js';
 import { botStale, createBotKey, halt, resolveUnknown, resume, revokeBotKey, setMode } from '../trading/executor.js';
 import { emit, eventsSince, onTradeEvent, saveTrading, trading } from '../trading/store.js';
@@ -157,6 +157,21 @@ tradingRoutes.put('/trading/decider', (req, res) => {
   if (trading.decider !== decider) {
     trading.decider = decider;
     emit('system.limits', 'user', decider === 'rules' ? 'القرار صار بالقاعدة البسيطة (بدون Claude)' : 'القرار صار بـ Claude');
+    saveTrading();
+  }
+  res.json(tradingView());
+});
+
+/** Caution mode: ended now by the user, or whether it may turn on by itself. */
+tradingRoutes.post('/trading/caution/end', (_req, res) => {
+  endCaution('user');
+  res.json(tradingView());
+});
+tradingRoutes.put('/trading/caution-auto', (req, res) => {
+  if (typeof req.body?.on !== 'boolean') throw new HttpError(400, 'on is true or false');
+  if (trading.cautionAuto !== req.body.on) {
+    trading.cautionAuto = req.body.on;
+    emit('system.limits', 'user', req.body.on ? 'وضع الحذر التلقائي: مفعّل' : 'وضع الحذر التلقائي: موقوف');
     saveTrading();
   }
   res.json(tradingView());

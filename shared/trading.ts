@@ -128,6 +128,7 @@ export type TradeEventType =
   | 'system.resumed'
   | 'system.mode'
   | 'system.limits'
+  | 'system.caution'
   | 'user.directive'
   | 'user.question'
   | 'agent.answer'
@@ -191,6 +192,18 @@ export interface TradingState {
   agentsCanDecide: boolean;
   /** Who decides: Claude (no trade when it is unavailable), or the plain rule, chosen on purpose. */
   decider: Decider;
+  /** Caution mode, when on: what set it off, the sectors without new buys, and when it ends by itself. */
+  caution?: Caution;
+  /** Whether a high-severity market development turns caution mode on by itself. */
+  cautionAuto: boolean;
+}
+
+export interface Caution {
+  since: string;
+  until: string;
+  sectors: string[];
+  reason: string;
+  source: string;
 }
 
 export type Decider = 'claude' | 'rules';

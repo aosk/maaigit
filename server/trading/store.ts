@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AgentId, Decider, Position, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder } from '../../shared/trading.js';
+import type { AgentId, Caution, Decider, Position, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder } from '../../shared/trading.js';
 import { config } from '../config.js';
 import { writePrivate } from '../secure-fs.js';
 import { tradingDay } from './tadawul.js';
@@ -26,6 +26,10 @@ export interface TradingData {
   mode: TradeMode;
   /** Who decides each round: Claude, or the plain rule (chosen by the user, never switched to silently). */
   decider: Decider;
+  /** Caution mode (half-size buys, none in the sectors named) while a serious market development is fresh. */
+  caution?: Caution;
+  /** A high-severity, confirmed market development turns caution on by itself (the user can turn this off). */
+  cautionAuto: boolean;
   halted: boolean;
   haltReason?: string;
   limits: TradeLimits;
@@ -59,6 +63,7 @@ function fresh(): TradingData {
   return {
     mode: 'paper',
     decider: 'claude',
+    cautionAuto: true,
     halted: false,
     limits: { ...DEFAULT_LIMITS },
     excluded: [],
