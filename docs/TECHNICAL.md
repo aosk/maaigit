@@ -88,6 +88,7 @@ Layering rule: `routes → services (ai, asana, gcal…) → store`. No module i
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude (without it: demo mode) |
 | `ANTHROPIC_ADMIN_KEY` | Optional Admin API key: lets Admin → Anthropic account show your usage and cost from Anthropic (organization accounts only) |
+| `RENDER_API_KEY` | Optional Render API key: lets Admin → Usage & cost show every service in the workspace, the estimated monthly cost, this service's CPU, memory, bandwidth and server errors |
 | `MAAI_PASSWORD` | Online sign-in password |
 | `MAAI_PIN`, `MAAI_PHONE`, `MAAI_PHONE_PORT` | Home-Wi-Fi mode |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Send/read mail |

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AdminOverview, AgentSetting, HealthReport } from '../../shared/types';
+import type { AdminOverview, AgentSetting, CloudUsage as Cloud, HealthReport, RenderUsage as Render } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
-import { Moon } from '../components/Icons';
+import { Back, ChartUp, Chat, FileText, Gear, Moon, Refresh, Sun } from '../components/Icons';
+import { Overview, markSeen } from './Overview';
+import { RenderUsage } from './RenderUsage';
 import { TokenUsage } from './TokenUsage';
 import { CloudUsage } from './CloudUsage';
 import { DeviceBot } from './DeviceBot';
@@ -31,12 +33,22 @@ function Badge({ outcome, label }: { outcome: string; label?: string }) {
  * you, then every part by area. The menu shows how many things need you, so a glance tells whether to open it.
  */
 const SECTIONS = [
-  { id: '', label: 'Overview' },
-  { id: 'bots', label: 'Bots' },
-  { id: 'agents', label: 'Agents' },
-  { id: 'usage', label: 'Usage & cost' },
-  { id: 'audit', label: 'Safety & audit' },
+  { id: '', label: 'Overview', short: 'Overview', icon: Sun },
+  { id: 'usage', label: 'Usage & cost', short: 'Usage', icon: ChartUp },
+  { id: 'bots', label: 'Bots', short: 'Bots', icon: Chat },
+  { id: 'agents', label: 'Agents', short: 'Agents', icon: Gear },
+  { id: 'audit', label: 'Safety & audit', short: 'Log', icon: FileText },
 ];
+
+/** The app screen the portal was opened from, to go back to (or «يومك»). */
+const backTo = () => {
+  try {
+    const r = sessionStorage.getItem('maai.beforeAdmin');
+    return r && r !== 'admin' ? `#/${r}` : '#/today';
+  } catch {
+    return '#/today';
+  }
+};
 /** Old addresses, from before the sections were merged. */
 const MOVED: Record<string, string> = { health: '', integrations: '', device: 'bots', cloud: 'usage' };
 
@@ -82,6 +94,39 @@ export function Admin() {
     return () => clearInterval(timer);
   }, [loadHealth]);
 
+  const [render, setRender] = useState<Render | null>(null);
+  const [renderError, setRenderError] = useState('');
+  const [renderBusy, setRenderBusy] = useState(false);
+  const loadRender = useCallback((refresh = false) => {
+    // Only a tap shows "Reading…"; the quiet refresh every minute does not.
+    if (refresh) setRenderBusy(true);
+    api.adminRender(refresh).then((r) => { setRender(r); setRenderError(''); }).catch((e: Error) => setRenderError(e.message)).finally(() => setRenderBusy(false));
+  }, []);
+  const [cloud, setCloud] = useState<Cloud | null>(null);
+  useEffect(() => {
+    if (section !== '' && section !== 'usage') return;
+    const read = () => api.adminRender().then((r) => { setRender(r); setRenderError(''); }).catch((e: Error) => setRenderError(e.message));
+    void read();
+    if (section === '') api.adminCloud().then(setCloud).catch(() => {});
+    const timer = setInterval(() => document.hidden || void read(), 60_000);
+    return () => clearInterval(timer);
+  }, [section]);
+
+  // Esc goes back to the app; leaving remembers this visit for "since you last looked".
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !(e.target instanceof HTMLInputElement)) window.location.hash = backTo();
+    };
+    window.addEventListener('keydown', onKey);
+    const leave = () => markSeen();
+    window.addEventListener('pagehide', leave);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pagehide', leave);
+      markSeen();
+    };
+  }, []);
+
   const load = useCallback((background = false) => {
     api.admin(background).then((d) => { setData(d); setError(''); }).catch((e: Error) => setError(e.message));
   }, []);
@@ -118,54 +163,65 @@ export function Admin() {
       ]
     : [];
 
+  const current = SECTIONS.find((x) => x.id === section) ?? SECTIONS[0];
+  const home = backTo();
+
   return (
     <div className="admin" dir="ltr" lang="en">
-      <nav className="admin-nav" aria-label="Admin sections">
-        <div className="row" style={{ padding: '0 8px 20px' }}>
-          <div className="admin-logo"><Logo size={22} /></div>
-          <div><div style={{ fontWeight: 700, fontSize: 15 }}>maai admin</div><div className="sub">{window.location.host}</div></div>
+      <header className="adm-top">
+        <a className="adm-back" href={home} aria-label="Back to the app">
+          <Back size={20} />
+          <span className="adm-logo-sm"><Logo size={16} /></span>
+          <span>Back to app</span>
+        </a>
+        <h1 className="adm-top-title">{current.label}</h1>
+        <div className="row" style={{ gap: 6 }}>
+          <button className="admin-btn" aria-label="Check everything again" onClick={() => { loadHealth(); load(); loadRender(true); }}>
+            <Refresh size={18} />
+          </button>
+          <button className="admin-btn" aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => update({ look: dark ? 'light' : 'dark' })}>
+            <Moon size={18} />
+          </button>
         </div>
-        {SECTIONS.map((s) => (
-          <a key={s.id} href={s.id ? `#/admin/${s.id}` : '#/admin'} aria-current={section === s.id ? 'page' : undefined}>
-            <span style={{ flex: 1 }}>{s.label}</span>
-            {badge[s.id] > 0 && <span className="admin-count" aria-label={`${badge[s.id]} need you`}>{badge[s.id]}</span>}
-          </a>
-        ))}
-        <a href="#/today" style={{ marginTop: 'auto' }}>← Back to the app</a>
-      </nav>
+      </header>
 
-      <main className="admin-main">
-        <header className="between wrap">
-          <div>
-            <h1 style={{ fontSize: 28 }}>{SECTIONS.find((x) => x.id === section)?.label ?? 'Overview'}</h1>
-            {section === '' && <span className="sub">What needs you first, then every part by area · refreshes by itself</span>}
+      <div className="adm-body">
+        <nav className="admin-nav adm-side" aria-label="Admin sections">
+          <div className="row" style={{ padding: '0 8px 16px' }}>
+            <div className="admin-logo"><Logo size={22} /></div>
+            <div><div style={{ fontWeight: 700, fontSize: 15 }}>maai admin</div><div className="sub">{window.location.host}</div></div>
           </div>
-          <div className="row wrap">
-            <button className="admin-btn" aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => update({ look: dark ? 'light' : 'dark' })}>
-              <Moon size={18} />
-            </button>
-          </div>
-        </header>
+          {SECTIONS.map((s) => (
+            <a key={s.id} href={s.id ? `#/admin/${s.id}` : '#/admin'} aria-current={section === s.id ? 'page' : undefined}>
+              <s.icon size={18} />
+              <span style={{ flex: 1, marginInlineStart: 10 }}>{s.label}</span>
+              {badge[s.id] > 0 && <span className="admin-count" aria-label={`${badge[s.id]} need you`}>{badge[s.id]}</span>}
+            </a>
+          ))}
+          <span className="sub" style={{ marginTop: 'auto', padding: '0 12px' }}>Esc goes back to the app</span>
+        </nav>
 
-        {error && <div className="error" role="alert">{error}</div>}
+        <main className="admin-main">
+          {error && <div className="error" role="alert">{error}</div>}
 
-        {section === '' && <Health report={health} error={healthError} reload={() => loadHealth()} />}
+          {section === '' && <Overview data={data} health={health} render={render} cloud={cloud} reload={() => { loadHealth(); loadRender(true); }} />}
+          {section === '' && <Health report={health} error={healthError} reload={() => loadHealth()} banner={false} />}
 
-        {section === '' && metrics.length > 0 && (
-          <section aria-label="Activity" className="admin-card">
-            <h2 className="h2" style={{ fontSize: 16 }}>Activity</h2>
-            <div className="metrics">
-              {metrics.map((m) => (
-                <div key={m.label} className="metric">
-                  <span className="sub" style={{ fontWeight: 600 }}>{m.label}</span>
-                  <span style={{ fontSize: 22, fontWeight: 700 }}>{m.value}</span>
-                  <span className="sub">{m.note}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
+          {section === 'usage' && <RenderUsage data={render} error={renderError} busy={renderBusy} reload={() => loadRender(true)} />}
+          {section === 'usage' && metrics.length > 0 && (
+            <section aria-label="Activity" className="admin-card">
+              <h2 className="h2" style={{ fontSize: 16 }}>What MAAI did</h2>
+              <div className="metrics">
+                {metrics.map((m) => (
+                  <div key={m.label} className="metric">
+                    <span className="sub" style={{ fontWeight: 600 }}>{m.label}</span>
+                    <span style={{ fontSize: 22, fontWeight: 700 }}>{m.value}</span>
+                    <span className="sub">{m.note}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         {section === 'usage' && data && <TokenUsage rows={data.usageLog} timeZone={data.status.location.timezone} allTime={data.usage} />}
         {section === 'usage' && data && <CloudUsage maaiThirtyDayTokens={data.usageLog.reduce((a, r) => a + r.input + r.cached + r.output, 0)} />}
 
@@ -237,7 +293,20 @@ export function Admin() {
             ))}
           </div>
         </section>}
-      </main>
+        </main>
+      </div>
+
+      <nav className="adm-tabs" aria-label="Admin sections">
+        {SECTIONS.map((s) => (
+          <a key={s.id} href={s.id ? `#/admin/${s.id}` : '#/admin'} aria-current={section === s.id ? 'page' : undefined}>
+            <span className="adm-tab-icon">
+              <s.icon size={22} />
+              {badge[s.id] > 0 && <span className="adm-tab-badge" aria-label={`${badge[s.id]} need you`}>{badge[s.id]}</span>}
+            </span>
+            <span>{s.short}</span>
+          </a>
+        ))}
+      </nav>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { dataIsPersistent } from './storage.js';
 import { state } from './store.js';
 import { alertHealth } from './notify.js';
 import { tradingChecks } from './trading/health.js';
+import { localUsage, renderCheck } from './render-usage.js';
 
 /**
  * Reads how every part of MAAI is doing right now: the server itself, the saved data, Claude, the device bot
@@ -73,7 +74,10 @@ function storage(): HealthCheck {
   if (config.production && !dataIsPersistent(config.dataDir)) {
     return { id: 'storage', name: 'Saved data', status: 'fail', detail: 'Not on a persistent disk: every update erases the data.', fix: 'Render → service → Disks → Add Disk (mount path /var/data), and MAAI_DATA_DIR = /var/data.' };
   }
-  return { id: 'storage', name: 'Saved data', status: 'ok', detail: `Saved${size}; last save ${ago(saves.lastOk)}.` };
+  const disk = localUsage().disk;
+  const space = disk ? `; disk ${disk.pct}% full (${Math.round(disk.used)} of ${Math.round(disk.limit!)} MB)` : '';
+  if (disk?.level === 'high') return { id: 'storage', name: 'Saved data', status: 'warn', detail: `Saved${size}${space}.`, fix: 'The disk is nearly full: make it bigger in Render → service → Disks (it can only grow).' };
+  return { id: 'storage', name: 'Saved data', status: 'ok', detail: `Saved${size}; last save ${ago(saves.lastOk)}${space}.` };
 }
 
 function claude(): HealthCheck {
@@ -169,7 +173,7 @@ function connections(): HealthCheck[] {
 const RANK: Record<HealthLevel, number> = { off: 0, ok: 0, warn: 1, fail: 2 };
 
 export function healthReport(): HealthReport {
-  const checks = [server(), storage(), claude(), ...deviceBot(), ...connections(), ...tradingChecks()];
+  const checks = [server(), storage(), renderCheck(), claude(), ...deviceBot(), ...connections(), ...tradingChecks()];
   const worst = Math.max(...checks.map((c) => RANK[c.status]));
   return {
     status: worst === 2 ? 'fail' : worst === 1 ? 'warn' : 'ok',

@@ -77,12 +77,21 @@ export function App() {
 
   useEffect(() => {
     const onHash = () => {
-      setRoute(readRoute());
+      const next = readRoute();
+      // Where to go back to from the admin portal: the screen it was opened from.
+      if (next === 'admin' && route !== 'admin') {
+        try {
+          sessionStorage.setItem('maai.beforeAdmin', route);
+        } catch {
+          // private mode: the portal goes back to «يومك»
+        }
+      }
+      setRoute(next);
       window.scrollTo(0, 0);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, []);
+  }, [route]);
 
   useEffect(() => {
     document.title = route === 'admin' ? 'MAAI Admin' : `${t.appName} · ${t[route]}`;

@@ -392,6 +392,55 @@ export interface CloudUsage {
   message?: string;
 }
 
+/** How heavy a use is: green, amber or red in the admin portal. */
+export type UsageLevel = 'low' | 'medium' | 'high';
+
+/** One measure of use against its limit. */
+export interface Gauge {
+  used: number;
+  limit?: number;
+  /** Used as a share of the limit (for CPU and memory, the peak of the period). */
+  pct?: number;
+  level?: UsageLevel;
+  unit: string;
+  /** Recent values, oldest first, for a small chart. */
+  series?: number[];
+}
+
+/** One service in the Render workspace and what it costs a month (estimated from Render's prices). */
+export interface RenderService {
+  id: string;
+  name: string;
+  type: string;
+  plan: string;
+  suspended: boolean;
+  diskGB?: number;
+  computeUsd: number;
+  diskUsd: number;
+  monthlyUsd: number;
+  url?: string;
+  dashboardUrl?: string;
+  /** This is the service MAAI runs on. */
+  self: boolean;
+  note?: string;
+}
+
+/** Render, where MAAI runs: this machine now, and (with RENDER_API_KEY) the workspace's services, cost and traffic. */
+export interface RenderUsage {
+  checkedAt: string;
+  local: { memory: Gauge; cpu: Gauge; disk?: Gauge; uptimeSec: number; node: string };
+  reports: 'ok' | 'needs-key' | 'error';
+  message?: string;
+  services?: RenderService[];
+  monthly?: { usd: number; level: UsageLevel; running: number; suspended: number; free: number; idleUsd: number };
+  self?: {
+    cpu?: Gauge;
+    memory?: Gauge;
+    bandwidth?: { last30MB: number; projectedMonthMB: number; includedMB: number; level: UsageLevel; series: number[] };
+    requests?: { total24h: number; errors24h: number; errorRate: number; level: UsageLevel; series: number[] };
+  };
+}
+
 export interface AdminOverview {
   counts: {
     events: number;

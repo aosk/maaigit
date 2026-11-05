@@ -12,7 +12,7 @@ const OVERALL: Record<HealthReport['status'], string> = { ok: 'All working', war
 const RANK: Record<HealthLevel, number> = { fail: 0, warn: 1, ok: 2, off: 3 };
 
 const GROUPS = [
-  { id: 'core', title: 'MAAI core', ids: ['server', 'storage', 'claude', 'push', 'news'], link: undefined },
+  { id: 'core', title: 'MAAI core', ids: ['server', 'storage', 'render', 'claude', 'push', 'news'], link: undefined },
   { id: 'messages', title: 'Messages & WhatsApp', ids: ['bot', 'replies', 'gmail', 'whatsapp'], link: '#/admin/bots' },
   { id: 'calendar', title: 'Calendar & tasks', ids: ['calendar', 'asana'], link: '#/settings' },
   { id: 'stocks', title: 'maai Stocks', ids: ['stocksmart', 'stocksmart-prices', 'stocksmart-agents', 'snb-bot'], link: '#/stocks' },
@@ -20,7 +20,7 @@ const GROUPS = [
 
 const groupOf = (c: HealthCheck) => GROUPS.find((g) => (g.ids as readonly string[]).includes(c.id)) ?? GROUPS[0];
 /** Where to fix a check: StockSmart for its parts, the bots page for the device bot, Settings for the rest. */
-const fixLink = (c: HealthCheck) => (c.id === 'news' ? '#/news' : c.id === 'bot' || c.id === 'replies' ? '#/admin/bots' : groupOf(c).link);
+const fixLink = (c: HealthCheck) => (c.id === 'news' ? '#/news' : c.id === 'render' || c.id === 'server' ? '#/admin/usage' : c.id === 'bot' || c.id === 'replies' ? '#/admin/bots' : groupOf(c).link);
 
 const time = (iso: string) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
 
@@ -31,7 +31,7 @@ const Dot = ({ level, size = 10 }: { level: HealthLevel; size?: number }) => (
   <span aria-hidden="true" className="hl-dot" style={{ width: size, height: size, background: COLOR[level] }} />
 );
 
-export function Health({ report, error, reload }: { report: HealthReport | null; error: string; reload: () => void }) {
+export function Health({ report, error, reload, banner = true }: { report: HealthReport | null; error: string; reload: () => void; banner?: boolean }) {
   if (error) return <div className="error" role="alert">The server did not answer: {error}</div>;
   if (!report) return <div className="admin-card"><div className="skeleton"><span /><span /></div></div>;
 
@@ -41,7 +41,7 @@ export function Health({ report, error, reload }: { report: HealthReport | null;
 
   return (
     <>
-      <section aria-label="Overall health" className={`admin-card hl-banner hl-${report.status}`}>
+      {banner && <section aria-label="Overall health" className={`admin-card hl-banner hl-${report.status}`}>
         <div className="between wrap" style={{ gap: 12 }}>
           <div role="status" className="row" style={{ gap: 10 }}>
             <Dot level={report.status} size={14} />
@@ -57,10 +57,10 @@ export function Health({ report, error, reload }: { report: HealthReport | null;
         <span className="sub">
           Checked {time(report.checkedAt)} · up since {time(report.startedAt)}{report.version ? ` · version ${report.version}` : ''} · your phone is alerted when something stops working
         </span>
-      </section>
+      </section>}
 
       {attention.length > 0 && (
-        <section aria-label="Needs your attention" className="admin-card">
+        <section id="attention" aria-label="Needs your attention" className="admin-card">
           <h2 className="h2" style={{ fontSize: 17 }}>Needs your attention</h2>
           {attention.map((c) => (
             <div key={c.id} className={`hl-issue hl-${c.status}`}>

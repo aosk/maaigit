@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ChatTurn, Lang, Proposal, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
-import { canListen, listen, speak, stopSpeaking, unlockSpeech, type ListenProblem } from '../speech';
+import { canListen, listen, speak, speechStream, stopSpeaking, unlockSpeech, type ListenProblem } from '../speech';
 import { canRecord, record } from '../recorder';
 import { FileText, Mic, Paperclip, Person, Plus, Send } from '../components/Icons';
 import { canPickContacts, pickContacts } from '../contacts';
@@ -139,7 +139,7 @@ export function Assistant() {
   const dictLang: Lang = lang;
   const smart = Boolean(status?.voice?.smart) && canRecord && !smartFailed;
 
-  async function send(text: string, voice?: Lang) {
+  async function send(text: string, voice?: Lang, spoken = false) {
     if (busyRef.current || !alive.current) return;
     const waiting = pendingRef.current;
     if (waiting.some((p) => p.status === 'uploading')) return setError(t.attachWaiting);
@@ -158,12 +158,27 @@ export function Assistant() {
     const abort = new AbortController();
     abortRef.current = abort;
     try {
-      const res = await api.send(message, lang, (e) => alive.current && setProgress((p) => addEvent(p, e)), files.map((f) => f.id!), abort.signal, voice);
+      // Read aloud as it is written: the first sentence plays while the rest is still coming.
+      const voiceOut = settings.toggles.speakReplies ? speechStream(lang, settings.toggles.slow) : null;
+      const res = await api.send(
+        message,
+        lang,
+        (e) => {
+          if (!alive.current) return;
+          if (e.type === 'text' && voiceOut?.current) voiceOut.push(e.text);
+          setProgress((p) => addEvent(p, e));
+        },
+        files.map((f) => f.id!),
+        abort.signal,
+        voice,
+        spoken,
+      );
       for (const f of files) if (f.preview) forgetPreview(f.preview);
       if (!alive.current) return;
       setProposals((ps) => ({ ...ps, ...Object.fromEntries(res.proposals.map((p) => [p.id, p])) }));
       setTurns((ts) => [...ts, { role: 'assistant', text: res.reply, proposalIds: res.proposals.map((p) => p.id) }]);
-      if (settings.toggles.speakReplies) speak(res.reply, lang, settings.toggles.slow);
+      if (voiceOut?.spoke) voiceOut.end();
+      else if (voiceOut?.current) speak(res.reply, lang, settings.toggles.slow);
     } catch (e) {
       if (!alive.current) return;
       // The connection may have dropped after MAAI finished: ask the server before telling the user it failed.
@@ -191,7 +206,7 @@ export function Assistant() {
     if (settings.toggles.reviewVoice) {
       setInput(words);
       inputRef.current?.focus();
-    } else void send(words, smart ? undefined : dictLang);
+    } else void send(words, smart ? undefined : dictLang, true);
   }
 
   function toggleMic() {

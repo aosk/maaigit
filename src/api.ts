@@ -18,6 +18,7 @@ import type {
   ChatEvent,
   CalendarEvent,
   CloudUsage,
+  RenderUsage,
   ChatTurn,
   InboxMessage,
   Lang,
@@ -171,8 +172,8 @@ export const api = {
     return (await res.json()) as UploadInfo;
   },
   /** Streams MAAI's progress (thinking, steps, reply text) and resolves with the final reply. `signal` abandons it (the screen was left). */
-  send: async (text: string, lang: Lang, onEvent: (e: ChatEvent) => void, attachments: string[] = [], signal?: AbortSignal, voice?: Lang) =>
-    readStream(await request('POST', '/chat/stream', { text, lang, attachments, voice }, false, signal), onEvent),
+  send: async (text: string, lang: Lang, onEvent: (e: ChatEvent) => void, attachments: string[] = [], signal?: AbortSignal, voice?: Lang, spoken = false) =>
+    readStream(await request('POST', '/chat/stream', { text, lang, attachments, voice, spoken }, false, signal), onEvent),
   /** Sends a recording to be turned into words (Arabic and English may be mixed). */
   transcribe: async (audio: Blob): Promise<string> => {
     const res = await fetch('/api/transcribe', { method: 'POST', headers: { 'Content-Type': audio.type || 'application/octet-stream' }, body: audio });
@@ -262,6 +263,7 @@ export const api = {
   alerts: (since: string) => call<AppAlert[]>('GET', `/alerts?since=${encodeURIComponent(since)}`, undefined, true),
 
   adminCloud: (refresh = false) => call<CloudUsage>('GET', `/admin/cloud${refresh ? '?refresh=1' : ''}`),
+  adminRender: (refresh = false) => call<RenderUsage>('GET', `/admin/render${refresh ? '?refresh=1' : ''}`),
   admin: (background = false) => call<AdminOverview>('GET', '/admin', undefined, background),
   setAgent: (id: AgentSetting['id'], enabled: boolean) => call<AgentSetting>('PATCH', `/admin/agents/${id}`, { enabled }),
   health: (background = false) => call<HealthReport>('GET', '/admin/health', undefined, background),

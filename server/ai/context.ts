@@ -168,9 +168,15 @@ export function contextNote(): string {
   ].join('\n\n');
 }
 
-/** Loads what the context needs that is not already in memory (Asana), best effort. */
-export async function refreshContext(): Promise<void> {
-  await Promise.all([openTasks().catch(() => {}), projects().catch(() => {})]);
+/**
+ * Loads what the context needs that is not already in memory (Asana), best effort. A reply never waits for Asana once
+ * its tasks were read before: the refresh then runs alongside and the next message has it. The very first time it waits
+ * a moment at most, so a slow Asana never holds up an answer.
+ */
+export async function refreshContext(waitMs = 1500): Promise<void> {
+  const refresh = Promise.all([openTasks().catch(() => {}), projects().catch(() => {})]);
+  if (!asanaConfigured || cachedTasks().length || cachedProjects().length) return;
+  await Promise.race([refresh, new Promise((resolve) => setTimeout(resolve, waitMs).unref?.())]);
 }
 
 /** The context block that starts every user message to Claude. */

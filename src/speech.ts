@@ -46,14 +46,9 @@ export function unlockSpeech() {
   }
 }
 
-/** Reads `text` aloud, a sentence at a time, in the best voice installed (or the one chosen in Settings). */
-export function speak(text: string, lang: Lang, slow: boolean, onEnd?: () => void) {
-  if (!('speechSynthesis' in window)) return onEnd?.();
-  window.speechSynthesis.cancel();
-  const mine = ++session;
-  const parts = sentences(cleanForSpeech(text, lang));
+/** Queues sentences to be read aloud in this session, each in the voice of its own language. */
+function say(parts: string[], mine: number, onEnd?: () => void) {
   if (!parts.length) return onEnd?.();
-
   void installedVoices().then((voices) => {
     if (mine !== session) return; // stopped or replaced while the voices were loading
     const all = voices as (SpeechSynthesisVoice & VoiceInfo)[];
@@ -66,7 +61,7 @@ export function speak(text: string, lang: Lang, slow: boolean, onEnd?: () => voi
       utterance.lang = voice?.lang ?? voiceLang(partLang);
       if (voice) utterance.voice = voice;
       // A touch slower than the default sounds calmer and less hurried.
-      utterance.rate = slow ? 0.8 : 0.95;
+      utterance.rate = slowSpeech ? 0.8 : 0.95;
       utterance.pitch = 1;
       if (i === parts.length - 1) utterance.onend = () => mine === session && onEnd?.();
       utterance.onerror = (e) => {
@@ -76,6 +71,63 @@ export function speak(text: string, lang: Lang, slow: boolean, onEnd?: () => voi
       window.speechSynthesis.speak(utterance);
     });
   });
+}
+
+let slowSpeech = false;
+
+/** Reads `text` aloud, a sentence at a time, in the best voice installed (or the one chosen in Settings). */
+export function speak(text: string, lang: Lang, slow: boolean, onEnd?: () => void) {
+  if (!('speechSynthesis' in window)) return onEnd?.();
+  window.speechSynthesis.cancel();
+  const mine = ++session;
+  slowSpeech = slow;
+  say(sentences(cleanForSpeech(text, lang)), mine, onEnd);
+}
+
+/** Where a finished sentence ends in text still arriving: after . ! ? ؟ or a line break, followed by more text. */
+const SENTENCE_END = /[.!?؟۔…\n](?=\s)/g;
+
+/**
+ * Reads a reply aloud while it is still being written: each finished sentence is spoken as soon as it arrives, so the
+ * answer starts within a second or two instead of after the whole reply. `push` takes each new piece of text, `end`
+ * reads what is left; `spoke` says whether anything was read, so the caller does not read the whole reply again.
+ */
+export function speechStream(lang: Lang, slow: boolean) {
+  const can = 'speechSynthesis' in window;
+  if (can) window.speechSynthesis.cancel();
+  const mine = can ? ++session : session;
+  slowSpeech = slow;
+  let buffer = '';
+  let spoke = false;
+  const flush = (text: string) => {
+    const parts = sentences(cleanForSpeech(text, lang));
+    if (!can || !parts.length || mine !== session) return;
+    spoke = true;
+    say(parts, mine);
+  };
+  return {
+    push(piece: string) {
+      buffer += piece;
+      let cut = -1;
+      for (const m of buffer.matchAll(SENTENCE_END)) cut = m.index + 1;
+      // Wait for a sentence of some length, so the voice does not stop after every short word.
+      if (cut >= 24) {
+        flush(buffer.slice(0, cut));
+        buffer = buffer.slice(cut);
+      }
+    },
+    end() {
+      if (buffer.trim()) flush(buffer);
+      buffer = '';
+    },
+    get spoke() {
+      return spoke;
+    },
+    /** Whether this is still the voice playing (not stopped or replaced). */
+    get current() {
+      return mine === session;
+    },
+  };
 }
 
 export function stopSpeaking() {

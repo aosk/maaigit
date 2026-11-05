@@ -135,8 +135,8 @@ export const answering = new Set<string>();
  * One turn of the conversation: Claude replies, calling tools as needed. Any
  * cards it proposes are saved as pending; the turn is added to the conversation.
  */
-export async function chat(conversation: Conversation, userText: string, lang: Lang, onEvent: OnEvent = () => {}, files: Upload[] = [], voice?: Lang): Promise<{ text: string; proposals: Proposal[] }> {
-  const reply = await answer(conversation, userText, lang, onEvent, files, voice);
+export async function chat(conversation: Conversation, userText: string, lang: Lang, onEvent: OnEvent = () => {}, files: Upload[] = [], voice?: Lang, spoken = Boolean(voice)): Promise<{ text: string; proposals: Proposal[] }> {
+  const reply = await answer(conversation, userText, lang, onEvent, files, voice, spoken && !files.length);
   conversation.turns.push({ role: 'user', text: userText, ...(files.length ? { attachments: files.map((f) => ({ name: f.name, kind: f.kind })) } : {}) });
   conversation.turns.push({ role: 'assistant', text: reply.text, proposalIds: reply.proposals.map((p) => p.id) });
   state.proposals.push(...reply.proposals);
@@ -145,7 +145,7 @@ export async function chat(conversation: Conversation, userText: string, lang: L
   return reply;
 }
 
-async function answer(conversation: Conversation, userText: string, lang: Lang, onEvent: OnEvent, files: Upload[], voice?: Lang): Promise<{ text: string; proposals: Proposal[] }> {
+async function answer(conversation: Conversation, userText: string, lang: Lang, onEvent: OnEvent, files: Upload[], voice: Lang | undefined, spoken: boolean): Promise<{ text: string; proposals: Proposal[] }> {
   if (!agentEnabled('assistant')) {
     return { text: lang === 'ar' ? 'المساعد متوقف حالياً من قبل المشرف.' : 'The assistant is switched off by the admin right now.', proposals: [] };
   }
@@ -167,14 +167,14 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
   try {
     let text: string;
     try {
-      text = await runLoop(lang, messages, created, onEvent);
+      text = await runLoop(lang, messages, created, onEvent, spoken);
     } catch (error) {
       // A saved conversation whose reasoning no longer matches its history heals itself: drop the reasoning, ask once more.
       if (!/signature/i.test((error as Error).message ?? '')) throw error;
       messages.length = before + 1;
       created.length = 0;
       dropThinking(messages);
-      text = await runLoop(lang, messages, created, onEvent);
+      text = await runLoop(lang, messages, created, onEvent, spoken);
     }
     // The files were for this turn only: what is kept is the question and the answer, not the pixels.
     if (files.length) {
@@ -190,11 +190,15 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
   }
 }
 
-async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[], onEvent: OnEvent): Promise<string> {
+/**
+ * A spoken question wants a spoken answer quickly: Claude thinks less (low effort) and keeps it short. Typed questions,
+ * and anything with a file, keep the deeper reasoning.
+ */
+async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[], onEvent: OnEvent, spoken: boolean): Promise<string> {
   const system = `${SYSTEM}\n\nThe app is currently set to ${lang === 'ar' ? 'Arabic' : 'English'}.`;
   let reply = '';
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const response = await stream({ purpose: 'chat', system, messages, tools: [...tools, WEB_SEARCH], effort: 'medium', maxTokens: 16000 }, onEvent);
+    const response = await stream({ purpose: 'chat', system, messages, tools: [...tools, WEB_SEARCH], effort: spoken ? 'low' : 'medium', maxTokens: 16000 }, onEvent);
     messages.push({ role: 'assistant', content: response.content });
     reply = textOf(response.content) || reply;
 

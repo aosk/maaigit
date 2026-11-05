@@ -7,6 +7,7 @@ import { allEvents, audit, state } from '../store.js';
 import { status } from '../status.js';
 import { recentUsage } from '../usage.js';
 import { cloudUsage } from '../anthropic-usage.js';
+import { renderUsage } from '../render-usage.js';
 import { HttpError, find, wrap } from './http.js';
 
 export const admin = Router();
@@ -36,6 +37,9 @@ admin.get('/admin', (_req, res) => {
 
 /** What Anthropic reports for the key MAAI uses: rate limits, and tokens and cost when an Admin API key is available. */
 admin.get('/admin/cloud', wrap(async (req, res) => res.json(await cloudUsage({ force: req.query.refresh === '1' }))));
+
+/** Render, where MAAI runs: this machine now, and with RENDER_API_KEY every service's monthly cost and this one's traffic. */
+admin.get('/admin/render', wrap(async (req, res) => res.json(await renderUsage({ force: req.query.refresh === '1' }))));
 
 admin.patch('/admin/agents/:id', (req, res) => {
   const agent = find(state.agents, req.params.id);
