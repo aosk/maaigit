@@ -6,6 +6,7 @@ import { useOnRefresh } from '../refresh';
 import { useSettings } from '../settings';
 import { ChartUp, Chevron, Send, Stop } from '../components/Icons';
 import { PixelOffice } from '../components/PixelOffice';
+import { MarketPulse } from '../components/MarketPulse';
 import { TradeLog } from '../components/TradeLog';
 
 /**
@@ -131,6 +132,7 @@ export function StockSmart() {
       <div className="ss-grid">
         <div className="ss-col">
           <Hero st={st} t={t} />
+          {st.pulse && <MarketPulse pulse={st.pulse} />}
           {layout === 'phone' && <PixelOffice st={st} status={executorLabel(st, t)} />}
           <Positions st={st} t={t} />
           <Orders st={st} t={t} lang={lang} />

@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useSettings } from '../settings';
 import { signed } from '../screens/StockSmart';
 import { ChartUp, Chevron } from './Icons';
+import { MOOD_COLOR } from './MarketPulse';
 
 /** One line at the top of «يومك»: StockSmart's mode, today's profit or loss, the trades and the last thing that happened. */
 export function StockStrip() {
@@ -27,6 +28,13 @@ export function StockStrip() {
         <span className="row" style={{ gap: 8 }}>
           <b>{t.stocks}</b>
           <span className={`ss-mode ${st.mode}`}>{st.mode === 'live' ? t.ss.live : t.ss.paper}</span>
+          {st.pulse && (
+            <span className="mp-chip" style={{ color: MOOD_COLOR[st.pulse.mood] }} title={t.ss.pulseTitle}>
+              <i aria-hidden="true" style={{ background: MOOD_COLOR[st.pulse.mood] }} />
+              {t.ss.pulseMood[st.pulse.mood]}
+              {st.pulse.index && <bdi dir="ltr"> {st.pulse.index.changePct > 0 ? '+' : ''}{st.pulse.index.changePct.toFixed(1)}%</bdi>}
+            </span>
+          )}
         </span>
         <span className="sub ss-strip-last" dir="auto">{st.halted ? t.ss.halted(st.haltReason ?? '') : last ? `${t.ss.last} ${last.text}` : t.ss.tradesN(st.ordersToday)}</span>
       </span>

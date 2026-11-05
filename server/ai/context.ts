@@ -10,6 +10,7 @@ import { neutralize as n } from './untrusted.js';
 import { asanaConfigured, cachedProjects, cachedTasks, openTasks, projects, todayIso } from '../asana.js';
 import { tradingView } from '../trading/engine.js';
 import { instrument } from '../trading/tadawul.js';
+import { MOOD_AR } from '../trading/pulse.js';
 
 /** What Claude is told about the user's day and inbox, rebuilt for every request. */
 
@@ -148,7 +149,9 @@ export function tradingOverview(now = new Date()): string {
   const bot = v.mode === 'live' || v.executor.connected
     ? `SNB desktop bot: ${v.executor.connected ? `${v.executor.practice ? 'practice mode, ' : ''}${v.executor.stale ? 'SILENT' : 'connected'}${v.executor.brokerSession ? ', logged in to SNB' : ', not logged in to SNB'}` : 'not connected'}.`
     : '';
-  return [head, money, positions, orders, activity, bot].filter(Boolean).join('\n');
+  const p = v.pulse;
+  const pulse = `Market indicator (computed): ${p.score} on -100..+100, ${MOOD_AR[p.mood]}${p.index ? `; TASI ${p.index.value.toLocaleString('en-US')} (${p.index.changePct >= 0 ? '+' : ''}${p.index.changePct}% today)` : '; TASI not read'}; ${p.breadth.up} of the followed stocks up, ${p.breadth.down} down; market risk ${p.risk}.`;
+  return [head, money, pulse, positions, orders, activity, bot].filter(Boolean).join('\n');
 }
 
 export function contextNote(): string {

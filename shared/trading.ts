@@ -161,6 +161,25 @@ export interface MarketClock {
   label: 'open' | 'closed' | 'weekend' | 'holiday';
 }
 
+/** The market as a whole, at a glance: the index, how the followed stocks move together, and the risk in the news. */
+export interface MarketPulse {
+  /** -100 (falling hard) to +100 (rising strongly). */
+  score: number;
+  mood: 'strong_up' | 'up' | 'mixed' | 'down' | 'strong_down';
+  /** TASI, when it could be read. */
+  index?: { value: number; changePct: number; /** % above (+) or below (-) its 20-day average. */ vsAvg20Pct?: number; change5dPct?: number; asOf: string; source: 'yahoo' | 'sim' };
+  /** The followed stocks: how many are up, down or flat today, and their average move. */
+  breadth: { up: number; down: number; flat: number; avgChangePct: number };
+  /** The most serious market-wide development the news agent reported, and caution mode. */
+  risk: 'low' | 'medium' | 'high';
+  riskHeadline?: string;
+  caution: boolean;
+  /** What moved the score, a short Arabic phrase each, strongest first. */
+  reasons: string[];
+  /** The newest price it was worked out from. */
+  asOf?: string;
+}
+
 /** Everything the StockSmart screen needs for its first paint; the stream keeps it current. */
 export interface TradingState {
   mode: TradeMode;
@@ -196,6 +215,8 @@ export interface TradingState {
   caution?: Caution;
   /** Whether a high-severity market development turns caution mode on by itself. */
   cautionAuto: boolean;
+  /** The general market indicator. */
+  pulse: MarketPulse;
 }
 
 export interface Caution {

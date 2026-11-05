@@ -1,11 +1,12 @@
-import type { TradingState } from '../../shared/trading.js';
+import type { MarketPulse, TradingState } from '../../shared/trading.js';
 import { client } from '../ai/claude.js';
 import { alertTrade } from '../notify.js';
 import { randomBytes } from 'node:crypto';
 import { decisionRound, lastDecisionRecord, marketContext, newsFetchedAt, newsRound, technicalRound, type Decision, type MarketItem } from './agents.js';
 import { archiveRound, type RoundRecord } from './archive.js';
 import { botStale, cancelAllOpen, halt, openOrders, processOrders, submit } from './executor.js';
-import { currentQuotes, refreshQuotes } from './market.js';
+import { currentIndex, currentQuotes, refreshQuotes } from './market.js';
+import { marketPulse } from './pulse.js';
 import { bookValue, dayPnl, rollDay, round2 } from './portfolio.js';
 import { checkOrder } from './risk.js';
 import { emit, onTradeEvent, saveTrading, trading } from './store.js';
@@ -100,15 +101,22 @@ async function runRound(now: Date): Promise<void> {
   record.technical = reads;
   record.news = { fetchedAt: newsFetchedAt(), items: news, market: marketContext() };
   record.caution = cautionNow(now) ? { ...trading.caution } : null;
+  const pulse = livePulse(now);
+  record.pulse = pulse;
   if (clock.minutesToChange <= NO_NEW_ORDERS_MIN) {
     emit('agent.observation', 'risk', `باقي ${clock.minutesToChange} دقيقة على الإقفال: ما فيه أوامر جديدة اليوم`, {}, now);
     archiveRound({ ...record, skipped: 'closing' });
     return;
   }
-  const decisions = await decisionRound(reads, news, clock.minutesToChange, now);
+  const decisions = await decisionRound(reads, news, clock.minutesToChange, now, pulse);
   record.decision = { ...lastDecisionRecord() };
   record.verdicts = decisions.map((d) => gate(d, now));
   archiveRound(record);
+}
+
+/** The general market indicator right now: TASI, the followed stocks' breadth, and the news agent's market risk. */
+function livePulse(now = new Date()): MarketPulse {
+  return marketPulse({ index: currentIndex(), quotes: [...currentQuotes().values()], market: marketContext(), caution: Boolean(cautionNow(now)) });
 }
 
 /** How long caution mode lasts after the last serious development. */
@@ -269,5 +277,6 @@ export function tradingView(now = new Date()): TradingState {
     decider: trading.decider,
     caution: cautionNow(now) ? trading.caution : undefined,
     cautionAuto: trading.cautionAuto,
+    pulse: livePulse(now),
   };
 }
