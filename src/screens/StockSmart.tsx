@@ -5,6 +5,7 @@ import { ago, time } from '../format';
 import { useOnRefresh } from '../refresh';
 import { useSettings } from '../settings';
 import { ChartUp, Chevron, Send, Stop } from '../components/Icons';
+import { PixelOffice } from '../components/PixelOffice';
 import { TradeLog } from '../components/TradeLog';
 
 /**
@@ -35,7 +36,7 @@ function Spark({ points, width = 320, height = 56 }: { points: number[]; width?:
 }
 
 export function StockSmart() {
-  const { t, settings } = useSettings();
+  const { t, settings, layout } = useSettings();
   const lang = settings.lang;
   const [st, setSt] = useState<TradingState | null>(null);
   const [error, setError] = useState('');
@@ -122,12 +123,13 @@ export function StockSmart() {
       <div className="ss-grid">
         <div className="ss-col">
           <Hero st={st} t={t} />
-          <AgentChips st={st} t={t} />
+          {layout === 'phone' && <PixelOffice st={st} status={executorLabel(st, t)} />}
           <Positions st={st} t={t} />
           <Orders st={st} t={t} lang={lang} />
           <SettingsPanel st={st} t={t} busy={busy} act={act} />
         </div>
         <div className="ss-col ss-side">
+          {layout !== 'phone' && <PixelOffice st={st} status={executorLabel(st, t)} />}
           <Feed st={st} t={t} lang={lang} onAsk={(q) => api.tradingAsk(q, lang).then((r) => r.answer)} onKeep={(text) => act(() => api.tradingDirective(text))} />
         </div>
       </div>
@@ -168,19 +170,10 @@ function Hero({ st, t }: { st: TradingState; t: T }) {
   );
 }
 
-function AgentChips({ st, t }: { st: TradingState; t: T }) {
+/** What carries the orders right now: the paper executor, or the SNB bot and its state. */
+function executorLabel(st: TradingState, t: T): string {
   const ex = st.executor;
-  const exec = st.mode === 'paper' ? t.ss.paperExecutor : !ex.connected ? t.ss.botOff : ex.stale ? t.ss.botStale : !ex.brokerSession ? t.ss.botLoggedOut : ex.practice ? t.ss.botPractice : t.ss.botOn;
-  return (
-    <div className="ss-agents">
-      {st.agents.filter((a) => a.id !== 'executor').map((a) => (
-        <span key={a.id} className={`ss-chip ag-${a.id}${a.enabled ? '' : ' off'}${a.lastError ? ' bad' : ''}`} title={a.lastError}>
-          <i />{t.ss.agentNames[a.id]}
-        </span>
-      ))}
-      <span className={`ss-chip ag-executor${st.mode === 'live' && (ex.stale || !ex.brokerSession) ? ' bad' : ''}`}><i />{exec}</span>
-    </div>
-  );
+  return st.mode === 'paper' ? t.ss.paperExecutor : !ex.connected ? t.ss.botOff : ex.stale ? t.ss.botStale : !ex.brokerSession ? t.ss.botLoggedOut : ex.practice ? t.ss.botPractice : t.ss.botOn;
 }
 
 function Positions({ st, t }: { st: TradingState; t: T }) {
