@@ -44,7 +44,11 @@ const check = (id: string) => healthReport().checks.find((c) => c.id === id)!;
 
 describe('the health check', () => {
   it('reports every part, with the worst as the overall status', () => {
+    // Outside Tadawul hours (Friday night): while the market is open, a test server with no prices is rightly a failure.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-06T20:00:00Z'));
     const report = healthReport();
+    vi.useRealTimers();
     expect(report.checks.map((c) => c.id)).toEqual(expect.arrayContaining(['server', 'storage', 'claude', 'bot', 'gmail', 'calendar', 'asana', 'push']));
     expect(report.checks.filter((c) => c.status !== 'ok' && c.status !== 'off').map((c) => `${c.id}: ${c.detail}`)).toEqual([]);
     expect(check('bot')).toMatchObject({ status: 'off' });
