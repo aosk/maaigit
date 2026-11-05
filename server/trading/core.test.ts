@@ -12,7 +12,7 @@ import { DEFAULT_LIMITS, emit, eventsSince, newBook, onTradeEvent, resetTrading,
 
 // Sunday 2 November 2026, 11:00 in Riyadh (08:00 UTC): the market is open.
 const OPEN = new Date('2026-11-01T08:00:00Z');
-const quote = (symbol: string, price: number, prevClose = price, asOf = OPEN): Quote => ({ symbol, price, prevClose, asOf: asOf.toISOString(), source: 'sim' });
+const quote = (symbol: string, price: number, prevClose = price, asOf = OPEN): Quote => ({ symbol, price, prevClose, asOf: asOf.toISOString(), receivedAt: asOf.toISOString(), source: 'sim' });
 
 function ctx(over: Partial<RiskContext> = {}): RiskContext {
   return {

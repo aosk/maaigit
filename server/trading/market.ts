@@ -17,14 +17,38 @@ const SOURCE: Source = process.env.MAAI_TRADING_QUOTES === 'yahoo' || (process.e
 
 const quotes = new Map<string, Quote>();
 const histories = new Map<string, { day: string; history: History }>();
+/** Every distinct price seen for each stock today, oldest first: what a paper order is judged against. */
+const observed = new Map<string, Quote[]>();
+const KEEP_OBSERVED = 200;
 
 export const currentQuotes = () => quotes;
+
+/** Sets a stock's current price and records it as an observation (once per exchange time). */
+function setQuote(q: Quote): void {
+  quotes.set(q.symbol, q);
+  const list = observed.get(q.symbol) ?? [];
+  if (list.at(-1)?.asOf !== q.asOf) {
+    list.push(q);
+    if (list.length > KEEP_OBSERVED) list.splice(0, list.length - KEEP_OBSERVED);
+    observed.set(q.symbol, list);
+  }
+}
+
+/** The prices seen for a stock that were true at the exchange after `from` and up to `to` (ISO times). */
+export function observedBetween(symbol: string, from: string, to: string): Quote[] {
+  const a = Date.parse(from);
+  const b = Date.parse(to);
+  return (observed.get(symbol) ?? []).filter((q) => Date.parse(q.asOf) > a && Date.parse(q.asOf) <= b);
+}
+
+/** The latest exchange time seen for a stock, if any. */
+export const latestObserved = (symbol: string): string | undefined => observed.get(symbol)?.at(-1)?.asOf;
 
 /** A price the desktop bot read at the broker: live, so it wins over the delayed feed. */
 export function noteBotQuote(symbol: string, price: number, prevClose: number | undefined, now = new Date()): void {
   if (!/^\d{4}$/.test(symbol) || !(price > 0)) return;
   const known = quotes.get(symbol);
-  quotes.set(symbol, { symbol, price, prevClose: prevClose && prevClose > 0 ? prevClose : known?.prevClose ?? price, asOf: now.toISOString(), source: 'bot' });
+  setQuote({ symbol, price, prevClose: prevClose && prevClose > 0 ? prevClose : known?.prevClose ?? price, asOf: now.toISOString(), receivedAt: now.toISOString(), source: 'bot' });
 }
 
 /** Reads today's prices for every stock (and, once a day, their daily history). Failures keep the last price, which then ages. */
@@ -53,7 +77,9 @@ export async function refreshQuotes(now = new Date(), fetcher: typeof fetch = fe
         const prevClose = Number(meta?.chartPreviousClose ?? meta?.previousClose) || closes[closes.length - 2] || price;
         histories.set(symbol, { day, history: { closes: closes.slice(0, -1), volumes: volumes.slice(0, -1) } });
         const at = Number(meta?.regularMarketTime) * 1000;
-        quotes.set(symbol, { symbol, price, prevClose: closes.length > 1 ? closes[closes.length - 2] : prevClose, asOf: new Date(at > 0 ? at : now.getTime()).toISOString(), source: 'yahoo' });
+        // A feed time in the future would let a price count before it happened: never later than when it arrived.
+        const asOf = new Date(at > 0 ? Math.min(at, now.getTime()) : now.getTime()).toISOString();
+        setQuote({ symbol, price, prevClose: closes.length > 1 ? closes[closes.length - 2] : prevClose, asOf, receivedAt: now.toISOString(), source: 'yahoo' });
       } catch (error) {
         console.error(`StockSmart: no price for ${symbol} (${(error as Error).message})`);
       }
@@ -103,11 +129,17 @@ function simulate(symbol: string, now: Date, day: string) {
   // Today's move follows the minute of the day, so the price drifts through the session.
   const minute = Math.floor(now.getTime() / 60_000) % 1440;
   const drift = Math.sin(minute / 37 + seed) * 0.012 + Math.sin(minute / 7) * 0.003;
-  quotes.set(symbol, { symbol, price: Math.round(prevClose * (1 + drift) * 100) / 100, prevClose, asOf: now.toISOString(), source: 'sim' });
+  setQuote({ symbol, price: Math.round(prevClose * (1 + drift) * 100) / 100, prevClose, asOf: now.toISOString(), receivedAt: now.toISOString(), source: 'sim' });
 }
 
 /** Forgets every price (tests only). */
 export function resetQuotes(): void {
   quotes.clear();
   histories.clear();
+  observed.clear();
+}
+
+/** Records a price as if it had arrived from the feed (tests and the scenario runner: a price true at `asOf`, received at `receivedAt`). */
+export function injectQuote(q: Quote): void {
+  setQuote(q);
 }

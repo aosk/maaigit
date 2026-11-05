@@ -1,7 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import type { Position } from '../../shared/trading.js';
 import { alertTrade } from '../notify.js';
-import { ackCommand, botKeyMatches, commandProgress, commandResult, halt, reconcile, stillGo, takeCommands, type BotResult } from '../trading/executor.js';
+import { ackCommand, botKeyMatches, commandProgress, commandResult, halt, reconcile, stillGo, takeCancels, takeCommands, type BotResult } from '../trading/executor.js';
 import { noteBotQuote } from '../trading/market.js';
 import { saveTrading, trading } from '../trading/store.js';
 
@@ -55,16 +55,19 @@ tradeBotApi.get('/commands', async (req, res) => {
   let closed = false;
   req.on('close', () => (closed = true));
   let commands = takeCommands();
-  while (!commands.length && !closed && Date.now() < until) {
+  let cancels = takeCancels();
+  while (!commands.length && !cancels.length && !closed && Date.now() < until) {
     await new Promise((r) => setTimeout(r, 1000));
     commands = takeCommands();
+    cancels = takeCancels();
   }
-  if (!closed) res.json({ commands, halted: trading.halted, mode: trading.mode, serverTime: new Date().toISOString() });
+  if (!closed) res.json({ commands, cancels, halted: trading.halted, mode: trading.mode, serverTime: new Date().toISOString() });
 });
 
 tradeBotApi.post('/ack', (req, res) => {
   const commandId = id(req.body?.commandId);
-  res.status(commandId && ackCommand(commandId) ? 204 : 404).end();
+  const kind = req.body?.kind === 'cancel' ? 'cancel' : 'order';
+  res.status(commandId && ackCommand(commandId, new Date(), kind) ? 204 : 404).end();
 });
 
 /** Asked right before pressing "submit" at the broker. */
@@ -78,12 +81,12 @@ tradeBotApi.post('/progress', (req, res) => {
   res.status(204).end();
 });
 
-const STATUSES = new Set(['filled', 'partial', 'rejected', 'failed']);
+const STATUSES = new Set(['accepted', 'filled', 'partial', 'cancelled', 'rejected', 'failed', 'unknown']);
 
 tradeBotApi.post('/result', (req, res) => {
   const b = req.body ?? {};
   const commandId = id(b.commandId);
-  if (!commandId || !STATUSES.has(b.status)) return res.status(400).json({ error: 'commandId and a status (filled, partial, rejected, failed) are needed' });
+  if (!commandId || !STATUSES.has(b.status)) return res.status(400).json({ error: 'commandId and a status (accepted, filled, partial, cancelled, rejected, failed, unknown) are needed' });
   const result: BotResult = {
     commandId,
     status: b.status,

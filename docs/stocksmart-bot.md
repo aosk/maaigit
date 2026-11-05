@@ -17,8 +17,8 @@ and session cookies never leave the computer: the server has no endpoint that as
 
 ```
 every request ............ Authorization: Bearer stk_…
-GET  /trade/v1/commands?wait=25     long-poll: returns at once if there are commands, else within 25 s
-POST /trade/v1/ack                  { commandId }                       received (until then it is sent again)
+GET  /trade/v1/commands?wait=25     long-poll: { commands, cancels, halted, mode, serverTime }
+POST /trade/v1/ack                  { commandId, kind? }                received ("cancel" for a cancel); until then it is sent again
 GET  /trade/v1/go/:commandId        { go, reason? }                     ask right before pressing Submit
 POST /trade/v1/progress             { commandId, stage }                "logging in", "form filled", "submitted"
 POST /trade/v1/result               { commandId, status, filledQty?, avgPrice?, brokerOrderId?, error? }
@@ -26,7 +26,30 @@ POST /trade/v1/positions            { cash, positions: [{ symbol, qty, avgCost }
 POST /trade/v1/heartbeat            { brokerSession, expiresInSec?, practice?, quotes?: [{ symbol, price, prevClose }] }  every minute
 ```
 
-`status` is `filled`, `partial`, `rejected` (the broker refused it) or `failed` (the bot could not place it).
+`status` is one of:
+
+| status | meaning |
+| --- | --- |
+| `accepted` | at SNB, not filled yet (the bot keeps following it) |
+| `partial` / `filled` | filled so far / completely, with `filledQty` and `avgPrice` |
+| `cancelled` | cancelled at SNB (what filled before stays) |
+| `rejected` | SNB refused it |
+| `failed` | it never reached SNB (stopped before Submit) |
+| `unknown` | it may have reached SNB: cut off after Submit, or a cancel that could not be confirmed |
+
+`unknown` keeps the order's cash and stock blocked and stops trading until the bot reports the real outcome or the
+user, having checked the SNB app, says whether it was executed. **After Submit, never report `failed`.**
+
+## A cancel
+
+```json
+{ "commandId": "ord_0123456789abcdef", "issuedAt": "2026-11-04T08:47:00.000Z", "sig": "…" }
+```
+
+`sig` = HMAC-SHA256 (hex) of `cancel|commandId|issuedAt`. Sent when the user presses Stop, or when an order the bot
+has reaches its expiry (it may be resting at SNB), and again every minute until acknowledged with `kind: "cancel"`.
+The bot cancels it at SNB if it is there and not finished, and reports `cancelled` (or what actually happened). A
+cancel for an order the bot never received is noted, so that order is refused if it ever arrives.
 
 ## A command
 

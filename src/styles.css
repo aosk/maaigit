@@ -820,3 +820,5 @@ input:not([type='checkbox']):not([type='radio']):focus-visible, textarea:focus-v
 /* iPhone: the strip behind the clock and battery, so the page never scrolls under them. */
 body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe-area-inset-top); background: var(--bg); z-index: 70; pointer-events: none; }
 :root[dir='rtl'] .ss-kv b { text-align: right; }
+.ss-unknown { border: 1px solid var(--danger); background: var(--danger-soft); display: flex; flex-direction: column; gap: 8px; }
+.ss-unknown-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--sep); }

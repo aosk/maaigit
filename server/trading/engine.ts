@@ -1,7 +1,9 @@
 import type { TradingState } from '../../shared/trading.js';
 import { client } from '../ai/claude.js';
 import { alertTrade } from '../notify.js';
-import { decisionRound, newsRound, technicalRound, type Decision } from './agents.js';
+import { randomBytes } from 'node:crypto';
+import { decisionRound, lastDecisionRecord, newsFetchedAt, newsRound, technicalRound, type Decision } from './agents.js';
+import { archiveRound, type RoundRecord } from './archive.js';
 import { botStale, cancelAllOpen, halt, openOrders, processOrders, submit } from './executor.js';
 import { currentQuotes, refreshQuotes } from './market.js';
 import { bookValue, dayPnl, rollDay, round2 } from './portfolio.js';
@@ -32,8 +34,10 @@ async function tick(now = new Date()): Promise<void> {
   busy = true;
   try {
     const clock = marketClock(now);
-    // Prices while the market is open, and once at start so the screen has something.
-    if ((clock.open && now.getTime() - lastQuotes >= QUOTES_EVERY_MS) || currentQuotes().size === 0) {
+    // Prices while the market is open (and after the close while a paper order still waits for the prices that judge
+    // it: the feed runs late), and once at start so the screen has something.
+    const judging = !clock.open && openOrders('paper').length > 0;
+    if (((clock.open || judging) && now.getTime() - lastQuotes >= QUOTES_EVERY_MS) || currentQuotes().size === 0) {
       lastQuotes = now.getTime();
       await refreshQuotes(now);
     }
@@ -73,17 +77,39 @@ export async function round(now = new Date()): Promise<void> {
 
 async function runRound(now: Date): Promise<void> {
   const clock = marketClock(now);
+  const book = trading.books[trading.mode];
+  // What the desk knew when the round began, before anything moved.
+  const record: RoundRecord = {
+    roundId: `rnd_${randomBytes(6).toString('hex')}`,
+    at: now.toISOString(),
+    day: tradingDay(now),
+    mode: trading.mode,
+    decider: trading.decider,
+    minutesToClose: clock.minutesToChange,
+    limits: { ...trading.limits },
+    excluded: [...trading.excluded],
+    instructions: trading.directives.map((d) => d.text),
+    book: { cash: book.cash, positions: book.positions.map((p) => ({ ...p })) },
+    ordersToday: trading.ordersToday.day === tradingDay(now) ? trading.ordersToday.count : 0,
+    quotes: [...currentQuotes().values()].map((q) => ({ ...q })),
+  };
   const reads = technicalRound(now);
   const news = await newsRound(now);
+  record.technical = reads;
+  record.news = { fetchedAt: newsFetchedAt(), items: news };
   if (clock.minutesToChange <= NO_NEW_ORDERS_MIN) {
     emit('agent.observation', 'risk', `باقي ${clock.minutesToChange} دقيقة على الإقفال: ما فيه أوامر جديدة اليوم`, {}, now);
+    archiveRound({ ...record, skipped: 'closing' });
     return;
   }
-  for (const decision of await decisionRound(reads, news, clock.minutesToChange, now)) gate(decision, now);
+  const decisions = await decisionRound(reads, news, clock.minutesToChange, now);
+  record.decision = { ...lastDecisionRecord() };
+  record.verdicts = decisions.map((d) => gate(d, now));
+  archiveRound(record);
 }
 
 /** The risk gate on one decision: its verdict goes on the log, and only a pass or a smaller order goes on. */
-export function gate(d: Decision, now = new Date()): void {
+export function gate(d: Decision, now = new Date()): { decisionId: string; verdict: string; qty: number; limitPrice: number; reasons: string[]; orderId?: string } {
   const clock = marketClock(now);
   const day = tradingDay(now);
   const verdict =
@@ -97,6 +123,7 @@ export function gate(d: Decision, now = new Date()): void {
           excluded: trading.excluded,
           halted: trading.halted,
           clock,
+          live: trading.mode === 'live',
           ordersToday: trading.ordersToday.day === day ? trading.ordersToday.count : 0,
           openOrders: openOrders(trading.mode),
           now,
@@ -110,7 +137,8 @@ export function gate(d: Decision, now = new Date()): void {
         ? `خفّضت الأمر إلى ${verdict.qty} سهم بحد ${verdict.limitPrice}: ${why}`
         : `وافقت: ${verdict.qty} سهم ${name} بحد ${verdict.limitPrice} ضمن كل الحدود`;
   emit('risk.verdict', 'risk', text, { correlationId: d.id, data: { verdict: verdict.verdict, qty: verdict.qty, reasons: verdict.reasons } }, now);
-  if (verdict.verdict !== 'veto') submit(d.id, d.symbol, d.side, verdict.qty, verdict.limitPrice, now);
+  const order = verdict.verdict !== 'veto' ? submit(d.id, d.symbol, d.side, verdict.qty, verdict.limitPrice, now, currentQuotes().get(d.symbol)?.asOf) : undefined;
+  return { decisionId: d.id, verdict: verdict.verdict, qty: verdict.qty, limitPrice: verdict.limitPrice, reasons: verdict.reasons, orderId: order?.id };
 }
 
 /** The risk gate's reasons in Arabic for the timeline (the English stays in the event's data). */
@@ -131,6 +159,8 @@ function arabicReason(reason: string): string {
     [/you allowed/, () => 'رأس المال المسموح'],
     [/within (\d+)% of the capital/, (m) => (reason.includes('sector') ? `حد القطاع ${m[1]}٪` : `حد السهم ${m[1]}٪`)],
     [/SNB bot is not connected/, () => 'بوت SNB غير متصل'],
+    [/last 20 minutes/, () => 'ما فيه مراكز جديدة في آخر ٢٠ دقيقة'],
+    [/live SNB price/, () => 'ما فيه سعر لحظي من SNB'],
     [/Nothing left/, () => 'ما بقي شي بعد تطبيق الحدود'],
   ];
   for (const [re, ar] of rules) {
@@ -197,6 +227,7 @@ export function tradingView(now = new Date()): TradingState {
     clock: marketClock(now),
     quotesAsOf: newest,
     quotesSource: newest ? [...quotes.values()].find((q) => q.asOf === newest)?.source : undefined,
-    agentsCanDecide: Boolean(client),
+    agentsCanDecide: trading.decider === 'rules' || Boolean(client),
+    decider: trading.decider,
   };
 }

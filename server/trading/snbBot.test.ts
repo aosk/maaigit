@@ -173,7 +173,8 @@ describe('the SNB bot against StockSmart', () => {
     ledger.write(order.id, { state: 'submitting' }); // the process died right after "go"
     const restarted = createBot({ url, key, secret, broker, ledger: openLedger(dir), log: () => {} });
     await restarted.recover();
-    expect(order).toMatchObject({ status: 'failed', error: expect.stringMatching(/may be at SNB/) });
+    expect(order).toMatchObject({ status: 'unknown', error: expect.stringMatching(/may be at SNB/) });
+    expect(trading.halted).toBe(true);
   });
 
   it('submits nothing when StockSmart has not answered for 3 minutes, and keeps the result to send later (rule 7)', async () => {
@@ -229,6 +230,77 @@ describe('the SNB bot against StockSmart', () => {
     expect(submitted).toHaveLength(1);
     bot.stop('test over');
     await expect(running).resolves.toBe('test over');
+  });
+
+  /** A broker where the order rests at SNB after Submit (accepted, not filled), and can be cancelled or looked up. */
+  function restingBroker(next: { status?: Result } = {}) {
+    const calls: string[] = [];
+    const broker: Broker = {
+      name: 'resting',
+      session: () => Promise.resolve({ loggedIn: true }),
+      quotes: () => Promise.resolve([]),
+      account: () => Promise.resolve(null),
+      async place(_cmd, { beforeSubmit }) {
+        if (!(await beforeSubmit())) return { status: 'failed', error: 'told not to go' };
+        calls.push('submit');
+        return { status: 'accepted', brokerOrderId: 'SNB5' };
+      },
+      async cancel(cmd, last) {
+        calls.push(`cancel ${cmd.commandId} ${last.brokerOrderId}`);
+        return { status: 'cancelled' };
+      },
+      orderStatus: () => Promise.resolve(next.status ?? null),
+    };
+    return { broker, calls };
+  }
+
+  it('cancels an order resting at SNB when the user presses Stop (signed cancel, confirmed, reported)', async () => {
+    const { broker, calls } = restingBroker();
+    const { bot, key } = setup(broker);
+    await bot.heartbeat();
+    const { order, commands } = await liveOrder(key);
+    await bot.handle(commands[0]);
+    expect(order).toMatchObject({ status: 'sent', brokerOrderId: 'SNB5', stage: expect.stringMatching(/accepted at SNB/) });
+    halt('stop', 'user');
+    const res = await fetch(`${url}/trade/v1/commands`, { headers: { authorization: `Bearer ${key}` } });
+    const { cancels } = (await res.json()) as { cancels: unknown[] };
+    expect(cancels).toHaveLength(1);
+    await bot.handleCancel(cancels[0]);
+    expect(calls).toEqual(['submit', `cancel ${order.id} SNB5`]);
+    expect(order).toMatchObject({ status: 'cancelled', cancelAckedAt: expect.any(String) });
+  });
+
+  it('ignores a cancel whose signature does not match', async () => {
+    const { broker, calls } = restingBroker();
+    const { bot, key } = setup(broker);
+    await bot.heartbeat();
+    const { order, commands } = await liveOrder(key);
+    await bot.handle(commands[0]);
+    await bot.handleCancel({ commandId: order.id, issuedAt: new Date().toISOString(), sig: '00'.repeat(32) });
+    expect(calls).toEqual(['submit']);
+    expect(order.status).toBe('sent');
+  });
+
+  it('follows an order resting at SNB until it fills', async () => {
+    const next: { status?: Result } = {};
+    const { broker } = restingBroker(next);
+    const { bot, key } = setup(broker);
+    await bot.heartbeat();
+    const { order, commands } = await liveOrder(key);
+    await bot.handle(commands[0]);
+    next.status = { status: 'filled', filledQty: 10, avgPrice: 27.4, brokerOrderId: 'SNB5' };
+    await bot.follow();
+    expect(order).toMatchObject({ status: 'filled', filledQty: 10 });
+  });
+
+  it('treats a crash after Submit as unknown, never as failed', async () => {
+    const broker: Broker = { ...recordingBroker().broker, async place(_c, { beforeSubmit }) { await beforeSubmit(); throw new Error('the page went blank'); } };
+    const { bot, key } = setup(broker);
+    await bot.heartbeat();
+    const { order, commands } = await liveOrder(key);
+    await bot.handle(commands[0]);
+    expect(order).toMatchObject({ status: 'unknown', error: expect.stringMatching(/after Submit/) });
+    expect(trading.halted).toBe(true);
   });
 
   it('stops for good when its key is revoked', async () => {

@@ -24,3 +24,10 @@ export function writePrivate(file: string, data: string): void {
     // not supported here; nothing to do
   }
 }
+
+/** Adds a line to a private file (only the server's user can read it), creating it and its folder if needed. */
+export function appendPrivate(file: string, data: string): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  fs.appendFileSync(file, data, { mode: 0o600 });
+  fs.chmodSync(file, 0o600);
+}

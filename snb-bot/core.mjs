@@ -16,6 +16,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 export const DEAD_MAN_MS = 3 * 60_000;
 const HEARTBEAT_MS = 60_000;
 const POSITIONS_MS = 5 * 60_000;
+/** How often an order resting at SNB (accepted, or partly filled) is looked up again. */
+const FOLLOW_MS = 30_000;
+const RESULTS = ['accepted', 'filled', 'partial', 'cancelled', 'rejected', 'failed', 'unknown'];
+/** The results after which nothing more can happen to an order at SNB. */
+const FINAL = ['filled', 'cancelled', 'rejected', 'failed'];
 const REQUEST_TIMEOUT_MS = 40_000;
 
 /** The signature StockSmart puts on each command (HMAC-SHA256 of its fields with the signing secret). */
@@ -181,12 +186,17 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
     try {
       result = await broker.place(cmd, { beforeSubmit: () => beforeSubmit(cmd), sameOrder: (shown) => sameOrder(cmd, shown), progress: (stage) => progress(id, stage) });
     } catch (error) {
-      // Rule 5: an unexpected screen or error is a stop, never a retry.
-      result = { status: 'failed', error: `The bot stopped: ${error?.message ?? error}` };
+      // Rule 5: an unexpected screen or error is a stop, never a retry. After Submit, SNB may have the order.
+      const submitted = ledger.get(id)?.state === 'submitting';
+      result = { status: submitted ? 'unknown' : 'failed', error: `The bot stopped${submitted ? ' after Submit' : ''}: ${error?.message ?? error}` };
     }
-    if (!result || !['filled', 'partial', 'rejected', 'failed'].includes(result.status)) result = { status: 'failed', error: 'The broker part gave no clear result.' };
+    // After Submit only the broker knows: a result the broker part cannot give is "unknown", never "failed" (which
+    // would tell StockSmart the order never reached SNB, and free its cash and stock).
+    const submitted = ledger.get(id)?.state === 'submitting';
+    if (!result || !RESULTS.includes(result.status)) result = { status: submitted ? 'unknown' : 'failed', error: 'The broker part gave no clear result.' };
+    if (submitted && result.status === 'failed' && !result.beforeSubmit) result = { ...result, status: 'unknown' };
     if (result.screenshot) ledger.write(id, { screenshot: result.screenshot });
-    const { screenshot: _s, ...sent } = result;
+    const { screenshot: _s, beforeSubmit: _b, ...sent } = result;
     log(`${sent.status === 'filled' || sent.status === 'partial' ? '✓' : '✗'} ${id}: ${sent.status}${sent.filledQty ? ` ${sent.filledQty} at ${sent.avgPrice}` : ''}${sent.error ? ` — ${sent.error}` : ''}`);
     await report(id, sent);
   }
@@ -196,10 +206,54 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
     for (const e of ledger.unreported()) await report(e.commandId, e.result);
     for (const e of ledger.interrupted()) {
       log(`! ${e.commandId} was being submitted when the bot stopped. It is not tried again: check it in the SNB app.`);
-      await report(e.commandId, { status: 'failed', error: 'The bot stopped while submitting this order; it may be at SNB. Check the SNB app.' });
+      await report(e.commandId, { status: 'unknown', error: 'The bot stopped while submitting this order; it may be at SNB. Check the SNB app.' });
     }
     // Received but the bot stopped before it got to Submit: nothing reached SNB, and it is not picked up again.
     for (const e of ledger.pending()) await report(e.commandId, { status: 'failed', error: 'The bot restarted before placing this order. It was not placed.' });
+  }
+
+  /**
+   * A cancel from StockSmart (Stop, or the order expired while resting at SNB). Checked like a command; an order the
+   * bot never received is noted so it can never be placed later; one that reached SNB and is not finished is
+   * cancelled there. A cancel the broker part cannot confirm is "unknown": the order might still fill.
+   */
+  async function handleCancel(c) {
+    const id = typeof c?.commandId === 'string' && /^ord_[0-9a-f]{16}$/.test(c.commandId) ? c.commandId : '';
+    if (!id) return;
+    const wanted = createHmac('sha256', secret).update(['cancel', id, String(c.issuedAt)].join('|')).digest('hex');
+    const given = Buffer.from(String(c.sig ?? ''), 'hex');
+    if (given.length !== 32 || !timingSafeEqual(given, Buffer.from(wanted, 'hex'))) {
+      log(`! Ignored a cancel for ${id}: its signature does not match.`);
+      return;
+    }
+    const entry = ledger.get(id);
+    await call('POST', '/ack', { commandId: id, kind: 'cancel' }).catch(() => {});
+    if (!entry) {
+      // Never received: noted, so the order itself is refused if it ever arrives.
+      ledger.write(id, { state: 'done', result: { status: 'cancelled' }, note: 'cancelled before it arrived' });
+      await report(id, { status: 'cancelled' });
+      return;
+    }
+    const last = entry.result?.status;
+    if (last && FINAL.includes(last)) return; // nothing left to cancel at SNB
+    log(`✗ Cancelling ${id} at SNB (${entry.result?.brokerOrderId ?? 'no SNB number yet'}).`);
+    let result;
+    try {
+      result = broker.cancel ? await broker.cancel({ commandId: id, ...entry.cmd }, entry.result ?? {}) : { status: 'unknown', error: 'This broker part cannot cancel.' };
+    } catch (error) {
+      result = { status: 'unknown', error: `Cancelling failed: ${error?.message ?? error}` };
+    }
+    if (!result || !RESULTS.includes(result.status)) result = { status: 'unknown', error: 'The cancel could not be confirmed.' };
+    await report(id, result);
+  }
+
+  /** Orders resting at SNB are looked up until they end (filled, cancelled, rejected), and each change reported. */
+  async function follow() {
+    if (!broker.orderStatus) return;
+    for (const e of ledger.resting()) {
+      const now = await broker.orderStatus({ commandId: e.commandId, ...e.cmd }, e.result ?? {});
+      if (now && RESULTS.includes(now.status) && (now.status !== e.result?.status || now.filledQty !== e.result?.filledQty)) await report(e.commandId, now);
+    }
   }
 
   async function heartbeat() {
@@ -249,6 +303,11 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
           busy = busy.then(() => handle(cmd)).catch((e) => log(`! ${e.message}`));
           await busy;
         }
+        for (const c of data?.cancels ?? []) {
+          // After any order in progress, so a cancel never races its own order.
+          busy = busy.then(() => handleCancel(c)).catch((e) => log(`! ${e.message}`));
+          await busy;
+        }
       } catch (error) {
         if (stopped) break;
         log(`! Fetching commands: ${error.message}`);
@@ -274,12 +333,15 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
       await recover().catch((e) => log(`! Recovering: ${e.message}`));
       every(HEARTBEAT_MS, 'Heartbeat', heartbeat);
       every(POSITIONS_MS, 'Account report', positions);
+      every(FOLLOW_MS, 'Following orders at SNB', () => (busy = busy.then(follow)));
       void pollLoop();
       return done;
     },
     stop,
     // For tests and the status line.
     handle,
+    handleCancel,
+    follow,
     recover,
     heartbeat,
     positions,

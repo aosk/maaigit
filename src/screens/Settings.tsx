@@ -231,7 +231,7 @@ function TradingConns({ s }: { s: TradingSummary }) {
   return (
     <>
       <Conn state={s.halted || stalePrices ? 'bad' : 'on'} name={t.ssConn}>
-        {s.halted ? t.ssConnHalted(s.haltReason ?? '') : `${t.ssConnState(live, s.marketOpen)} · ${stalePrices ? t.ssConnStale : t.ssConnPrices[s.quotesSource ?? 'none']} · ${t.ssConnAgents(s.agentsCanDecide)}. `}
+        {s.halted ? t.ssConnHalted(s.haltReason ?? '') : `${t.ssConnState(live, s.marketOpen)} · ${stalePrices ? t.ssConnStale : t.ssConnPrices[s.quotesSource ?? 'none']} · ${t.ssConnAgents(!s.agentsCanDecide ? 'none' : s.decider)}. `}
         {!s.halted && t.ssConnKeys} <a href="#/stocks">{t.ss.open}</a>
       </Conn>
       <Conn state={!bot.connected ? (live ? 'bad' : 'off') : bot.stale || !bot.brokerSession ? 'bad' : 'on'} name={t.snbConn}>

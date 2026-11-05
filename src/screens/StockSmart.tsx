@@ -116,6 +116,7 @@ export function StockSmart() {
       </header>
 
       {st.halted && <div className="error" role="alert">{t.ss.halted(st.haltReason ?? '')}</div>}
+      <UnknownOrders st={st} t={t} busy={busy} act={act} />
       {error && <div className="error" role="alert">{error}</div>}
 
       <div className="ss-grid">
@@ -223,11 +224,43 @@ function Orders({ st, t, lang }: { st: TradingState; t: T; lang: 'ar' | 'en' }) 
         {today.map((o) => (
           <li key={o.id} className="between">
             <span><b>{o.side === 'buy' ? '▲' : '▼'}</b> <bdi dir="ltr">{o.symbol}</bdi> · {o.filledQty || o.qty} × <bdi dir="ltr">{(o.avgFillPrice ?? o.limitPrice).toFixed(2)}</bdi></span>
-            <span className={`ss-status ${o.status}`}>{t.ss.orderStatus[o.status]}{o.stage && o.status === 'sent' ? ` · ${o.stage}` : ''} · {time(o.createdAt, lang)}</span>
+            <span className={`ss-status ${o.status}`}>{t.ss.orderStatus[o.status]}{o.stage && o.status === 'sent' ? ` · ${stageText(o.stage, t)}` : ''} · {time(o.createdAt, lang)}</span>
           </li>
         ))}
       </ul>
     </details>
+  );
+}
+
+/** The executor's own stage words, in the user's language when it is one the screen knows. */
+function stageText(stage: string, t: T): string {
+  if (stage.startsWith('waiting for exchange prices')) return t.ss.stageWaitingPrices;
+  if (stage.startsWith('accepted at SNB')) return t.ss.stageAccepted;
+  return stage;
+}
+
+/**
+ * Orders SNB may or may not have (the bot was cut off after Submit): trading stays stopped until each is resolved,
+ * by the bot or by the user after looking in the SNB app.
+ */
+function UnknownOrders({ st, t, busy, act }: { st: TradingState; t: T; busy: boolean; act: (run: () => Promise<TradingState>) => Promise<boolean> }) {
+  const unknown = st.orders.filter((o) => o.status === 'unknown');
+  if (!unknown.length) return null;
+  const name = (symbol: string) => st.universe.find((i) => i.symbol === symbol)?.nameAr ?? symbol;
+  return (
+    <section className="card ss-unknown" role="alert">
+      <b>{t.ss.unknownTitle}</b>
+      <p className="sub">{t.ss.unknownHint}</p>
+      {unknown.map((o) => (
+        <div key={o.id} className="ss-unknown-row">
+          <span>{o.side === 'buy' ? '▲' : '▼'} <bdi>{name(o.symbol)}</bdi> · <bdi dir="ltr">{o.qty} × {o.limitPrice.toFixed(2)}</bdi></span>
+          <span className="row wrap" style={{ gap: 6 }}>
+            <button type="button" className="btn secondary" disabled={busy} onClick={() => window.confirm(t.ss.unknownExecutedConfirm) && act(() => api.tradingResolve(o.id, true))}>{t.ss.unknownExecuted}</button>
+            <button type="button" className="btn secondary" disabled={busy} onClick={() => window.confirm(t.ss.unknownNotConfirm) && act(() => api.tradingResolve(o.id, false))}>{t.ss.unknownNot}</button>
+          </span>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -313,6 +346,15 @@ function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boo
               );
             })}
           </div>
+        </div>
+
+        <div>
+          <div className="section-label">{t.ss.deciderTitle}</div>
+          <div className="seg" role="radiogroup" aria-label={t.ss.deciderTitle}>
+            <button type="button" role="radio" aria-checked={st.decider === 'claude'} disabled={busy} onClick={() => act(() => api.tradingDecider('claude'))}>{t.ss.deciderClaude}</button>
+            <button type="button" role="radio" aria-checked={st.decider === 'rules'} disabled={busy} onClick={() => act(() => api.tradingDecider('rules'))}>{t.ss.deciderRules}</button>
+          </div>
+          <p className="sub">{st.decider === 'rules' ? t.ss.deciderRulesHint : t.ss.deciderClaudeHint}</p>
         </div>
 
         <div>

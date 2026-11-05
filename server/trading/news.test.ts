@@ -8,7 +8,7 @@ vi.hoisted(() => {
 const create = vi.hoisted(() => vi.fn());
 vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof import('../ai/claude')>()), client: {}, create }));
 
-import { newsRound, officialAnnouncements } from './agents';
+import { DECISION_PROMPT_VERSION, decisionRound, lastDecisionRecord, newsRound, officialAnnouncements } from './agents';
 import { resetTrading, trading } from './store';
 
 const OPEN = new Date('2026-11-01T08:00:00Z');
@@ -52,5 +52,24 @@ describe('the news agent and the Saudi Exchange announcements', () => {
     const items = await newsRound(new Date(OPEN.getTime() + 4 * 3_600_000));
     expect(items[0].official).toBe(false);
     expect(officialAnnouncements().detail).toBe('not tried');
+  });
+});
+
+describe('the decision agent with Claude', () => {
+  const reads = [{ symbol: '2222', price: 27.4, changePct: 1, trend: 'up' as const, score: 0.6, signal: 'buy' as const }];
+
+  it('places nothing when Claude fails this round, and the record says why', async () => {
+    create.mockRejectedValue(new Error('timeout'));
+    expect(await decisionRound(reads, [], 200, OPEN)).toEqual([]);
+    expect(lastDecisionRecord()).toMatchObject({ source: 'claude', error: 'timeout', promptVersion: DECISION_PROMPT_VERSION, decisions: [] });
+    expect(lastDecisionRecord().input).toContain('"symbol":"2222"');
+  });
+
+  it('keeps Claude\'s exact answer and the prompt version with the decisions it made', async () => {
+    const answer = JSON.stringify({ summary: 'اختراق مع حجم', decisions: [{ symbol: '2222', side: 'buy', qty: 50, limitPrice: 27.45, confidence: 0.7, rationale: 'اختراق' }] });
+    create.mockResolvedValue({ model: 'test-model', content: [{ type: 'text', text: answer }] });
+    const made = await decisionRound(reads, [], 200, OPEN);
+    expect(made).toHaveLength(1);
+    expect(lastDecisionRecord()).toMatchObject({ source: 'claude', model: 'test-model', raw: answer, summary: 'اختراق مع حجم', decisions: [{ id: made[0].id }] });
   });
 });

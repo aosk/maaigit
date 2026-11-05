@@ -10,7 +10,7 @@ vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof impo
 
 import { checkDailyLoss, gate, round, tradingView } from './engine';
 import { ackCommand, botKeyMatches, commandResult, createBotKey, halt, processOrders, reconcile, resume, setMode, stillGo, submit, takeCommands } from './executor';
-import { currentQuotes, refreshQuotes, resetQuotes } from './market';
+import { currentQuotes, injectQuote, refreshQuotes, resetQuotes } from './market';
 import { applyFill } from './portfolio';
 import { resetTrading, trading } from './store';
 
@@ -26,10 +26,13 @@ beforeEach(async () => {
 const price = (symbol: string) => currentQuotes().get(symbol)!.price;
 
 describe('a decision on its way to the market (paper)', () => {
-  it('is checked by the risk gate, then filled at the market price, with every step on the log', () => {
+  it('is checked by the risk gate, then filled by a later exchange price through its limit, with every step on the log', () => {
     gate({ id: 'd1', symbol: '2222', side: 'buy', qty: 100, limitPrice: price('2222') * 1.005, confidence: 0.7, rationale: 'test' }, OPEN);
     const order = trading.orders[0];
-    expect(order).toMatchObject({ status: 'filled', qty: 100, filledQty: 100, mode: 'paper' });
+    expect(order).toMatchObject({ status: 'sent', filledQty: 0 }); // nothing traded after it yet
+    injectQuote({ ...currentQuotes().get('2222')!, price: order.limitPrice - 0.05, asOf: later(60_000).toISOString(), receivedAt: later(60_000).toISOString() });
+    processOrders(later(60_000));
+    expect(order).toMatchObject({ status: 'filled', qty: 100, filledQty: 100, mode: 'paper', avgFillPrice: order.limitPrice });
     expect(trading.books.paper.positions[0]).toMatchObject({ symbol: '2222', qty: 100 });
     expect(trading.events.map((e) => e.type)).toEqual(['risk.verdict', 'order.queued', 'order.filled']);
     expect(trading.events.every((e) => e.correlationId === 'd1')).toBe(true);
@@ -140,14 +143,15 @@ describe('the SNB desktop bot', () => {
     expect(trading.halted).toBe(false);
   });
 
-  it('lets go of an order the bot took but never finished, and stops trading until the user checks SNB', () => {
+  it('asks SNB to cancel an order the bot took at its expiry, and if no result ever comes marks it unknown and stops trading', () => {
     const order = liveOrder();
     takeCommands(OPEN);
     ackCommand(order.id, OPEN);
     processOrders(new Date(Date.parse(order.expiresAt) + 5 * 60_000));
-    expect(order.status).toBe('sent'); // still the bot's
+    expect(order.status).toBe('sent'); // still the bot's, and asked to be cancelled at SNB
+    expect(order.cancelRequestedAt).toBeDefined();
     processOrders(new Date(Date.parse(order.expiresAt) + 31 * 60_000));
-    expect(order.status).toBe('failed');
+    expect(order.status).toBe('unknown');
     expect(trading.halted).toBe(true);
   });
 

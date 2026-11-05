@@ -1,5 +1,5 @@
 import type { AddressCard } from '../shared/vcard';
-import type { AgentId, TradeLimits, TradeMode, TradingState } from '../shared/trading';
+import type { AgentId, Decider, TradeLimits, TradeMode, TradingState } from '../shared/trading';
 import type { AuthenticationResponseJSON, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
 import type {
   AdminOverview,
@@ -188,6 +188,8 @@ export const api = {
   trading: (background = false) => call<TradingState>('GET', '/trading', undefined, background),
   tradingHalt: (reason?: string) => call<TradingState>('POST', '/trading/halt', { reason }),
   tradingResume: () => call<TradingState>('POST', '/trading/resume', {}),
+  tradingDecider: (decider: Decider) => call<TradingState>('PUT', '/trading/decider', { decider }),
+  tradingResolve: (orderId: string, executed: boolean) => call<TradingState>('POST', `/trading/orders/${encodeURIComponent(orderId)}/resolve`, { executed }),
   tradingMode: (mode: TradeMode, confirm?: string) => call<TradingState>('POST', '/trading/mode', { mode, confirm }),
   tradingLimits: (limits: Partial<TradeLimits>) => call<TradingState>('PUT', '/trading/limits', limits),
   tradingDirective: (text: string) => call<TradingState>('POST', '/trading/directives', { text }),

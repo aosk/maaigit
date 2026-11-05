@@ -34,7 +34,7 @@ const shiftClockTo = (when: Date) => {
 };
 
 const { trading, resetTrading, flushTrading } = await import('../server/trading/store.js');
-const { refreshQuotes, currentQuotes, resetQuotes } = await import('../server/trading/market.js');
+const { refreshQuotes, currentQuotes, resetQuotes, injectQuote } = await import('../server/trading/market.js');
 const { gate, round, checkDailyLoss, tradingView } = await import('../server/trading/engine.js');
 const { processOrders, cancelAllOpen, takeCommands, halt, resume } = await import('../server/trading/executor.js');
 const { applyFill, bookValue, dayPnl } = await import('../server/trading/portfolio.js');
@@ -58,9 +58,10 @@ interface Result {
 const DAY = '2026-11-04';
 const at = (hhmm: string) => new Date(`${DAY}T${hhmm}:00+03:00`);
 const prices = () => new Map([...currentQuotes()].map(([s, q]) => [s, q.price]));
+/** A price as the feed would bring it: true at `asOf` (and, in live mode, read from SNB's screen by the bot). */
 const setPrice = (symbol: string, price: number, prevClose?: number, asOf = new Date()) => {
   const q = currentQuotes().get(symbol)!;
-  currentQuotes().set(symbol, { ...q, price, prevClose: prevClose ?? q.prevClose, asOf: asOf.toISOString() });
+  injectQuote({ ...q, price, prevClose: prevClose ?? q.prevClose, asOf: asOf.toISOString(), receivedAt: asOf.toISOString(), source: trading.mode === 'live' ? 'bot' : q.source });
 };
 let n = 0;
 const decision = (d: Omit<Decision, 'id' | 'confidence'> & { confidence?: number }): Decision => ({ id: `dec_case${String(++n).padStart(4, '0')}`, confidence: 0.7, ...d });
@@ -68,6 +69,8 @@ const decision = (d: Omit<Decision, 'id' | 'confidence'> & { confidence?: number
 async function fresh(now: Date) {
   resetTrading();
   resetQuotes();
+  // No Claude here: the plain rule decides, chosen explicitly as the desk now requires.
+  trading.decider = 'rules';
   await refreshQuotes(now);
 }
 
@@ -111,6 +114,9 @@ async function normalDay(): Promise<Result> {
     if ((t - at('10:00').getTime()) % (15 * 60_000) === 0 && t < at('15:00').getTime()) await round(now);
   }
   cancelAllOpen('أقفل السوق', at('15:00'));
+  // Paper orders are judged on exchange prices from after their window: the feed keeps coming briefly after the close.
+  await refreshQuotes(at('15:05'));
+  processOrders(at('15:05'));
   const filled = trading.orders.filter((o) => o.status === 'filled');
   const r = finish(
     {
@@ -204,6 +210,8 @@ async function lossLimit(): Promise<Result> {
   for (let i = 1; i <= 12; i++) {
     const now = new Date(at('10:20').getTime() + i * 5 * 60_000);
     for (const s of ['2222', '1120', '2010']) setPrice(s, +(start.get(s)! * (1 - 0.012 * i)).toFixed(2), undefined, now);
+    setPrice('1150', start.get('1150')!, undefined, now); // Alinma holds still: its dip-buy keeps waiting
+    processOrders(now);
     const pnl = dayPnl(book, prices());
     steps.push(`${now.toISOString().slice(11, 16)}Z: P/L ${pnl.toFixed(2)}`);
     checkDailyLoss(now);
@@ -226,7 +234,7 @@ async function lossLimit(): Promise<Result> {
       checks: [
         { name: 'Halted when the loss reached the limit', ok: halted && lossAtHalt <= -limit, detail: `at ${new RealDate(RealDate.parse(haltedAt) + 3 * 3_600_000).toISOString().slice(11, 16)} Riyadh, with ${lossAtHalt.toFixed(2)} SAR` },
         { name: 'Not halted before the limit', ok: steps.filter((s, i) => i < steps.findIndex((x) => x.startsWith(haltedAt.slice(11, 16)))).every((s) => Number(s.split('P/L ')[1]) > -limit) },
-        { name: 'The waiting dip-buy was cancelled', ok: trading.orders.find((o) => o.symbol === '1150')?.status === 'cancelled' },
+        { name: 'Nothing was left waiting after the stop (the dip-buy expired or was cancelled)', ok: ['cancelled', 'expired'].includes(trading.orders.find((o) => o.symbol === '1150')?.status ?? '') && !trading.orders.some((o) => ['queued', 'sent', 'partial'].includes(o.status)) },
         { name: 'A new buy while halted was refused', ok: vetoedWhileHalted },
         { name: 'Only you started it again', ok: trading.events.at(-1)?.type === 'system.resumed' && trading.events.at(-1)?.actor === 'user' },
       ],
@@ -420,10 +428,14 @@ async function liveTrouble(): Promise<Result> {
 
 // ---------- 7. The close ----------
 async function close(): Promise<Result> {
-  await fresh(at('14:40'));
-  gate(decision({ symbol: '2222', side: 'buy', qty: 50, limitPrice: prices().get('2222')! * 0.98, rationale: 'A limit below the market that waits' }), at('14:40'));
+  await fresh(at('14:35'));
+  gate(decision({ symbol: '2222', side: 'buy', qty: 50, limitPrice: prices().get('2222')! * 0.98, rationale: 'A limit below the market that waits' }), at('14:35'));
+  await refreshQuotes(at('14:45'));
+  gate(decision({ symbol: '1120', side: 'buy', qty: 5, limitPrice: prices().get('1120')!, rationale: 'A new position at 14:45' }), at('14:45'));
+  const noNewPositions = verdicts().at(-1) === 'veto';
   await round(at('14:52'));
   const noNew = trading.events.some((e) => e.actor === 'risk' && e.type === 'agent.observation' && e.text.includes('ما فيه أوامر جديدة'));
+  await refreshQuotes(at('15:00'));
   processOrders(at('15:00'));
   cancelAllOpen('أقفل السوق', at('15:00'));
   gate(decision({ symbol: '2010', side: 'buy', qty: 10, limitPrice: prices().get('2010')!, rationale: 'After the close' }), at('15:05'));
@@ -431,9 +443,10 @@ async function close(): Promise<Result> {
     {
       id: 'close',
       title: 'The end of the session',
-      goal: 'No new orders in the last 10 minutes, everything still waiting cancelled at 15:00, and nothing accepted after the close.',
-      inputs: ['14:40: a buy 2% below the market that waits', '14:52: a round of the agents', '15:00: the close', '15:05: a decision after the close'],
+      goal: 'No new positions in the last 20 minutes, no orders at all in the last 10, everything still waiting let go at 15:00, and nothing accepted after the close.',
+      inputs: ['14:35: a buy 2% below the market that waits', '14:45: a new position proposed', '14:52: a round of the agents', '15:00: the close', '15:05: a decision after the close'],
       checks: [
+        { name: 'A new position in the last 20 minutes was refused by the gate', ok: noNewPositions },
         { name: 'The 14:52 round placed nothing (under 10 minutes to the close)', ok: noNew },
         { name: 'The waiting order was cancelled or expired at the close', ok: ['cancelled', 'expired'].includes(trading.orders[0]?.status ?? '') },
         { name: 'A decision after the close was refused', ok: verdicts().at(-1) === 'veto' },

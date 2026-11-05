@@ -44,7 +44,8 @@ export function tradingSummary(now = new Date()): TradingSummary {
     quotesAsOf: newest?.asOf,
     quotesSource: newest?.source,
     quotesFresh: Boolean(newest) && now.getTime() - Date.parse(newest.asOf) <= STALE_QUOTE_MS,
-    agentsCanDecide: Boolean(client),
+    agentsCanDecide: trading.decider === 'rules' || Boolean(client),
+    decider: trading.decider,
     lastRoundAt: runs.map((r) => r!.lastRunAt).filter((x): x is string => Boolean(x)).sort().pop(),
     agentErrors: (['technical', 'news', 'decision'] as const).filter((id) => trading.agents[id]?.lastError).map((id) => `${id}: ${trading.agents[id]!.lastError}`),
     bot: { connected: Boolean(trading.bot.keyHash), stale: Boolean(trading.bot.keyHash) && botStale(now.getTime()), brokerSession: Boolean(trading.bot.brokerSession), practice: Boolean(trading.bot.practice), lastSeen: trading.bot.lastSeen },
@@ -71,7 +72,9 @@ export function tradingChecks(now = new Date()): HealthCheck[] {
   else checks.push({ id: 'stocksmart-prices', name: 'StockSmart prices', status: s.marketOpen && !s.quotesFresh ? 'fail' : 'ok', detail: `${s.quotesSource === 'bot' ? 'Live from SNB' : s.quotesSource === 'yahoo' ? 'Yahoo Finance, about 15 min delayed' : 'Simulated'}; newest price ${ago(s.quotesAsOf, now)}.`, fix: s.marketOpen && !s.quotesFresh ? 'The agents stop trading on old prices until they are fresh again.' : undefined });
   checks.push(
     !s.agentsCanDecide
-      ? { id: 'stocksmart-agents', name: 'StockSmart agents', status: 'warn', detail: 'No Claude key: the decision agent follows a plain momentum rule.', fix: 'ANTHROPIC_API_KEY in Render → Environment.' }
+      ? { id: 'stocksmart-agents', name: 'StockSmart agents', status: 'warn', detail: 'No Claude key, so no decisions are made (the desk only watches).', fix: 'ANTHROPIC_API_KEY in Render → Environment, or choose the plain rule in StockSmart → Limits and settings.' }
+      : s.decider === 'rules'
+        ? { id: 'stocksmart-agents', name: 'StockSmart agents', status: 'ok', detail: `The plain momentum rule decides (chosen in StockSmart); last round ${ago(s.lastRoundAt, now)}.` }
       : s.agentErrors.length
         ? { id: 'stocksmart-agents', name: 'StockSmart agents', status: 'warn', detail: `Last error — ${s.agentErrors.join('; ')}`, fix: 'Usually Claude (credit or a busy moment); see Claude AI above.' }
         : { id: 'stocksmart-agents', name: 'StockSmart agents', status: 'ok', detail: `Technical, news and decision agents working; last round ${ago(s.lastRoundAt, now)}. Saudi Exchange announcements: ${officialAnnouncements().detail}${officialAnnouncements().at ? ` (${ago(officialAnnouncements().at, now)})` : ''}.` },

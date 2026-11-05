@@ -24,6 +24,8 @@ export interface RiskContext {
   excluded: string[];
   halted: boolean;
   clock: MarketClock;
+  /** Real money: prices must come from SNB itself, fresh. */
+  live?: boolean;
   ordersToday: number;
   openOrders: TradeOrder[];
   now: Date;
@@ -39,6 +41,10 @@ export interface Verdict {
 
 /** A price older than this is not traded on (delayed feeds run about 15 minutes behind). */
 export const STALE_QUOTE_MS = 40 * 60_000;
+/** Real money is priced only from SNB's own screen, read by the bot within this (never from the delayed feed). */
+const LIVE_QUOTE_MS = 2 * 60_000;
+/** No new positions this close to the close (sales to reduce are still allowed). */
+const NO_NEW_POSITIONS_MIN = 20;
 /** A buy may not chase more than 1% above the price, nor a sale undercut it by more. */
 const CHASE = 0.01;
 
@@ -52,6 +58,8 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
   if (!Number.isInteger(p.qty) || p.qty < 1) return veto('The quantity is not a whole number of shares.');
   const quote = ctx.quotes.get(p.symbol);
   if (!quote || ctx.now.getTime() - Date.parse(quote.asOf) > STALE_QUOTE_MS) return veto(`No fresh price for ${p.symbol}.`);
+  if (ctx.live && (quote.source !== 'bot' || ctx.now.getTime() - Date.parse(quote.asOf) > LIVE_QUOTE_MS)) return veto(`No live SNB price for ${p.symbol} in the last 2 minutes.`);
+  if (p.side === 'buy' && ctx.clock.minutesToChange <= NO_NEW_POSITIONS_MIN) return veto('No new positions in the last 20 minutes before the close.');
   if (ctx.ordersToday >= ctx.limits.maxOrdersPerDay) return veto(`Today's limit of ${ctx.limits.maxOrdersPerDay} orders is used up.`);
   if (ctx.openOrders.some((o) => o.symbol === p.symbol)) return veto(`An order for ${p.symbol} is still open.`);
 

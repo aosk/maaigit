@@ -15,6 +15,10 @@ export function practiceBroker({ log = console.log } = {}) {
     async account() {
       return null;
     },
+    /** Nothing is ever at SNB in practice, so a cancel always succeeds. */
+    async cancel() {
+      return { status: 'cancelled' };
+    },
     async place(cmd, { beforeSubmit, sameOrder, progress }) {
       await progress('practice: order form filled');
       // What the confirmation screen would show; the real broker reads it from SNB.
@@ -22,8 +26,9 @@ export function practiceBroker({ log = console.log } = {}) {
       if (!sameOrder(shown)) return { status: 'failed', error: 'The confirmation did not match the order.' };
       await progress('practice: confirmation checked');
       if (!(await beforeSubmit())) return { status: 'failed', error: 'Practice: StockSmart said not to go at the last check.' };
+      // Practice stops short of Submit, so even after "go" nothing reached SNB: "failed" (not "unknown") is the truth.
       log(`  (practice) would press Submit now: ${cmd.side} ${cmd.qty} × ${cmd.symbol} at ${Number(cmd.limitPrice).toFixed(2)}`);
-      return { status: 'failed', error: `Practice mode: not placed (would have ${cmd.side === 'buy' ? 'bought' : 'sold'} ${cmd.qty} × ${cmd.symbol} at ${Number(cmd.limitPrice).toFixed(2)}).` };
+      return { status: 'failed', beforeSubmit: true, error: `Practice mode: not placed (would have ${cmd.side === 'buy' ? 'bought' : 'sold'} ${cmd.qty} × ${cmd.symbol} at ${Number(cmd.limitPrice).toFixed(2)}).` };
     },
   };
 }

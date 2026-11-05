@@ -43,8 +43,11 @@ For each order, in this order: check StockSmart's signature and that it has not 
 2. **Signed and on time.** An order whose signature does not match, or that expired, is refused.
 3. **Asks right before Submit.** If you pressed Stop in maai while it was filling the form, it does not press Submit.
 4. **Confirmation must match.** Any difference in symbol, side, quantity or price: it stops.
-5. **Unknown screen = stop**, never a retry. If the bot is interrupted after "go", that order is never tried again
-   and StockSmart is told to check it in the SNB app (it stops trading until you do).
+5. **Unknown screen = stop**, never a retry. If the bot is interrupted after Submit, that order is never tried again
+   and is reported as **unknown** (SNB may have it): StockSmart keeps its cash and stock blocked and stops trading
+   until the outcome is known, from the bot or from you after checking the SNB app.
+5b. **Stop cancels at SNB.** An order resting at SNB (accepted, or partly filled) gets a signed cancel when you press
+   Stop or when it expires; what already filled stays. Resting orders are looked up every 30 seconds until they end.
 6. **Screenshot** of every submission, kept in `data/`.
 7. **Dead-man switch.** If maai has not answered for 3 minutes, nothing is submitted. Results wait on disk and go
    out when maai is back.

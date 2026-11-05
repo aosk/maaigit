@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AgentId, Position, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder } from '../../shared/trading.js';
+import type { AgentId, Decider, Position, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder } from '../../shared/trading.js';
 import { config } from '../config.js';
 import { writePrivate } from '../secure-fs.js';
 import { tradingDay } from './tadawul.js';
@@ -24,6 +24,8 @@ export interface Book {
 
 export interface TradingData {
   mode: TradeMode;
+  /** Who decides each round: Claude, or the plain rule (chosen by the user, never switched to silently). */
+  decider: Decider;
   halted: boolean;
   haltReason?: string;
   limits: TradeLimits;
@@ -56,6 +58,7 @@ export function newBook(cash: number, now = new Date()): Book {
 function fresh(): TradingData {
   return {
     mode: 'paper',
+    decider: 'claude',
     halted: false,
     limits: { ...DEFAULT_LIMITS },
     excluded: [],
@@ -104,7 +107,8 @@ export function flushTrading(): void {
   if (timer) clearTimeout(timer);
   timer = undefined;
   if (trading.events.length > KEEP_EVENTS) trading.events = trading.events.slice(-KEEP_EVENTS);
-  const open = trading.orders.filter((o) => o.status === 'queued' || o.status === 'sent' || o.status === 'partial');
+  // Orders still in play, an unknown one above all, are never trimmed.
+  const open = trading.orders.filter((o) => o.status === 'queued' || o.status === 'sent' || o.status === 'partial' || o.status === 'unknown');
   if (trading.orders.length > KEEP_ORDERS) trading.orders = [...trading.orders.filter((o) => !open.includes(o)).slice(-KEEP_ORDERS), ...open];
   for (const book of Object.values(trading.books)) if (book.curve.length > CURVE_POINTS) book.curve = book.curve.filter((_, i, all) => i % 2 === 0 || i === all.length - 1);
   try {

@@ -42,8 +42,10 @@ export interface Quote {
   price: number;
   /** The previous session's close, for the day's change and the ±10% price band. */
   prevClose: number;
-  /** When the price was true (delayed feeds lag), ISO. */
+  /** When the price was true at the exchange (delayed feeds lag), ISO. */
   asOf: string;
+  /** When StockSmart received it, ISO. A fill is judged by `asOf`, never by when it arrived. */
+  receivedAt: string;
   source: 'yahoo' | 'sim' | 'bot';
 }
 
@@ -55,7 +57,8 @@ export interface Position {
 }
 
 /** An order from the moment the risk gate passed it until it is filled, refused or expires. */
-type OrderStatus = 'queued' | 'sent' | 'filled' | 'partial' | 'rejected' | 'expired' | 'failed' | 'cancelled';
+/** `unknown`: the broker may or may not have it (the bot was cut off after Submit); it holds its cash and its stock until resolved. */
+type OrderStatus = 'queued' | 'sent' | 'filled' | 'partial' | 'rejected' | 'expired' | 'failed' | 'cancelled' | 'unknown';
 
 export interface TradeOrder {
   id: string;
@@ -80,6 +83,15 @@ export interface TradeOrder {
   ackedAt?: string;
   /** What the desktop bot said it is doing: logging in, form filled, submitted… */
   stage?: string;
+  /** When the price the risk gate priced it from was true at the exchange. */
+  priceAsOf?: string;
+  /** When the exchange price that filled it (paper) was true. */
+  fillPriceAsOf?: string;
+  /** Asked to be cancelled (Stop, or expiry while at the broker): a paper order's window ends here; a live one is cancelled at SNB. */
+  cancelRequestedAt?: string;
+  /** When the bot last got the cancel request, and when it confirmed it. */
+  cancelSentAt?: string;
+  cancelAckedAt?: string;
 }
 
 /** One event on the log. One shape for everything, so the live screen needs no special case per type. */
@@ -110,6 +122,7 @@ export type TradeEventType =
   | 'order.expired'
   | 'order.failed'
   | 'order.cancelled'
+  | 'order.unknown'
   | 'position.drift'
   | 'system.halted'
   | 'system.resumed'
@@ -176,7 +189,11 @@ export interface TradingState {
   quotesSource?: Quote['source'];
   /** Claude is set up (without it the agents only watch). */
   agentsCanDecide: boolean;
+  /** Who decides: Claude (no trade when it is unavailable), or the plain rule, chosen on purpose. */
+  decider: Decider;
 }
+
+export type Decider = 'claude' | 'rules';
 
 /** StockSmart in Settings → Connections: the desk, its prices and agents, and the SNB desktop bot. */
 export interface TradingSummary {
@@ -189,6 +206,7 @@ export interface TradingSummary {
   /** Recent enough to trade on. */
   quotesFresh: boolean;
   agentsCanDecide: boolean;
+  decider: Decider;
   lastRoundAt?: string;
   agentErrors: string[];
   bot: { connected: boolean; stale: boolean; brokerSession: boolean; practice: boolean; lastSeen?: string };
@@ -208,7 +226,7 @@ export function categoryOf(e: Pick<TradeEvent, 'type'>): LogCategory {
 }
 
 /** How one decision ended, from its events on the log. */
-export type TradeOutcome = 'filled' | 'partial' | 'vetoed' | 'open' | 'expired' | 'rejected' | 'failed' | 'cancelled';
+export type TradeOutcome = 'filled' | 'partial' | 'vetoed' | 'open' | 'expired' | 'rejected' | 'failed' | 'cancelled' | 'unknown';
 
 export function outcomeOf(thread: Pick<TradeEvent, 'type' | 'data'>[]): TradeOutcome {
   const last = [...thread].reverse().find((e) => e.type.startsWith('order.') && e.type !== 'order.progress' && e.type !== 'order.sent' && e.type !== 'order.queued');

@@ -38,6 +38,8 @@ export function openLedger(dir) {
     write,
     /** Results not yet accepted by the server, to send again. */
     unreported: () => [...entries.values()].filter((e) => e.state === 'done'),
+    /** Orders at SNB that have not ended: accepted, or partly filled (their last result reported). */
+    resting: () => [...entries.values()].filter((e) => (e.state === 'reported' || e.state === 'done') && (e.result?.status === 'accepted' || e.result?.status === 'partial')),
     /** Commands received but not yet at Submit when the bot stopped. */
     pending: () => [...entries.values()].filter((e) => e.state === 'received'),
     /** Commands a crash interrupted mid-submission. */

@@ -2,7 +2,8 @@ import { Router } from 'express';
 import type { AgentId, TradeLimits } from '../../shared/trading.js';
 import { askAgents } from '../trading/agents.js';
 import { round, tradingView } from '../trading/engine.js';
-import { botStale, createBotKey, halt, resume, revokeBotKey, setMode } from '../trading/executor.js';
+import { roundsOf } from '../trading/archive.js';
+import { botStale, createBotKey, halt, resolveUnknown, resume, revokeBotKey, setMode } from '../trading/executor.js';
 import { emit, eventsSince, onTradeEvent, saveTrading, trading } from '../trading/store.js';
 import { marketClock, UNIVERSE } from '../trading/tadawul.js';
 import { HttpError, lang, text, wrap } from './http.js';
@@ -38,7 +39,7 @@ tradingRoutes.post('/trading/halt', (req, res) => {
 });
 
 tradingRoutes.post('/trading/resume', (_req, res) => {
-  resume();
+  if (!resume()) throw new HttpError(409, 'An order\'s status at SNB is unknown: check it in the SNB app and say whether it was executed first.');
   saveTrading();
   res.json(tradingView());
 });
@@ -148,6 +149,32 @@ tradingRoutes.post('/trading/round', wrap(async (_req, res) => {
   await round();
   res.json(tradingView());
 }));
+
+/** Who decides each round: Claude, or the plain rule. Chosen here only, never switched to on its own. */
+tradingRoutes.put('/trading/decider', (req, res) => {
+  const decider = req.body?.decider;
+  if (decider !== 'claude' && decider !== 'rules') throw new HttpError(400, 'decider is claude or rules');
+  if (trading.decider !== decider) {
+    trading.decider = decider;
+    emit('system.limits', 'user', decider === 'rules' ? 'القرار صار بالقاعدة البسيطة (بدون Claude)' : 'القرار صار بـ Claude');
+    saveTrading();
+  }
+  res.json(tradingView());
+});
+
+/** The user checked SNB about an order whose status was unknown: executed or not. */
+tradingRoutes.post('/trading/orders/:id/resolve', (req, res) => {
+  const executed = req.body?.executed;
+  if (typeof executed !== 'boolean') throw new HttpError(400, 'executed is true or false');
+  if (!resolveUnknown(String(req.params.id), executed)) throw new HttpError(404, 'No order with an unknown status by that id.');
+  res.json(tradingView());
+});
+
+/** Every round of a day as archived (inputs, the decision step's exact input and output, verdicts), for review. */
+tradingRoutes.get('/trading/rounds', (req, res) => {
+  const day = typeof req.query.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.day) ? req.query.day : new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
+  res.json({ day, rounds: roundsOf(day) });
+});
 
 /** The desktop bot's key and signing secret, shown once. A new one stops the old. */
 tradingRoutes.post('/trading/bot/key', (_req, res) => res.json(createBotKey()));
