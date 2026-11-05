@@ -36,3 +36,4 @@ export const Search = (p: P) => <Icon {...p}><circle cx="11" cy="11" r="7" /><pa
 export const Mail = (p: P) => <Icon {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></Icon>;
 export const ChartUp = (p: P) => <Icon {...p}><path d="M3 3v18h18" /><path d="m7 15 4-4 3 3 6-7" /></Icon>;
 export const Stop = (p: P) => <Icon {...p}><rect x="6" y="6" width="12" height="12" rx="2" /></Icon>;
+export const Key = (p: P) => <Icon {...p}><circle cx="7.5" cy="15.5" r="5" /><path d="m11 12 9-9M16 7l3 3M14 9l2 2" /></Icon>;

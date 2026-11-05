@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AdminOverview, AgentSetting, CloudUsage as Cloud, HealthReport, RenderUsage as Render } from '../../shared/types';
+import type { AdminOverview, AgentSetting, ApiKeyView, CloudUsage as Cloud, HealthReport, RenderUsage as Render } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
-import { Back, ChartUp, Chat, FileText, Gear, Moon, Refresh, Sun } from '../components/Icons';
+import { Back, ChartUp, Chat, Gear, Key, Moon, Refresh, Sun } from '../components/Icons';
+import { Keys, keysDue } from './Keys';
 import { Overview, markSeen } from './Overview';
 import { RenderUsage } from './RenderUsage';
 import { TokenUsage } from './TokenUsage';
@@ -37,7 +38,7 @@ const SECTIONS = [
   { id: 'usage', label: 'Usage & cost', short: 'Usage', icon: ChartUp },
   { id: 'bots', label: 'Bots', short: 'Bots', icon: Chat },
   { id: 'agents', label: 'Agents', short: 'Agents', icon: Gear },
-  { id: 'audit', label: 'Safety & audit', short: 'Log', icon: FileText },
+  { id: 'audit', label: 'Keys & audit', short: 'Keys', icon: Key },
 ];
 
 /** The app screen the portal was opened from, to go back to (or «يومك»). */
@@ -103,6 +104,11 @@ export function Admin() {
     api.adminRender(refresh).then((r) => { setRender(r); setRenderError(''); }).catch((e: Error) => setRenderError(e.message)).finally(() => setRenderBusy(false));
   }, []);
   const [cloud, setCloud] = useState<Cloud | null>(null);
+  // The keys are read on every visit: the menu's badge counts the ones to renew.
+  const [keyList, setKeyList] = useState<ApiKeyView[] | null>(null);
+  useEffect(() => {
+    api.adminKeys().then(setKeyList).catch(() => setKeyList([]));
+  }, [section]);
   useEffect(() => {
     if (section !== '' && section !== 'usage') return;
     const read = () => api.adminRender().then((r) => { setRender(r); setRenderError(''); }).catch((e: Error) => setRenderError(e.message));
@@ -152,7 +158,7 @@ export function Admin() {
   const audit = allAudit.filter((a) => (!outcome || a.outcome === outcome) && (!query || `${a.event} ${a.who}`.toLowerCase().includes(query.toLowerCase())));
   const needs = attentionCount(health);
   const botIssues = health ? health.checks.filter((c) => (c.id === 'bot' || c.id === 'snb-bot') && (c.status === 'fail' || c.status === 'warn')).length : 0;
-  const badge: Record<string, number> = { '': needs, bots: botIssues };
+  const badge: Record<string, number> = { '': needs, bots: botIssues, audit: keysDue(keyList) };
   const metrics = data
     ? [
         { label: 'Requests', value: data.counts.chats, note: `${data.counts.drafts} reply drafts` },
@@ -264,6 +270,7 @@ export function Admin() {
           </section>
         )}
 
+        {section === 'audit' && <Keys list={keyList} onChange={setKeyList} />}
         {section === 'audit' && <section id="audit" aria-label="Audit log" className="admin-card">
           <div className="between wrap">
             <h2 className="h2" style={{ fontSize: 18 }}>Safety &amp; audit</h2>

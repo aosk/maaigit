@@ -12,7 +12,7 @@ const OVERALL: Record<HealthReport['status'], string> = { ok: 'All working', war
 const RANK: Record<HealthLevel, number> = { fail: 0, warn: 1, ok: 2, off: 3 };
 
 const GROUPS = [
-  { id: 'core', title: 'MAAI core', ids: ['server', 'storage', 'render', 'claude', 'push', 'news'], link: undefined },
+  { id: 'core', title: 'MAAI core', ids: ['server', 'storage', 'render', 'keys', 'claude', 'push', 'news'], link: undefined },
   { id: 'messages', title: 'Messages & WhatsApp', ids: ['bot', 'replies', 'gmail', 'whatsapp'], link: '#/admin/bots' },
   { id: 'calendar', title: 'Calendar & tasks', ids: ['calendar', 'asana'], link: '#/settings' },
   { id: 'stocks', title: 'maai Stocks', ids: ['stocksmart', 'stocksmart-prices', 'stocksmart-agents', 'snb-bot'], link: '#/stocks' },
@@ -20,7 +20,7 @@ const GROUPS = [
 
 const groupOf = (c: HealthCheck) => GROUPS.find((g) => (g.ids as readonly string[]).includes(c.id)) ?? GROUPS[0];
 /** Where to fix a check: StockSmart for its parts, the bots page for the device bot, Settings for the rest. */
-const fixLink = (c: HealthCheck) => (c.id === 'news' ? '#/news' : c.id === 'render' || c.id === 'server' ? '#/admin/usage' : c.id === 'bot' || c.id === 'replies' ? '#/admin/bots' : groupOf(c).link);
+const fixLink = (c: HealthCheck) => (c.id === 'news' ? '#/news' : c.id === 'render' || c.id === 'server' ? '#/admin/usage' : c.id === 'keys' ? '#/admin/audit' : c.id === 'bot' || c.id === 'replies' ? '#/admin/bots' : groupOf(c).link);
 
 const time = (iso: string) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
 

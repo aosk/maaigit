@@ -258,6 +258,11 @@ export async function alertHealth(key: string, text: (lang: Lang) => Text): Prom
   await deliver({ key, kind: 'health', text }, '/#/admin');
 }
 
+/** A key about to expire (or expired): told even with health alerts off, since a key that lapses stops a service. Opens Admin → Keys. */
+export async function alertKey(key: string, text: (lang: Lang) => Text): Promise<void> {
+  await deliver({ key, kind: 'health', text }, '/#/admin/audit');
+}
+
 /** StockSmart: a fill, a halt, the broker account not matching, the bot needing the user. Always told; opens StockSmart. */
 export async function alertTrade(key: string, body: string): Promise<void> {
   await deliver({ key, kind: 'trade', text: () => ({ title: 'أسهمي', body }) }, '/#/stocks');

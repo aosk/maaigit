@@ -10,6 +10,7 @@ import { dedupeEvents } from '../shared/schedule.js';
 import type { AddressCard } from '../shared/vcard.js';
 import type {
   AgentSetting,
+  ApiKeyEntry,
   AppAlert,
   AuditEntry,
   BotCommand,
@@ -121,6 +122,8 @@ interface State {
   replyMode: ReplyMode;
   /** Per number: MAAI's own first replies to that person in the last day, and what it found out. */
   intake: Record<string, IntakeState>;
+  /** Reminders to renew API keys: names and expiry dates only, never a key (see server/keys.ts). */
+  keys?: ApiKeyEntry[];
 }
 
 export const DEFAULT_PREFS: NotifyPrefs = { reminders: true, leave: true, events: false, eventMinutes: 10, prayers: false, prayerMinutes: 10, briefing: false, briefingTime: '07:00', messages: true, health: true };

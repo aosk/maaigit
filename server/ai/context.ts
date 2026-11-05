@@ -11,6 +11,7 @@ import { asanaConfigured, cachedProjects, cachedTasks, openTasks, projects, toda
 import { tradingView } from '../trading/engine.js';
 import { instrument } from '../trading/tadawul.js';
 import { MOOD_AR } from '../trading/pulse.js';
+import { keysNote } from '../keys.js';
 
 /** What Claude is told about the user's day and inbox, rebuilt for every request. */
 
@@ -167,8 +168,9 @@ export function contextNote(): string {
     whatsappOverview(),
     botOverview(),
     tradingOverview(now),
+    keysNote(now),
     contactsNote(),
-  ].join('\n\n');
+  ].filter(Boolean).join('\n\n');
 }
 
 /**

@@ -8,6 +8,7 @@ import { status } from '../status.js';
 import { recentUsage } from '../usage.js';
 import { cloudUsage } from '../anthropic-usage.js';
 import { renderUsage } from '../render-usage.js';
+import { KeyInputError, addKey, keysView, removeKey, updateKey } from '../keys.js';
 import { HttpError, find, wrap } from './http.js';
 
 export const admin = Router();
@@ -40,6 +41,37 @@ admin.get('/admin/cloud', wrap(async (req, res) => res.json(await cloudUsage({ f
 
 /** Render, where MAAI runs: this machine now, and with RENDER_API_KEY every service's monthly cost and this one's traffic. */
 admin.get('/admin/render', wrap(async (req, res) => res.json(await renderUsage({ force: req.query.refresh === '1' }))));
+
+// ---------- API keys: names and expiry dates only, never a key ----------
+
+const keyError = (error: unknown) => (error instanceof KeyInputError ? new HttpError(400, error.message) : error);
+admin.get('/admin/keys', (_req, res) => res.json(keysView()));
+admin.post('/admin/keys', (req, res) => {
+  try {
+    const entry = addKey(req.body ?? {});
+    audit(`Key reminder added: ${entry.name}`, 'Admin', 'done');
+    res.status(201).json(keysView());
+  } catch (error) {
+    throw keyError(error);
+  }
+});
+admin.put('/admin/keys/:id', (req, res) => {
+  try {
+    const entry = updateKey(req.params.id, req.body ?? {});
+    if (req.body?.renewed) audit(`Key renewed: ${entry.name}${entry.expiresOn ? ` (now expires ${entry.expiresOn})` : ''}`, 'Admin', 'done');
+    res.json(keysView());
+  } catch (error) {
+    throw keyError(error);
+  }
+});
+admin.delete('/admin/keys/:id', (req, res) => {
+  try {
+    removeKey(req.params.id);
+    res.json(keysView());
+  } catch (error) {
+    throw keyError(error);
+  }
+});
 
 admin.patch('/admin/agents/:id', (req, res) => {
   const agent = find(state.agents, req.params.id);

@@ -943,3 +943,17 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .mp-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75em; font-weight: 700; white-space: nowrap; }
 .mp-chip i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 @media (max-width: 380px) { .mp-dial { width: 120px; } .mp-mood { font-size: 1.25em; } }
+
+/* API keys */
+.ky-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ky-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--sep); border-inline-start: 4px solid var(--sep); }
+.ky-row.ky-low { border-inline-start-color: var(--success); }
+.ky-row.ky-medium { border-inline-start-color: var(--warn-bar, var(--warn-text)); background: var(--warn-soft); }
+.ky-row.ky-high { border-inline-start-color: var(--danger); background: var(--danger-soft); }
+.ky-row .admin-btn, .ky-form .admin-btn { padding: 0 12px; font: inherit; font-size: 13px; cursor: pointer; color: var(--text); text-decoration: none; }
+.ky-primary { background: var(--tint) !important; color: var(--on-tint) !important; border-color: var(--tint) !important; font-weight: 600; }
+.ky-link { color: var(--tint-text) !important; font-weight: 600; }
+.ky-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 10px; padding: 14px; border-radius: 12px; background: var(--raised); }
+.ky-form label { display: flex; flex-direction: column; gap: 4px; }
+.ky-form .admin-input { width: 100%; }
+.ky-form > .row, .ky-form > .error { grid-column: 1 / -1; }

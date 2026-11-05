@@ -392,6 +392,37 @@ export interface CloudUsage {
   message?: string;
 }
 
+/** The services MAAI knows keys for (where to renew them, and whose expiry emails to trust). */
+export type KeyService = 'anthropic' | 'xai' | 'render' | 'openai' | 'groq' | 'google' | 'asana' | 'twilio' | 'github' | 'other';
+
+/** A reminder to renew an API key: its name and expiry, never the key itself. */
+export interface ApiKeyEntry {
+  id: string;
+  name: string;
+  service: KeyService;
+  /** Where it is used: the environment variable on Render (e.g. ANTHROPIC_API_KEY). */
+  envVar?: string;
+  /** The day it expires (YYYY-MM-DD); none when it does not expire or is not known. */
+  expiresOn?: string;
+  note?: string;
+  /** Added by the user, found in an expiry email, or detected from MAAI's own settings. */
+  source: 'user' | 'email' | 'detected';
+  /** The email it was found in, by number. */
+  emailUid?: number;
+  addedAt: string;
+  renewedAt?: string;
+}
+
+/** A key as the admin portal shows it. */
+export interface ApiKeyView extends ApiKeyEntry {
+  daysLeft?: number;
+  /** Green beyond 14 days, amber within 14, red within 3 or expired; none without a date. */
+  level: 'low' | 'medium' | 'high' | 'none';
+  /** Its environment variable is set on this server. */
+  inUse: boolean;
+  renewUrl?: string;
+}
+
 /** How heavy a use is: green, amber or red in the admin portal. */
 export type UsageLevel = 'low' | 'medium' | 'high';
 
