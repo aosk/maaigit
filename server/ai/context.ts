@@ -152,7 +152,12 @@ export function tradingOverview(now = new Date()): string {
     : '';
   const p = v.pulse;
   const pulse = `Market indicator (computed): ${p.score} on -100..+100, ${MOOD_AR[p.mood]}${p.index ? `; TASI ${p.index.value.toLocaleString('en-US')} (${p.index.changePct >= 0 ? '+' : ''}${p.index.changePct}% today)` : '; TASI not read'}; ${p.breadth.up} of the followed stocks up, ${p.breadth.down} down; market risk ${p.risk}.`;
-  return [head, money, pulse, positions, orders, activity, bot].filter(Boolean).join('\n');
+  const h = v.holders;
+  const kinds: Record<string, string> = { new: 'reached 5%+', added: 'raised its stake', trimmed: 'cut its stake', exited: 'fell below 5%' };
+  const holders = h.changes.length
+    ? `Substantial shareholders (5%+), latest changes (from web sources, information only):\n${h.changes.slice(0, 5).map((c) => `- ${c.date} ${nameOf(c.symbol)}: ${n(c.holder)} ${kinds[c.kind]}${c.toPct !== undefined ? ` to ${c.toPct}%` : ''}${c.official ? ' (official disclosure)' : ''}`).join('\n')}`
+    : h.covered ? `Substantial shareholders: listings read for ${h.covered} of ${h.total} followed stocks, no changes recorded.` : '';
+  return [head, money, pulse, positions, orders, activity, holders, bot].filter(Boolean).join('\n');
 }
 
 export function contextNote(): string {

@@ -161,6 +161,42 @@ export interface MarketClock {
   label: 'open' | 'closed' | 'weekend' | 'holiday';
 }
 
+/** A substantial shareholder (5% or more) of a company, as a source last listed them. */
+export interface Holder {
+  name: string;
+  pct: number;
+}
+
+/** A change among a company's substantial shareholders: from an announcement, or seen between two listings. */
+export interface HolderChange {
+  id: string;
+  symbol: string;
+  holder: string;
+  kind: 'new' | 'added' | 'trimmed' | 'exited';
+  fromPct?: number;
+  toPct?: number;
+  /** When it happened, as the source says (YYYY-MM-DD), or when the listing showed it. */
+  date: string;
+  source: string;
+  /** Announced by the company or the exchange (an official disclosure), rather than seen in a listing. */
+  official: boolean;
+  how: 'announcement' | 'listing';
+}
+
+/** «كبار الملاك»: who holds 5% or more of the followed stocks, what changed, and the big investors across them. */
+export interface HoldersView {
+  updatedAt?: string;
+  /** How many of the followed stocks have a listing. */
+  covered: number;
+  total: number;
+  /** The last 60 days, newest first. */
+  changes: HolderChange[];
+  /** Each big holder and its stakes in the followed stocks, most stakes first (like following an investor's portfolio). */
+  investors: { name: string; stakes: { symbol: string; pct: number }[] }[];
+  /** Each stock's latest listing. */
+  listings: { symbol: string; holders: Holder[]; asOf: string; source: string }[];
+}
+
 /** The market as a whole, at a glance: the index, how the followed stocks move together, and the risk in the news. */
 export interface MarketPulse {
   /** -100 (falling hard) to +100 (rising strongly). */
@@ -217,6 +253,8 @@ export interface TradingState {
   cautionAuto: boolean;
   /** The general market indicator. */
   pulse: MarketPulse;
+  /** Substantial shareholders of the followed stocks and their changes. */
+  holders: HoldersView;
 }
 
 export interface Caution {

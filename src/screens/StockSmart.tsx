@@ -7,6 +7,7 @@ import { useSettings } from '../settings';
 import { ChartUp, Chevron, Send, Stop } from '../components/Icons';
 import { PixelOffice } from '../components/PixelOffice';
 import { MarketPulse } from '../components/MarketPulse';
+import { Holders } from '../components/Holders';
 import { TradeLog } from '../components/TradeLog';
 
 /**
@@ -136,6 +137,7 @@ export function StockSmart() {
           {st.pulse && <MarketPulse pulse={st.pulse} />}
           {layout === 'phone' && <PixelOffice st={st} status={executorLabel(st, t)} />}
           <Positions st={st} t={t} />
+          {st.holders && <Holders view={st.holders} universe={st.universe} />}
           <Orders st={st} t={t} lang={lang} />
           <SettingsPanel st={st} t={t} busy={busy} act={act} />
         </div>

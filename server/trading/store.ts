@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AgentId, Caution, Decider, Position, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder } from '../../shared/trading.js';
+import type { AgentId, Caution, Decider, Holder, HolderChange, Position, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder } from '../../shared/trading.js';
 import { config } from '../config.js';
 import { writePrivate } from '../secure-fs.js';
 import { tradingDay } from './tadawul.js';
@@ -43,6 +43,8 @@ export interface TradingData {
   nextEventId: number;
   ordersToday: { day: string; count: number };
   agents: Partial<Record<AgentId, { enabled: boolean; lastRunAt?: string; lastError?: string }>>;
+  /** Substantial shareholders (5% or more): each stock's latest listing, and the changes seen (see holders.ts). */
+  holders?: { listings: Record<string, { holders: Holder[]; asOf: string; source: string; readAt: string }>; changes: HolderChange[]; lastDay?: string; lastRunAt?: string };
   /** The desktop bot: its key (only the hash), the secret commands are signed with, and what it last said. */
   bot: { keyHash?: string; keyHint?: string; signSecret?: string; lastSeen?: string; brokerSession?: boolean; expiresInSec?: number; practice?: boolean };
 }
@@ -154,6 +156,9 @@ export const eventsSince = (id: number) => trading.events.filter((e) => e.id > i
 
 /** Starts again with nothing (tests only). */
 export function resetTrading(): void {
+  // Optional parts are not in a fresh copy, so they are cleared by hand.
+  delete trading.caution;
+  delete trading.holders;
   Object.assign(trading, fresh());
   listeners.clear();
 }

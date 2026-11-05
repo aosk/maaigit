@@ -7,6 +7,7 @@ import { archiveRound, type RoundRecord } from './archive.js';
 import { botStale, cancelAllOpen, halt, openOrders, processOrders, submit } from './executor.js';
 import { currentIndex, currentQuotes, refreshQuotes } from './market.js';
 import { marketPulse } from './pulse.js';
+import { holdersRound, holdersView } from './holders.js';
 import { bookValue, dayPnl, rollDay, round2 } from './portfolio.js';
 import { checkOrder } from './risk.js';
 import { emit, onTradeEvent, saveTrading, trading } from './store.js';
@@ -97,6 +98,8 @@ async function runRound(now: Date): Promise<void> {
   };
   const reads = technicalRound(now);
   const news = await newsRound(now);
+  // Once a trading day: the substantial shareholders of a few stocks, and the week's ownership announcements.
+  await holdersRound(now);
   noteMarket(marketContext(), now);
   record.technical = reads;
   record.news = { fetchedAt: newsFetchedAt(), items: news, market: marketContext() };
@@ -278,5 +281,6 @@ export function tradingView(now = new Date()): TradingState {
     caution: cautionNow(now) ? trading.caution : undefined,
     cautionAuto: trading.cautionAuto,
     pulse: livePulse(now),
+    holders: holdersView(now),
   };
 }
