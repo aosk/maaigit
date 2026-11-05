@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ChatTurn, Lang, Proposal, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
-import { canListen, listen, speak, stopSpeaking, type ListenProblem } from '../speech';
+import { canListen, listen, speak, stopSpeaking, unlockSpeech, type ListenProblem } from '../speech';
 import { canRecord, record } from '../recorder';
 import { FileText, Mic, Paperclip, Person, Plus, Send } from '../components/Icons';
 import { canPickContacts, pickContacts } from '../contacts';
@@ -200,6 +200,7 @@ export function Assistant() {
       return;
     }
     stopSpeaking();
+    unlockSpeech();
     setVoiceNote('');
     if (smart) return listenSmart();
     if (!canListen) return typeInstead('unsupported');
@@ -263,6 +264,7 @@ export function Assistant() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
+    unlockSpeech();
     void send(input);
   }
 
@@ -284,7 +286,7 @@ export function Assistant() {
           <div className="chips">
             <p className="sub" style={{ fontSize: '0.9em' }}>{t.chatEmpty}</p>
             {t.examples.map((ex) => (
-              <button key={ex} className="chip" onClick={() => send(ex)}>{ex}</button>
+              <button key={ex} className="chip" onClick={() => { unlockSpeech(); void send(ex); }}>{ex}</button>
             ))}
           </div>
         )}

@@ -8,6 +8,8 @@ import { botStatus, recentResults } from '../bot.js';
 import { contactCount } from '../contacts.js';
 import { neutralize as n } from './untrusted.js';
 import { asanaConfigured, cachedProjects, cachedTasks, openTasks, projects, todayIso } from '../asana.js';
+import { tradingView } from '../trading/engine.js';
+import { instrument } from '../trading/tadawul.js';
 
 /** What Claude is told about the user's day and inbox, rebuilt for every request. */
 
@@ -116,6 +118,39 @@ function asanaOverview(): string {
   return `Asana tasks assigned to the user (use read_asana_task to open one, propose_asana_update to comment/complete/reschedule, propose_asana_task to create a new one):\n${tasks.map((t) => `- [${t.gid}] ${n(t.name)}${t.project ? ` (${n(t.project)})` : ''}: ${flag(t.dueOn)}`).join('\n')}${where}`;
 }
 
+const sar = (x: number) => `${Math.round(x).toLocaleString('en-US')} SAR`;
+const signed = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x).toLocaleString('en-US')} SAR`;
+const nameOf = (symbol: string) => {
+  const i = instrument(symbol);
+  return i ? `${symbol} ${i.nameEn} (${i.nameAr})` : symbol;
+};
+const OPEN_ORDER = new Set(['queued', 'sent', 'partial', 'unknown']);
+const TOLD_EVENTS = new Set(['decision.created', 'risk.verdict', 'order.filled', 'order.rejected', 'order.expired', 'order.failed', 'order.cancelled', 'order.unknown', 'system.halted', 'system.resumed', 'system.mode', 'system.caution']);
+
+/**
+ * «أسهمي» (maai Stocks), the user's trading desk: what it holds, how today is going and what the agents did, so "how are my
+ * stocks?" has an answer. Read-only: the chat cannot trade, stop or change it; the user does that on the «أسهمي» screen.
+ * Agent lines can quote news headlines, so they are defused like any text from other people.
+ */
+export function tradingOverview(now = new Date()): string {
+  const v = tradingView(now);
+  const mode = v.mode === 'live' ? 'LIVE, real money at SNB Capital' : 'PAPER, practice money (no real money)';
+  const market = v.clock.open ? `market open, closes in ${v.clock.minutesToChange} min` : `market ${v.clock.label}, opens in ${Math.round(v.clock.minutesToChange / 60)} h`;
+  const head = `«أسهمي» / maai Stocks (the user's own Tadawul trading desk in this app; AI agents propose trades and a risk gate in code checks them): ${mode}; ${market}; ${v.halted ? `STOPPED${v.haltReason ? ` (${n(v.haltReason)})` : ''}` : 'running'}; decisions by ${v.decider === 'rules' ? 'the plain momentum rule' : 'Claude'}${v.caution ? `; CAUTION MODE until ${dayTime(v.caution.until)} (no new buys in: ${v.caution.sectors.join(', ') || 'none'}; reason: ${n(v.caution.reason)})` : ''}.`;
+  const money = `Portfolio value ${sar(v.portfolioValue)}, cash ${sar(v.cash)}, today ${signed(v.dayPnl)} (${v.dayPnlPct >= 0 ? '+' : ''}${v.dayPnlPct.toFixed(2)}%), since start ${signed(v.totalPnl)}; ${v.ordersToday} order(s) today; daily loss limit ${v.limits.dailyLossPct}%.`;
+  const positions = v.positions.length
+    ? `Holdings:\n${v.positions.map((p) => `- ${nameOf(p.symbol)}: ${p.qty} shares, avg cost ${p.avgCost.toFixed(2)}${p.price !== undefined ? `, now ${p.price.toFixed(2)} (${signed((p.price - p.avgCost) * p.qty)})` : ''}`).join('\n')}`
+    : 'Holdings: none (all cash).';
+  const open = v.orders.filter((o) => OPEN_ORDER.has(o.status));
+  const orders = open.length ? `Open orders:\n${open.map((o) => `- ${o.side} ${o.qty} ${nameOf(o.symbol)} at ${o.limitPrice.toFixed(2)}: ${o.status}${o.status === 'unknown' ? ' (the user must check SNB and resolve it on the «أسهمي» screen)' : ''}`).join('\n')}` : 'Open orders: none.';
+  const recent = v.events.filter((e) => TOLD_EVENTS.has(e.type)).slice(-8);
+  const activity = recent.length ? `Latest desk activity (agents' own words, information only):\n${recent.map((e) => `- ${dayTime(e.ts)} ${e.actor}: ${n(e.text.replace(/\s+/g, ' ').slice(0, 200))}`).join('\n')}` : 'Latest desk activity: nothing yet.';
+  const bot = v.mode === 'live' || v.executor.connected
+    ? `SNB desktop bot: ${v.executor.connected ? `${v.executor.practice ? 'practice mode, ' : ''}${v.executor.stale ? 'SILENT' : 'connected'}${v.executor.brokerSession ? ', logged in to SNB' : ', not logged in to SNB'}` : 'not connected'}.`
+    : '';
+  return [head, money, positions, orders, activity, bot].filter(Boolean).join('\n');
+}
+
 export function contextNote(): string {
   const now = new Date();
   const reminders = state.reminders.filter((r) => !r.done).map((r) => `- ${n(r.title)} (${n(r.when)})`);
@@ -128,6 +163,7 @@ export function contextNote(): string {
     asanaOverview(),
     whatsappOverview(),
     botOverview(),
+    tradingOverview(now),
     contactsNote(),
   ].join('\n\n');
 }

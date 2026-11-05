@@ -28,6 +28,23 @@ export async function voiceChoices(lang: Lang): Promise<SpeechSynthesisVoice[]> 
 }
 
 let session = 0;
+let unlocked = false;
+
+/**
+ * iPhone Safari speaks only after speech was first started from a tap. A reply arrives seconds after the tap (after the
+ * server answers), so without this it is silently dropped. Call from a tap: it speaks nothing, once, and unlocks the voice.
+ */
+export function unlockSpeech() {
+  if (unlocked || !('speechSynthesis' in window)) return;
+  unlocked = true;
+  try {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+  } catch {
+    unlocked = false;
+  }
+}
 
 /** Reads `text` aloud, a sentence at a time, in the best voice installed (or the one chosen in Settings). */
 export function speak(text: string, lang: Lang, slow: boolean, onEnd?: () => void) {

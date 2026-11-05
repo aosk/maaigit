@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { unlockSpeech } from './speech';
 
 /** Moving between screens. Hash routes (#/assistant) so links work without any server setup. */
 
@@ -31,6 +32,7 @@ export function askAssistant(prompt: string) {
 
 /** Opens the assistant with the microphone already listening. */
 export function talkToAssistant() {
+  unlockSpeech();
   sessionStorage.setItem(LISTEN_KEY, '1');
   go('assistant');
 }
