@@ -35,6 +35,8 @@ describe('the news agent and the Saudi Exchange announcements', () => {
     const items = await newsRound(OPEN);
     const req = create.mock.calls[0][0] as { system: string; tools: { name: string; allowed_domains?: string[] }[] };
     expect(req.system).toMatch(/FIRST read the official company announcements/);
+    // web_fetch only opens addresses in the messages, not in the system prompt.
+    expect((create.mock.calls[0][0] as { messages: { content: string }[] }).messages[0].content).toContain('saudiexchange.sa/wps/portal/saudiexchange/newsandreports/issuer-news?locale=ar');
     expect(req.tools.map((t) => t.name)).toEqual(['web_fetch', 'web_search']);
     expect(req.tools[0].allowed_domains).toEqual(['saudiexchange.sa', 'www.saudiexchange.sa', 'argaam.com', 'www.argaam.com']);
     expect(items.map((i) => [i.symbol, i.official])).toEqual([['2222', true], ['1120', false]]); // a stock not followed is dropped
