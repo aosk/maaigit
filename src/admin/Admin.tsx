@@ -195,8 +195,8 @@ export function Admin() {
             </div>
           </section>}
         {section === 'agents' && data?.status.trading && (
-          <section aria-label="StockSmart agents" className="admin-card">
-            <div className="between wrap"><h2 className="h2" style={{ fontSize: 18 }}>StockSmart agents</h2><a href="#/stocks" className="hl-go">Open StockSmart</a></div>
+          <section aria-label="Istithmari agents" className="admin-card">
+            <div className="between wrap"><h2 className="h2" style={{ fontSize: 18 }}>Istithmari agents</h2><a href="#/stocks" className="hl-go">Open Istithmari</a></div>
             <span className="sub">Technical (indicators, in code), news (Claude with web search, hourly) and decision (Claude; a plain momentum rule without a key). They run every 15 minutes while Tadawul is open, and every order passes the risk gate.</span>
             <div className="row wrap" style={{ gap: 8 }}>
               <Badge outcome={data.status.trading.agentsCanDecide ? 'approved' : 'cancelled'} label={data.status.trading.agentsCanDecide ? 'Deciding with Claude' : 'Plain rule (no Claude key)'} />

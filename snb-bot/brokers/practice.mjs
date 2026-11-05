@@ -1,6 +1,6 @@
-// Practice: goes through every step of an order exactly as the real broker part will (StockSmart's checks, the
+// Practice: goes through every step of an order exactly as the real broker part will (Istithmari's checks, the
 // confirmation compared with the command, the last "still go?") and stops short of SNB. Nothing is placed, ever.
-// Each order is reported "failed: practice", so StockSmart shows what would have happened and books nothing.
+// Each order is reported "failed: practice", so Istithmari shows what would have happened and books nothing.
 export function practiceBroker({ log = console.log } = {}) {
   return {
     practice: true,
@@ -11,7 +11,7 @@ export function practiceBroker({ log = console.log } = {}) {
     async quotes() {
       return [];
     },
-    /** Not read in practice: StockSmart's live book is left as it is. */
+    /** Not read in practice: Istithmari's live book is left as it is. */
     async account() {
       return null;
     },
@@ -25,7 +25,7 @@ export function practiceBroker({ log = console.log } = {}) {
       const shown = { symbol: cmd.symbol, side: cmd.side, qty: cmd.qty, limitPrice: cmd.limitPrice };
       if (!sameOrder(shown)) return { status: 'failed', error: 'The confirmation did not match the order.' };
       await progress('practice: confirmation checked');
-      if (!(await beforeSubmit())) return { status: 'failed', error: 'Practice: StockSmart said not to go at the last check.' };
+      if (!(await beforeSubmit())) return { status: 'failed', error: 'Practice: Istithmari said not to go at the last check.' };
       // Practice stops short of Submit, so even after "go" nothing reached SNB: "failed" (not "unknown") is the truth.
       log(`  (practice) would press Submit now: ${cmd.side} ${cmd.qty} × ${cmd.symbol} at ${Number(cmd.limitPrice).toFixed(2)}`);
       return { status: 'failed', beforeSubmit: true, error: `Practice mode: not placed (would have ${cmd.side === 'buy' ? 'bought' : 'sold'} ${cmd.qty} × ${cmd.symbol} at ${Number(cmd.limitPrice).toFixed(2)}).` };
