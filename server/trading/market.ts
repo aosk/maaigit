@@ -154,7 +154,7 @@ async function yahooChart(ticker: string, interval: string, range: string, fetch
 }
 
 /** A believable random walk per stock, the same every run for the same day (for development and tests). */
-const BASE: Record<string, number> = { '2222': 27.4, '1120': 88, '1180': 36, '1150': 27, '1010': 28.5, '2010': 62, '1211': 51, '7010': 41, '7020': 53, '2082': 280, '5110': 17, '2280': 52, '2050': 24, '4190': 13, '4013': 270 };
+const BASE: Record<string, number> = { '2222': 27.4, '1120': 88, '1180': 36, '1150': 27, '1010': 28.5, '2010': 62, '1211': 51, '7010': 41, '7020': 53, '2082': 280, '5110': 17, '2280': 52, '2050': 24, '4190': 13, '4013': 270, '4002': 75, '4200': 125, '1212': 160 };
 
 function simulate(symbol: string, now: Date, day: string) {
   let seed = [...`${symbol}${day}`].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);

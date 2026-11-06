@@ -80,6 +80,9 @@ export const UNIVERSE: Instrument[] = [
   { symbol: '2050', nameAr: 'صافولا', nameEn: 'Savola', sector: 'food' },
   { symbol: '4190', nameAr: 'جرير', nameEn: 'Jarir', sector: 'retail' },
   { symbol: '4013', nameAr: 'سليمان الحبيب', nameEn: 'Dr. Sulaiman Al Habib', sector: 'health' },
+  { symbol: '4002', nameAr: 'المواساة', nameEn: 'Mouwasat', sector: 'health' },
+  { symbol: '4200', nameAr: 'الدريس', nameEn: 'Aldrees', sector: 'energy' },
+  { symbol: '1212', nameAr: 'أسترا الصناعية', nameEn: 'Astra Industrial', sector: 'industrials' },
 ];
 
 export const instrument = (symbol: string) => UNIVERSE.find((i) => i.symbol === symbol);

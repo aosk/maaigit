@@ -20,7 +20,7 @@ import { instrument, tradingDay, UNIVERSE } from './tadawul.js';
  */
 
 /** How many stocks' listings are read per day (all are covered every three days). */
-const PER_DAY = 5;
+const PER_DAY = 6;
 /** A stake must move this many percentage points between two listings to count as a change. */
 const MIN_MOVE = 0.5;
 const KEEP_DAYS = 60;

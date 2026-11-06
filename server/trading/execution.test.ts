@@ -185,9 +185,9 @@ describe('the record of every round', () => {
     await round(OPEN);
     const [r] = roundsOf('2026-11-01') as unknown as { quotes: unknown[]; technical: unknown[]; decision: unknown; verdicts: Record<string, unknown>[] }[];
     expect(r).toMatchObject({ day: '2026-11-01', mode: 'paper', decider: 'rules', limits: { capital: 100_000 }, book: { cash: 100_000 } });
-    expect(r.quotes).toHaveLength(15);
+    expect(r.quotes).toHaveLength(18);
     expect(r.quotes[0]).toEqual(expect.objectContaining({ asOf: expect.any(String), receivedAt: expect.any(String), source: 'sim' }));
-    expect(r.technical).toHaveLength(15);
+    expect(r.technical).toHaveLength(18);
     expect(r.decision).toMatchObject({ source: 'rules', promptVersion: expect.stringMatching(/^momentum-/) });
     expect(Array.isArray(r.verdicts)).toBe(true);
     for (const v of r.verdicts) expect(v).toEqual(expect.objectContaining({ decisionId: expect.any(String), verdict: expect.any(String) }));

@@ -97,7 +97,7 @@ export interface MarketItem {
 }
 
 let newsCache: { at: number; items: NewsItem[]; market: MarketItem[] } = { at: 0, items: [], market: [] };
-const SECTORS = ['energy', 'banks', 'materials', 'telecom', 'utilities', 'food', 'retail', 'health'];
+const SECTORS = ['energy', 'banks', 'materials', 'telecom', 'utilities', 'food', 'retail', 'health', 'industrials'];
 const NEWS_EVERY_MS = 60 * 60_000;
 const WEB_SEARCH: ServerTool = { type: 'web_search_20260209', name: 'web_search', max_uses: 4, user_location: { type: 'approximate', country: 'SA', timezone: config.timezone } };
 /**
