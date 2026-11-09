@@ -18,6 +18,7 @@ const FAKE_PORT = vi.hoisted(() => {
 
 import { create } from './ai/claude';
 import { dayKey, recentUsage, recordUsage } from './usage';
+import { inDesk } from './trading/desk';
 import { createInnerApp, createOnlineSite } from './site';
 import { listen, raw } from './security/helpers';
 import { state } from './store';
@@ -85,6 +86,20 @@ describe('every Claude request is counted under what it was for', () => {
       { purpose: 'whatsapp', input: 110, cached: 50, output: 20, requests: 1 },
     ]);
     expect(state.usage.requests).toBe(2);
+  });
+
+  it('counts each trading agent apart, per desk', async () => {
+    await inDesk('us', () => create({ purpose: 'trading-news', system: 's', messages: [{ role: 'user', content: 'hi' }], effort: 'low', maxTokens: 100 }));
+    await inDesk('crypto', () => create({ purpose: 'trading-news', system: 's', messages: [{ role: 'user', content: 'hi' }], effort: 'low', maxTokens: 100 }));
+    await inDesk('us', () => create({ purpose: 'trading-news', system: 's', messages: [{ role: 'user', content: 'hi' }], effort: 'low', maxTokens: 100 }));
+    await create({ purpose: 'trading-decision', system: 's', messages: [{ role: 'user', content: 'hi' }], effort: 'low', maxTokens: 100 });
+    await create({ purpose: 'chat', system: 's', messages: [{ role: 'user', content: 'hi' }], effort: 'low', maxTokens: 100 });
+    expect(state.usageLog.map(({ purpose, desk, requests }) => ({ purpose, desk, requests }))).toEqual([
+      { purpose: 'trading-news', desk: 'us', requests: 2 },
+      { purpose: 'trading-news', desk: 'crypto', requests: 1 },
+      { purpose: 'trading-decision', desk: 'sa', requests: 1 },
+      { purpose: 'chat', desk: undefined, requests: 1 },
+    ]);
   });
 });
 

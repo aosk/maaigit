@@ -204,7 +204,7 @@ export async function holdersRound(now = new Date()): Promise<void> {
   const all = UNIVERSE.map((i) => `${i.symbol} ${i.nameEn} (${i.nameAr})`).join('; ');
   try {
     const response = await create({
-      purpose: 'trading',
+      purpose: 'trading-holders',
       system: `You research the substantial shareholders (owners of 5% or more) of Saudi listed companies for a trading desk.
 1. For each of these stocks, find the current list of substantial shareholders with each one's percentage: ${read.map((s) => `${s} ${instrument(s)?.nameEn} (${instrument(s)?.nameAr})`).join('; ')}. Argaam's company pages ("كبار الملاك" / major shareholders) and the Saudi Exchange's company profile list them; search to find the page, then read it with web_fetch. Report the names in Arabic as the source writes them, the percentages exactly as the source gives them, the date the source says the list is as of (YYYY-MM-DD, or '' if it does not say), and the source's site name. A stock whose list you could not read is left out: never guess or recall numbers from memory.
 2. For all the followed stocks (${all}), find announcements from the last 7 days about a change in a substantial shareholder's ownership (reaching 5%, a stake rising or falling, falling below 5%). For each: the 4-digit symbol, the holder, the stake before and after in percent (null when not stated), the date (YYYY-MM-DD), the source's site name, and official = true only when it is the company's or the exchange's own announcement.

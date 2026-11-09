@@ -1,6 +1,7 @@
-import type { UsagePurpose, UsageRow } from '../shared/types.js';
+import type { UsageDesk, UsagePurpose, UsageRow } from '../shared/types.js';
 import { config } from './config.js';
 import { save, state } from './store.js';
+import { deskId } from './trading/desk.js';
 
 /** Counts Claude tokens per day and feature, for the admin portal. */
 
@@ -21,6 +22,18 @@ export function dayKey(date: Date, timeZone = config.timezone): string {
 /** A token count that is always a whole number, never negative or NaN, whatever the API sent. */
 const count = (value: number | null | undefined) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0);
 
+/** Today's row for a feature (and, for a trading agent, the desk it ran for), made if missing. */
+function rowFor(purpose: UsagePurpose, now: Date): UsageRow {
+  const day = dayKey(now);
+  const desk: UsageDesk | undefined = purpose.startsWith('trading') ? deskId() : undefined;
+  let row = state.usageLog.find((r) => r.day === day && r.purpose === purpose && r.desk === desk);
+  if (!row) {
+    row = { day, purpose, ...(desk ? { desk } : {}), input: 0, cached: 0, output: 0, requests: 0 };
+    state.usageLog.push(row);
+  }
+  return row;
+}
+
 export function recordUsage(purpose: UsagePurpose, usage: ApiUsage, now = new Date()): void {
   const cached = count(usage.cache_read_input_tokens);
   const input = count(usage.input_tokens) + count(usage.cache_creation_input_tokens);
@@ -30,12 +43,7 @@ export function recordUsage(purpose: UsagePurpose, usage: ApiUsage, now = new Da
   state.usage.outputTokens += output;
   state.usage.requests += 1;
 
-  const day = dayKey(now);
-  let row = state.usageLog.find((r) => r.day === day && r.purpose === purpose);
-  if (!row) {
-    row = { day, purpose, input: 0, cached: 0, output: 0, requests: 0 };
-    state.usageLog.push(row);
-  }
+  const row = rowFor(purpose, now);
   row.input += input;
   row.cached += cached;
   row.output += output;
@@ -48,12 +56,7 @@ export function recordUsage(purpose: UsagePurpose, usage: ApiUsage, now = new Da
 
 /** An answer was reused from the cache instead of asking Claude again. */
 export function recordCacheHit(purpose: UsagePurpose, now = new Date()): void {
-  const day = dayKey(now);
-  let row = state.usageLog.find((r) => r.day === day && r.purpose === purpose);
-  if (!row) {
-    row = { day, purpose, input: 0, cached: 0, output: 0, requests: 0 };
-    state.usageLog.push(row);
-  }
+  const row = rowFor(purpose, now);
   row.hits = (row.hits ?? 0) + 1;
   save();
 }

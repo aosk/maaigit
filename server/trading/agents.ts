@@ -193,7 +193,7 @@ export async function newsRound(now = new Date()): Promise<NewsItem[]> {
     const sectors = deskConfig().sectors.join(', ');
     const saudi = deskConfig().saudi;
     const response = await create({
-      purpose: 'trading',
+      purpose: 'trading-news',
       system: saudi
         ? `You are the news analyst on a Saudi stock trading desk, following these stocks only: ${list}.
 1. FIRST read the official company announcements published by the Saudi Exchange with web_fetch: ${ANNOUNCEMENTS_AR} (or ${ANNOUNCEMENTS_EN}). Open an announcement's own page when its title alone does not say what it means (results, dividends, board decisions, contracts, capital changes, trading halts). If the exchange's page cannot be read, Argaam's company announcements are the next best.
@@ -361,7 +361,7 @@ export async function decisionRound(reads: TechRead[], news: NewsItem[], minutes
         userInstructions: trading.directives.map((d) => d.text),
       });
       const response = await create({
-        purpose: 'trading',
+        purpose: 'trading-decision',
         system: decisionSystem(),
         messages: [
           {
@@ -431,7 +431,7 @@ export async function askAgents(question: string, lang: Lang, now = new Date()):
     try {
       const book = trading.books[trading.mode];
       const response = await create({
-        purpose: 'trading',
+        purpose: 'trading-ask',
         system: `You speak for أسهمي (maai Stocks), the trading desk in the maai app (technical, news and decision agents, a risk gate, and an executor). Answer the user's question about what the desk did and why, from the log and the book below only. If the log does not say, say so. Be brief and plain, in ${lang === 'ar' ? 'Arabic (Saudi, friendly)' : 'English'}. If the user gives an instruction, say it was noted: instructions are saved separately.`,
         messages: [{ role: 'user', content: JSON.stringify({ question, mode: trading.mode, halted: trading.halted, limits: trading.limits, cash: book.cash, positions: book.positions, log: trading.events.slice(-80).map((e) => `${e.ts} ${e.actor}: ${e.text}`) }) }],
         effort: 'low',

@@ -1,4 +1,4 @@
-import type { UsagePurpose, UsageRow } from '../../shared/types';
+import type { UsageDesk, UsagePurpose, UsageRow } from '../../shared/types';
 
 const LABELS: Record<UsagePurpose, string> = {
   chat: 'Assistant chat',
@@ -7,8 +7,16 @@ const LABELS: Record<UsagePurpose, string> = {
   'email-draft': 'Reply drafts',
   whatsapp: 'WhatsApp summary',
   news: 'News picks',
-  trading: 'maai Stocks agents',
+  trading: 'maai Stocks agents (before the split)',
+  'trading-news': 'Stocks · News agent',
+  'trading-decision': 'Stocks · Decision agent',
+  'trading-calendar': 'Stocks · Calendar',
+  'trading-holders': 'Stocks · Major shareholders',
+  'trading-review': 'Stocks · Weekly review',
+  'trading-shariah': 'Stocks · Shariah check',
+  'trading-ask': 'Stocks · Your questions',
 };
+const DESKS: Record<UsageDesk, string> = { sa: 'Saudi', us: 'US', crypto: 'Crypto' };
 
 const total = (r: Pick<UsageRow, 'input' | 'cached' | 'output'>) => r.input + r.cached + r.output;
 const sum = (rows: UsageRow[]) => rows.reduce((a, r) => ({ input: a.input + r.input, cached: a.cached + r.cached, output: a.output + r.output, requests: a.requests + r.requests, hits: a.hits + (r.hits ?? 0) }), { input: 0, cached: 0, output: 0, requests: 0, hits: 0 });
@@ -28,8 +36,11 @@ export function TokenUsage({ rows, timeZone, allTime }: { rows: UsageRow[]; time
   const week = sum(rows.filter((r) => r.day >= since(7)));
   const month = sum(rows);
 
-  const byPurpose = (Object.keys(LABELS) as UsagePurpose[])
-    .map((purpose) => ({ purpose, ...sum(rows.filter((r) => r.purpose === purpose)) }))
+  // One line per feature, and per desk for the trading agents.
+  const groups = new Map<string, { purpose: UsagePurpose; desk?: UsageDesk }>();
+  for (const r of rows) if (LABELS[r.purpose]) groups.set(`${r.purpose}|${r.desk ?? ''}`, { purpose: r.purpose, desk: r.desk });
+  const byPurpose = [...groups.entries()]
+    .map(([key, g]) => ({ key, ...g, ...sum(rows.filter((r) => r.purpose === g.purpose && r.desk === g.desk)) }))
     .filter((r) => r.requests > 0 || r.hits > 0)
     .sort((a, b) => total(b) - total(a));
   const monthTotal = total(month) || 1;
@@ -70,8 +81,8 @@ export function TokenUsage({ rows, timeZone, allTime }: { rows: UsageRow[]; time
               <thead><tr><th>Feature</th><th>Requests</th><th>Reused</th><th>Input</th><th>From cache</th><th>Output</th><th>Total</th><th>Share</th></tr></thead>
               <tbody>
                 {byPurpose.map((r) => (
-                  <tr key={r.purpose}>
-                    <td>{LABELS[r.purpose]}</td>
+                  <tr key={r.key}>
+                    <td>{LABELS[r.purpose]}{r.desk ? ` (${DESKS[r.desk]})` : ''}</td>
                     <td>{r.requests}</td>
                     <td>{r.hits}</td>
                     <td>{compact(r.input)}</td>

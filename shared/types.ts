@@ -352,13 +352,33 @@ export interface StatusInfo {
 }
 
 /** What a Claude request was for, so token use can be split by feature. */
-export type UsagePurpose = 'chat' | 'briefing' | 'email-digest' | 'email-draft' | 'whatsapp' | 'news' | 'trading';
+export type UsagePurpose =
+  | 'chat'
+  | 'briefing'
+  | 'email-digest'
+  | 'email-draft'
+  | 'whatsapp'
+  | 'news'
+  /** Before the trading agents were counted one by one (kept for older rows). */
+  | 'trading'
+  | 'trading-news'
+  | 'trading-decision'
+  | 'trading-calendar'
+  | 'trading-holders'
+  | 'trading-review'
+  | 'trading-shariah'
+  | 'trading-ask';
+
+/** The trading desk a request was made for. */
+export type UsageDesk = 'sa' | 'us' | 'crypto';
 
 /** One day's Claude use for one feature. `input` excludes tokens read from the cache, which are in `cached`. */
 export interface UsageRow {
   /** YYYY-MM-DD in the app's time zone. */
   day: string;
   purpose: UsagePurpose;
+  /** Trading agents only: which desk (Saudi, US, crypto) the request was for. */
+  desk?: UsageDesk;
   input: number;
   cached: number;
   output: number;
