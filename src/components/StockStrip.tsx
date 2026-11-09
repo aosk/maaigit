@@ -7,6 +7,8 @@ import { MOOD_COLOR } from './MarketPulse';
 
 const MARKETS: TradingMarket[] = ['sa', 'us', 'crypto'];
 const FLAG: Record<TradingMarket, string> = { sa: '🇸🇦', us: '🇺🇸', crypto: '₿' };
+/** The market's overall mood as a symbol: strongly up, up, mixed, down, strongly down. */
+const MOOD_SYMBOL: Record<NonNullable<TradingState['pulse']>['mood'], string> = { strong_up: '▲▲', up: '▲', mixed: '◆', down: '▼', strong_down: '▼▼' };
 
 /** «أسواقي» at the top of «يومك»: one line per desk, its flag, the market's overall mood today and the desk's profit or loss in money. */
 export function StockStrip() {
@@ -49,9 +51,8 @@ export function StockStrip() {
             <span className="sx-cell">
               <span className="sub">{s.stripMarket}</span>
               {st.pulse ? (
-                <b className="sx-mood" style={{ color: MOOD_COLOR[st.pulse.mood] }}>
-                  <i aria-hidden="true" style={{ background: MOOD_COLOR[st.pulse.mood] }} />
-                  {s.pulseMood[st.pulse.mood]}
+                <b className="sx-mood" style={{ color: MOOD_COLOR[st.pulse.mood] }} title={s.pulseMood[st.pulse.mood]} aria-label={s.pulseMood[st.pulse.mood]}>
+                  {MOOD_SYMBOL[st.pulse.mood]}
                 </b>
               ) : (
                 <b>—</b>

@@ -1011,5 +1011,4 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .sx-cell { flex: 1; display: flex; align-items: baseline; justify-content: space-between; gap: 6px; font-size: 0.9em; font-variant-numeric: tabular-nums; }
 .sx-cell .sub { font-size: 0.85em; }
 .sx-cell small { font-size: 0.72em; font-weight: 600; color: var(--text2); }
-.sx-mood { display: inline-flex; align-items: center; gap: 5px; }
-.sx-mood i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.sx-mood { letter-spacing: -2px; font-size: 1.05em; }
