@@ -76,24 +76,37 @@ const RANGES: Record<keyof TradeLimits, [number, number]> = {
 };
 
 tradingRoutes.put('/trading/limits', (req, res) => {
-  const changes: string[] = [];
+  // Check every value first, so a refused change leaves the limits as they were.
+  const next: Partial<TradeLimits> = {};
   for (const [key, [min, max]] of Object.entries(RANGES) as [keyof TradeLimits, [number, number]][]) {
     const value = req.body?.[key];
     if (value === undefined) continue;
     const n = Number(value);
     if (!Number.isFinite(n) || n < min || n > max) throw new HttpError(400, `${key} must be between ${min} and ${max}.`);
+    next[key] = n;
+  }
+  // Paper money follows the capital: the difference is added to (or taken from) the paper cash, so the desk can use
+  // the new amount even while it holds positions, and the profit so far is unchanged. It cannot take away money that
+  // is already invested.
+  const paper = trading.books.paper;
+  const delta = next.capital !== undefined ? next.capital - trading.limits.capital : 0;
+  const reserved = trading.orders.filter((o) => o.mode === 'paper' && o.side === 'buy' && ['queued', 'sent', 'partial'].includes(o.status)).reduce((sum, o) => sum + (o.qty - o.filledQty) * o.limitPrice, 0);
+  if (delta < 0 && paper.cash - reserved + delta < 0) {
+    const least = Math.ceil(trading.limits.capital - (paper.cash - reserved));
+    throw new HttpError(409, `That much is invested already: choose at least ${least}, or sell first.`);
+  }
+  const changes: string[] = [];
+  for (const [key, n] of Object.entries(next) as [keyof TradeLimits, number][]) {
     if (trading.limits[key] !== n) {
       changes.push(`${key}: ${trading.limits[key]} → ${n}`);
       trading.limits[key] = n;
     }
   }
-  if (changes.length) emit('system.limits', 'user', `غيّرت الحدود: ${changes.join(' · ')}`);
-  // Paper money follows the capital while nothing is invested (only when the capital itself changed).
-  const paper = trading.books.paper;
-  if (changes.some((c) => c.startsWith('capital:')) && paper.positions.length === 0 && trading.orders.every((o) => o.mode !== 'paper' || !['queued', 'sent', 'partial'].includes(o.status))) {
-    paper.cash = trading.limits.capital;
-    paper.dayStart.value = paper.cash;
+  if (delta) {
+    paper.cash = Math.round((paper.cash + delta) * 100) / 100;
+    paper.dayStart.value = Math.round((paper.dayStart.value + delta) * 100) / 100;
   }
+  if (changes.length) emit('system.limits', 'user', `غيّرت الحدود: ${changes.join(' · ')}${delta ? ` · الكاش التجريبي ${delta > 0 ? 'زاد' : 'نقص'} ${deskConfig().money(Math.abs(delta))}` : ''}`);
   saveTrading();
   res.json(tradingView());
 });

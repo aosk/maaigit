@@ -77,6 +77,25 @@ describe('StockSmart for the user', () => {
     expect(trading.events.at(-1)?.text).toMatch(/capital: 100000 → 20000/);
   });
 
+  it('moves the paper money with the capital even while stocks are held, keeping the profit so far', async () => {
+    const paper = trading.books.paper;
+    paper.cash = 60_000;
+    paper.positions = [{ symbol: '2222', qty: 1000, avgCost: 40 }];
+    paper.dayStart.value = 100_000;
+    const res = await asUser('PUT', '/trading/limits', { capital: 150_000 });
+    expect(res.status).toBe(200);
+    expect(paper.cash).toBe(110_000);
+    expect(paper.dayStart.value).toBe(150_000);
+    expect(paper.positions).toHaveLength(1);
+    expect(trading.events.at(-1)?.text).toMatch(/الكاش التجريبي زاد/);
+    // Less than what is invested: refused, and nothing changes.
+    const tooLow = await asUser('PUT', '/trading/limits', { capital: 30_000 });
+    expect(tooLow.status).toBe(409);
+    expect(tooLow.json()).toMatchObject({ error: expect.stringMatching(/at least 40000/) });
+    expect(trading.limits.capital).toBe(150_000);
+    expect(paper.cash).toBe(110_000);
+  });
+
   it('keeps instructions and exclusions the agents must follow', async () => {
     await asUser('POST', '/trading/directives', { text: 'لا تشتري بنوك اليوم' });
     await asUser('PUT', '/trading/excluded', { excluded: ['banks', '2222', 'not-a-stock'] });
