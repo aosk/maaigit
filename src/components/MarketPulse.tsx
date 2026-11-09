@@ -2,7 +2,7 @@ import type { MarketPulse as Pulse } from '../../shared/trading';
 import { useSettings } from '../settings';
 
 /** The mood's colour, from red (falling hard) to green (rising strongly). */
-export const MOOD_COLOR: Record<Pulse['mood'], string> = {
+const MOOD_COLOR: Record<Pulse['mood'], string> = {
   strong_down: 'var(--danger)',
   down: '#e8743b',
   mixed: 'var(--warn-bar, #dc6803)',
