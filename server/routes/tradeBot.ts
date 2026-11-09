@@ -124,8 +124,8 @@ tradeBotApi.post('/heartbeat', (req, res) => {
   if (Array.isArray(quotes)) for (const q of quotes.slice(0, 50) as Record<string, unknown>[]) noteBotQuote(typeof q?.symbol === 'string' ? q.symbol : '', num(q?.price), num(q?.prevClose));
   // Logged out while trading real money: stop, and ask the user to log in again (the OTP is theirs).
   if (was && !trading.bot.brokerSession && trading.mode === 'live') {
-    halt('بوت SNB خرج من حسابه في SNB Capital', 'system');
-    void alertTrade(`trade:login:${Date.now()}`, 'بوت SNB يحتاج تسجيل دخول جديد (رمز التحقق على جوالك).').catch(() => {});
+    halt('بوت Broker خرج من حسابه في Broker', 'system');
+    void alertTrade(`trade:login:${Date.now()}`, 'بوت Broker يحتاج تسجيل دخول جديد (رمز التحقق على جوالك).').catch(() => {});
   }
   saveTrading();
   res.json({ halted: trading.halted, mode: trading.mode, serverTime: new Date().toISOString() });

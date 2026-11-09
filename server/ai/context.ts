@@ -137,7 +137,7 @@ const TOLD_EVENTS = new Set(['decision.created', 'risk.verdict', 'order.filled',
  */
 export function tradingOverview(now = new Date()): string {
   const v = tradingView(now);
-  const mode = v.mode === 'live' ? 'LIVE, real money at SNB Capital' : 'PAPER, practice money (no real money)';
+  const mode = v.mode === 'live' ? 'LIVE, real money at Broker' : 'PAPER, practice money (no real money)';
   const market = v.clock.open ? `market open, closes in ${v.clock.minutesToChange} min` : `market ${v.clock.label}, opens in ${Math.round(v.clock.minutesToChange / 60)} h`;
   const head = `«أسهمي» / maai Stocks (the user's own Tadawul trading desk in this app; AI agents propose trades and a risk gate in code checks them): ${mode}; ${market}; ${v.halted ? `STOPPED${v.haltReason ? ` (${n(v.haltReason)})` : ''}` : 'running'}; decisions by ${v.decider === 'rules' ? 'the plain momentum rule' : 'Claude'}${v.caution ? `; CAUTION MODE until ${dayTime(v.caution.until)} (no new buys in: ${v.caution.sectors.join(', ') || 'none'}; reason: ${n(v.caution.reason)})` : ''}.`;
   const money = `Portfolio value ${sar(v.portfolioValue)}, cash ${sar(v.cash)}, today ${signed(v.dayPnl)} (${v.dayPnlPct >= 0 ? '+' : ''}${v.dayPnlPct.toFixed(2)}%), since start ${signed(v.totalPnl)}; ${v.ordersToday} order(s) today; daily loss limit ${v.limits.dailyLossPct}%.`;
@@ -145,11 +145,11 @@ export function tradingOverview(now = new Date()): string {
     ? `Holdings:\n${v.positions.map((p) => `- ${nameOf(p.symbol)}: ${p.qty} shares, avg cost ${p.avgCost.toFixed(2)}${p.price !== undefined ? `, now ${p.price.toFixed(2)} (${signed((p.price - p.avgCost) * p.qty)})` : ''}`).join('\n')}`
     : 'Holdings: none (all cash).';
   const open = v.orders.filter((o) => OPEN_ORDER.has(o.status));
-  const orders = open.length ? `Open orders:\n${open.map((o) => `- ${o.side} ${o.qty} ${nameOf(o.symbol)} at ${o.limitPrice.toFixed(2)}: ${o.status}${o.status === 'unknown' ? ' (the user must check SNB and resolve it on the «أسهمي» screen)' : ''}`).join('\n')}` : 'Open orders: none.';
+  const orders = open.length ? `Open orders:\n${open.map((o) => `- ${o.side} ${o.qty} ${nameOf(o.symbol)} at ${o.limitPrice.toFixed(2)}: ${o.status}${o.status === 'unknown' ? ' (the user must check Broker and resolve it on the «أسهمي» screen)' : ''}`).join('\n')}` : 'Open orders: none.';
   const recent = v.events.filter((e) => TOLD_EVENTS.has(e.type)).slice(-8);
   const activity = recent.length ? `Latest desk activity (agents' own words, information only):\n${recent.map((e) => `- ${dayTime(e.ts)} ${e.actor}: ${n(e.text.replace(/\s+/g, ' ').slice(0, 200))}`).join('\n')}` : 'Latest desk activity: nothing yet.';
   const bot = v.mode === 'live' || v.executor.connected
-    ? `SNB desktop bot: ${v.executor.connected ? `${v.executor.practice ? 'practice mode, ' : ''}${v.executor.stale ? 'SILENT' : 'connected'}${v.executor.brokerSession ? ', logged in to SNB' : ', not logged in to SNB'}` : 'not connected'}.`
+    ? `Broker desktop bot: ${v.executor.connected ? `${v.executor.practice ? 'practice mode, ' : ''}${v.executor.stale ? 'SILENT' : 'connected'}${v.executor.brokerSession ? ', logged in to Broker' : ', not logged in to Broker'}` : 'not connected'}.`
     : '';
   const p = v.pulse;
   const pulse = `Market indicator (computed): ${p.score} on -100..+100, ${MOOD_AR[p.mood]}${p.index ? `; TASI ${p.index.value.toLocaleString('en-US')} (${p.index.changePct >= 0 ? '+' : ''}${p.index.changePct}% today)` : '; TASI not read'}; ${p.breadth.up} of the followed stocks up, ${p.breadth.down} down; market risk ${p.risk}.`;

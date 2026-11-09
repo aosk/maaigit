@@ -101,7 +101,7 @@ export function PixelOffice({ st, status }: { st: TradingState; status: string }
             {t.ss.agentNames[p.actor as keyof typeof t.ss.agentNames]}
           </span>
         ))}
-        <span className="ss-plate snb" style={{ left: '91.8%', top: '17.6%' }}>SNB</span>
+        <span className="ss-plate snb" style={{ left: '91.8%', top: '17.6%' }}>Broker</span>
         <button type="button" className="ss-office-full" onClick={() => setFull(!full)} aria-label={full ? t.ss.officeExit : t.ss.officeFull}>
           {full ? '✕' : '⛶'}
         </button>

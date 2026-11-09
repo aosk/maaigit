@@ -704,7 +704,7 @@ export function createOffice(canvas: HTMLCanvasElement, opts: { reduced: () => b
         botBlink = 1800;
         return;
       case 'order.progress':
-        add(async (my) => { botBlink = 1200; await say(exec, short(e.text.replace(/^بوت SNB:\s*/, ''), 24), 1100, my); });
+        add(async (my) => { botBlink = 1200; await say(exec, short(e.text.replace(/^بوت (?:Broker|SNB):\s*/, ''), 24), 1100, my); });
         return;
       case 'order.filled':
         add(async (my) => {
@@ -734,14 +734,14 @@ export function createOffice(canvas: HTMLCanvasElement, opts: { reduced: () => b
       case 'order.cancelled':
       case 'order.rejected':
       case 'order.failed': {
-        const words = { 'order.expired': 'انتهت مدته', 'order.cancelled': 'أُلغي', 'order.rejected': 'رفضته SNB', 'order.failed': 'ما وصل SNB' }[e.type];
+        const words = { 'order.expired': 'انتهت مدته', 'order.cancelled': 'أُلغي', 'order.rejected': 'رفضه Broker', 'order.failed': 'ما وصل Broker' }[e.type];
         add(async (my) => { await say(exec, `${words}${stock ? ` · ${stock}` : ''}`, 1300, my); });
         return;
       }
       case 'order.unknown':
         add(async (my) => {
           gateLight = 'alarm';
-          await say(exec, 'حالته في SNB غير معروفة!', 2200, my);
+          await say(exec, 'حالته في Broker غير معروفة!', 2200, my);
         });
         return;
       case 'system.caution':
