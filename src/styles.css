@@ -1015,3 +1015,10 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .sx-dial { width: 46px; height: auto; display: block; }
 .sx-mood small { font-size: 0.68em; font-weight: 700; margin-top: 1px; }
 .sx-cell { align-items: center; }
+
+/* Decision scores */
+.sc-right { color: var(--success); font-weight: 700; }
+.sc-wrong { color: var(--danger); font-weight: 700; }
+.sc-even { color: var(--text2); font-weight: 700; }
+.sc-lesson { display: block; margin-top: 4px; font-size: 0.85em; color: var(--text2); line-height: 1.5; }
+.sc-alpha { flex: none; font-variant-numeric: tabular-nums; }

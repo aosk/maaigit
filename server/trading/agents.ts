@@ -10,6 +10,7 @@ import { emit, trading } from './store.js';
 import { referenceFor } from './reference.js';
 import { holdersForDecision } from './holders.js';
 import { upcoming } from './calendar.js';
+import { trackRecord } from './scoring.js';
 import { instrument, units, UNIVERSE } from './tadawul.js';
 import { deskConfig, perDesk, unitAr } from './desk.js';
 
@@ -275,6 +276,7 @@ const DECISION_SYSTEM = `You are the portfolio manager on a Saudi stock (Tadawul
 - "marketPulse" is the market as a whole, computed in code: score from -100 (falling hard) to +100 (rising strongly), TASI's move and trend, and how many followed stocks rise against fall. Against a falling market (score below -40) a new buy needs an especially strong reason of its own; it never forces a sale by itself.
 - "holders" lists changes among substantial shareholders (5% or more) in the last month, and who holds the stocks you hold. A large holder adding is mild support and one cutting or leaving is mild caution, more so when official; it is often days old and already known, so it is never a reason to trade by itself.
 - "caution" (when present) means caution mode is on: the risk gate halves new buys and refuses new buys in the sectors listed; plan within that.
+- "trackRecord" (when present) scores your past trades against the market index once their holding window passed: alphaPct > 0 means the call beat the index. Read the lessons and apply them; do not repeat a pattern that keeps missing, and say so when a lesson is the reason for a decision.
 - "calendar" lists events in the next two weeks (results, rate decisions, inflation and jobs reports). The risk gate already refuses new buys in a stock the day before and the day of its confirmed results; beyond that, avoid building a position just before a stock's results or a big market event, and say so when it is the reason.
 - "reference" lists verified past disclosures (results, deals, rate decisions) as background. They are already known to the market and priced in to some degree: use them to understand a stock, never as a reason to trade today on their own, and never treat them as new.
 - Write the summary and each rationale in short, plain Arabic (one or two sentences), naming the evidence.`;
@@ -354,6 +356,8 @@ export async function decisionRound(reads: TechRead[], news: NewsItem[], minutes
         // Substantial shareholders (5% or more): the last month's changes, and who holds the stocks in the book.
         holders: holdersForDecision(held.map((h) => h.symbol), now),
         // What is coming in the next week: results, rate decisions, reports.
+        // How past trades did against the index once their window passed, with the lesson drawn from each.
+        trackRecord: trackRecord(),
         calendar: upcoming(now).slice(0, 12).map(({ date, timeRiyadh, kind, symbols, title, confirmed }) => ({ date, timeRiyadh, kind, symbols, title, confirmed })),
         // Past disclosures (results, deals, rate decisions), checked: background for judging today's reads, not news.
         reference: referenceFor(UNIVERSE.map((i) => i.symbol), now).map((e) => ({ date: e.date, symbols: e.symbols, headline: e.headline, facts: e.facts })),

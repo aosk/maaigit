@@ -226,6 +226,44 @@ export interface WeeklyReview {
   suggestions: string[];
 }
 
+/** A filled trade, scored against the desk's index once its holding window has passed (see server/trading/scoring.ts). */
+export interface ScoredDecision {
+  orderId: string;
+  symbol: string;
+  side: Side;
+  /** The decision's own reason, as written then. */
+  rationale: string;
+  /** The fill: when, at what price, and the index then. */
+  at: string;
+  price: number;
+  index: number;
+  /** When it is judged. */
+  dueAt: string;
+  settledAt?: string;
+  exitPrice?: number;
+  exitIndex?: number;
+  /** The stock's and the index's move over the window, in %. */
+  ret?: number;
+  indexRet?: number;
+  /** Points by which the call beat the index: stock minus index for a buy, index minus stock for a sale. */
+  alpha?: number;
+  verdict?: 'right' | 'wrong' | 'even';
+  /** Claude's lesson on it, in Arabic (where Claude decides). */
+  lesson?: string;
+}
+
+/** How often the desk's calls beat the market, and the latest scored trades. */
+export interface Scorecard {
+  holdDays: number;
+  settled: number;
+  right: number;
+  wrong: number;
+  /** Average points ahead of (or behind) the index. */
+  avgAlpha: number;
+  pending: number;
+  recent: ScoredDecision[];
+}
+
 /** The quarterly Shariah check of the US list: whether each stock is still held by the S&P 500 Shariah ETF. */
 export interface ShariahCheck {
   checkedAt?: string;
@@ -314,6 +352,8 @@ export interface TradingState {
   review: WeeklyReview | null;
   /** The US list's Shariah check (US desk only). */
   shariah: ShariahCheck | null;
+  /** Each filled trade scored against the index after its holding window. */
+  scorecard: Scorecard;
 }
 
 export interface Caution {

@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { openScore } from './scoring.js';
 import type { Position, Quote, Side, TradeMode, TradeOrder } from '../../shared/trading.js';
 import { applyFill, round2 } from './portfolio.js';
 import { latestObserved, observedBetween } from './market.js';
@@ -96,6 +97,8 @@ function fill(order: TradeOrder, qty: number, price: number, now: Date, profit: 
   order.stage = undefined;
   const taken = order.side === 'sell' ? ` · ${profit >= 0 ? 'ربح' : 'خسارة'} ${deskConfig().money(Math.abs(profit))}` : '';
   const when = evidence ? ` · سعر البورصة ${evidence.price} الساعة ${evidence.asOf.slice(11, 16)} (توقيت عالمي)` : '';
+  // Noted for scoring against the index once its holding window has passed.
+  openScore(order, price, now);
   emit('order.filled', 'executor', `تم التنفيذ: ${sideAr(order.side)} ${qty} × ${label(order.symbol)} بسعر ${price}${taken}${when}`, { correlationId: order.decisionId, data: { orderId: order.id, qty, price, profit, ...(evidence ? { quoteAsOf: evidence.asOf, quoteReceivedAt: evidence.receivedAt, quotePrice: evidence.price } : {}) } }, now);
 }
 

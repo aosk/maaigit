@@ -367,7 +367,8 @@ export type UsagePurpose =
   | 'trading-holders'
   | 'trading-review'
   | 'trading-shariah'
-  | 'trading-ask';
+  | 'trading-ask'
+  | 'trading-lessons';
 
 /** The trading desk a request was made for. */
 export type UsageDesk = 'sa' | 'us' | 'crypto';

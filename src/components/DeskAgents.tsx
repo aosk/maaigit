@@ -102,6 +102,59 @@ export function Review({ st, busy, act }: { st: TradingState; busy: boolean; act
   );
 }
 
+/** «تقييم القرارات»: each filled trade set against the market index once its holding window has passed, and the lesson drawn. */
+export function Scorecard({ st }: { st: TradingState }) {
+  const { t, settings } = useSettings();
+  const s = t.ss;
+  const c = st.scorecard;
+  if (!c || (c.settled === 0 && c.pending === 0)) return null;
+  const name = (symbol: string) => {
+    const i = st.universe.find((u) => u.symbol === symbol);
+    return i && st.market === 'sa' ? (settings.lang === 'ar' ? i.nameAr : i.nameEn) : symbol;
+  };
+  // Rounded first, so a tiny move reads 0.0%, not −0.0%.
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const pct = (n: number) => `${r1(n) > 0 ? '+' : r1(n) < 0 ? '−' : ''}${Math.abs(r1(n)).toFixed(1)}%`;
+  const tone = (n: number | undefined) => (r1(n ?? 0) > 0 ? 'up' : r1(n ?? 0) < 0 ? 'down' : '');
+  const MARK = { right: '✓', wrong: '✗', even: '=' } as const;
+  return (
+    <section className="card dk" aria-label={s.scTitle}>
+      <div>
+        <h2 className="h2" style={{ margin: 0 }}>{s.scTitle}</h2>
+        <span className="sub">{s.scSub(c.holdDays, st.indexName[settings.lang === 'ar' ? 'ar' : 'en'])}</span>
+      </div>
+      <div className="dk-stats">
+        <div><b>{c.right}/{c.settled}</b><span>{s.scRight}</span></div>
+        <div><b className={tone(c.avgAlpha)} dir="ltr">{c.settled ? pct(c.avgAlpha) : '—'}</b><span>{s.scAlpha}</span></div>
+        <div><b>{c.wrong}</b><span>{s.scWrong}</span></div>
+        <div><b>{c.pending}</b><span>{s.scPending}</span></div>
+      </div>
+      {c.recent.length === 0 ? (
+        <p className="sub" style={{ margin: 0 }}>{s.scWaiting(c.holdDays)}</p>
+      ) : (
+        <ul className="dk-list">
+          {c.recent.map((d) => (
+            <li key={d.orderId}>
+              <span className={`dk-icon sc-${d.verdict}`} aria-label={d.verdict ? s.scVerdict[d.verdict] : ''}>{d.verdict ? MARK[d.verdict] : ''}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="dk-line">
+                  {d.side === 'buy' ? s.scBuy : s.scSell} <bdi>{name(d.symbol)}</bdi>
+                </span>
+                <span className="sub">
+                  {s.scStock} <bdi dir="ltr">{pct(d.ret ?? 0)}</bdi> · {s.scIndex} <bdi dir="ltr">{pct(d.indexRet ?? 0)}</bdi>
+                </span>
+                {d.lesson && <span className="sc-lesson" dir="auto">{d.lesson}</span>}
+              </span>
+              <b className={`sc-alpha ${d.verdict === 'even' ? '' : tone(d.alpha)}`} dir="ltr">{pct(d.alpha ?? 0)}</b>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="sub" style={{ margin: 0 }}>{s.scNote}</p>
+    </section>
+  );
+}
+
 /** The US list's quarterly Shariah check: each stock still held by SPUS, or not, and when it is next due. */
 export function Shariah({ st, busy, act }: { st: TradingState; busy: boolean; act: (run: () => Promise<TradingState>) => Promise<boolean> }) {
   const { t, settings } = useSettings();

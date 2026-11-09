@@ -12,6 +12,7 @@ import { holdersRound, holdersView } from './holders.js';
 import { blackoutNow, calendarRound, upcoming } from './calendar.js';
 import { latestReview, weeklyReview } from './review.js';
 import { shariahRound, shariahView } from './shariah.js';
+import { scoreRound, scorecardView } from './scoring.js';
 import { bookValue, dayPnl, rollDay, round2 } from './portfolio.js';
 import { checkOrder } from './risk.js';
 import { emit, onTradeEvent, saveTrading, trading } from './store.js';
@@ -107,6 +108,8 @@ async function runRound(now: Date): Promise<void> {
   await holdersRound(now);
   // Once a trading day: the next two weeks' results, rate decisions and reports.
   await calendarRound(now);
+  // Trades whose holding window has passed: scored against the index, with a lesson each where Claude decides.
+  await scoreRound(now);
   noteMarket(marketContext(), now);
   record.technical = reads;
   record.news = { fetchedAt: newsFetchedAt(), items: news, market: marketContext() };
@@ -307,6 +310,7 @@ export function tradingView(now = new Date()): TradingState {
     hoursRiyadh: hoursRiyadh(now),
     calendar: upcoming(now),
     review: latestReview(),
+    scorecard: scorecardView(),
     shariah: shariahView(),
   };
 }
