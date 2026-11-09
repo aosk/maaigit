@@ -1,6 +1,7 @@
 import type { Instrument, MarketClock } from '../../shared/trading.js';
 import { deskId } from './desk.js';
 import { nyseClock, nyseDay, US_UNIVERSE } from './nyse.js';
+import { cryptoClock, CRYPTO_UNIVERSE } from './crypto.js';
 
 /**
  * The Tadawul Main Market rules StockSmart works by, in one dated place. Written 2026-11-04 from general knowledge:
@@ -34,14 +35,14 @@ function tickFor(price: number): number {
 /** A price on the tick grid: down for a buy limit, up for a sell, so rounding never makes an order worse for us. */
 export function onTick(price: number, side: 'buy' | 'sell'): number {
   // US stocks and ETFs above $1 trade in cents.
-  const tick = deskId() === 'us' ? 0.01 : tickFor(price);
+  const tick = deskId() === 'us' ? 0.01 : deskId() === 'crypto' ? (price >= 1 ? 0.01 : 0.0001) : tickFor(price);
   const steps = side === 'buy' ? Math.floor(price / tick + 1e-9) : Math.ceil(price / tick - 1e-9);
   return Math.round(steps * tick * 100) / 100;
 }
 
 /** The day's allowed range around the previous close. */
 // The US has no daily price limit (its pauses are per stock and short): a wide range keeps limit orders sane.
-export const band = (prevClose: number) => (deskId() === 'us' ? { low: prevClose * 0.5, high: prevClose * 1.5 } : { low: prevClose * (1 - PRICE_BAND), high: prevClose * (1 + PRICE_BAND) });
+export const band = (prevClose: number) => (deskId() !== 'sa' ? { low: prevClose * 0.5, high: prevClose * 1.5 } : { low: prevClose * (1 - PRICE_BAND), high: prevClose * (1 + PRICE_BAND) });
 
 /** Riyadh's calendar day and minute of the day. */
 export function riyadh(now: Date): { date: string; weekday: number; minute: number } {
@@ -55,6 +56,7 @@ export const tradingDay = (now: Date) => (deskId() === 'us' ? nyseDay(now) : riy
 /** Whether the market is open, and how long until that changes. */
 export function marketClock(now: Date): MarketClock {
   if (deskId() === 'us') return nyseClock(now);
+  if (deskId() === 'crypto') return cryptoClock();
   const { date, weekday, minute } = riyadh(now);
   const tradingDayToday = TRADING_DAYS.has(weekday) && !holidays().has(date);
   if (tradingDayToday && minute >= OPEN_MIN && minute < CLOSE_MIN) return { open: true, minutesToChange: CLOSE_MIN - minute, label: 'open' };
@@ -91,7 +93,7 @@ const SA_UNIVERSE: Instrument[] = [
 ];
 
 /** The followed list of the desk in use (Tadawul, or the US list). Reads like an array wherever it is used. */
-const current = () => (deskId() === 'us' ? US_UNIVERSE : SA_UNIVERSE);
+const current = () => (deskId() === 'us' ? US_UNIVERSE : deskId() === 'crypto' ? CRYPTO_UNIVERSE : SA_UNIVERSE);
 export const UNIVERSE: Instrument[] = new Proxy([] as Instrument[], {
   get: (_t, key) => {
     const list = current();
@@ -112,4 +114,9 @@ export const instrument = (symbol: string) => current().find((i) => i.symbol ===
 const SA_FEE_RATE = 0.0016;
 /** US brokers charge little or nothing per trade: a small allowance for spreads and fees. */
 const US_FEE_RATE = 0.0005;
-export const feeRate = () => (deskId() === 'us' ? US_FEE_RATE : SA_FEE_RATE);
+/** Crypto exchanges take about 0.1% a trade. */
+const CRYPTO_FEE_RATE = 0.001;
+export const feeRate = () => (deskId() === 'us' ? US_FEE_RATE : deskId() === 'crypto' ? CRYPTO_FEE_RATE : SA_FEE_RATE);
+
+/** An amount to trade, rounded down: whole shares on stock desks, millionths of a coin on the crypto desk. */
+export const units = (q: number) => (deskId() === 'crypto' ? Math.floor(q * 1e6 + 1e-6) / 1e6 : Math.floor(q + 1e-9));

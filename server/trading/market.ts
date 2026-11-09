@@ -2,6 +2,7 @@ import type { Quote } from '../../shared/trading.js';
 import { UNIVERSE } from './tadawul.js';
 import { deskConfig, deskId, perDesk } from './desk.js';
 import { US_SIM_BASE } from './nyse.js';
+import { CRYPTO_SIM_BASE } from './crypto.js';
 
 /**
  * Prices. Tadawul has no free real-time feed, so StockSmart reads Yahoo Finance's public chart data (about 15 minutes
@@ -131,7 +132,7 @@ function simulateIndex(now: Date, day: string): IndexQuote {
   let seed = [...`${deskId()}INDEX${day}`].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
   const rand = () => ((seed = (seed * 1_103_515_245 + 12_345) >>> 0) / 2 ** 32);
   const closes: number[] = [];
-  let v = deskId() === 'us' ? 6_500 : 11_200;
+  let v = deskId() === 'us' ? 6_500 : deskId() === 'crypto' ? 100_000 : 11_200;
   for (let i = 0; i < 60; i++) closes.push(Math.round((v *= 1 + (rand() - 0.49) * 0.012) * 100) / 100);
   const prevClose = closes[closes.length - 1];
   const minute = Math.floor(now.getTime() / 60_000) % 1440;
@@ -165,7 +166,7 @@ const BASE: Record<string, number> = { '2222': 27.4, '1120': 88, '1180': 36, '11
 function simulate(symbol: string, now: Date, day: string) {
   let seed = [...`${symbol}${day}`].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
   const rand = () => ((seed = (seed * 1_103_515_245 + 12_345) >>> 0) / 2 ** 32);
-  const base = (deskId() === 'us' ? US_SIM_BASE[symbol] : BASE[symbol]) ?? 30;
+  const base = (deskId() === 'us' ? US_SIM_BASE[symbol] : deskId() === 'crypto' ? CRYPTO_SIM_BASE[symbol] : BASE[symbol]) ?? 30;
   const histories = prices().histories;
   if (!histories.has(symbol) || histories.get(symbol)!.day !== day) {
     const closes: number[] = [];

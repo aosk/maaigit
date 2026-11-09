@@ -1,7 +1,7 @@
 import { deskConfig } from './desk.js';
 import type { Instrument, MarketClock, Quote, Side, TradeLimits, TradeOrder } from '../../shared/trading.js';
 import type { Book } from './store.js';
-import { band, onTick } from './tadawul.js';
+import { band, onTick, units } from './tadawul.js';
 import { exposure } from './portfolio.js';
 
 /**
@@ -58,7 +58,8 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
   const stock = ctx.universe.find((i) => i.symbol === p.symbol);
   if (!stock) return veto(`${p.symbol} is not in the list of stocks the agents may trade.`);
   if (ctx.excluded.includes(p.symbol) || ctx.excluded.includes(stock.sector)) return veto(`${p.symbol} is excluded by your instruction.`);
-  if (!Number.isInteger(p.qty) || p.qty < 1) return veto('The quantity is not a whole number of shares.');
+  const fractional = deskConfig().fractional;
+  if (!(p.qty > 0) || units(p.qty) !== p.qty || (!fractional && p.qty < 1)) return veto(fractional ? 'The amount is not a valid quantity.' : 'The quantity is not a whole number of shares.');
   const quote = ctx.quotes.get(p.symbol);
   if (!quote || ctx.now.getTime() - Date.parse(quote.asOf) > STALE_QUOTE_MS) return veto(`No fresh price for ${p.symbol}.`);
   if (ctx.live && (quote.source !== 'bot' || ctx.now.getTime() - Date.parse(quote.asOf) > LIVE_QUOTE_MS)) return veto(`No live SNB price for ${p.symbol} in the last 2 minutes.`);
@@ -80,7 +81,7 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
   const reasons: string[] = [];
   let qty = p.qty;
   const cut = (most: number, reason: string) => {
-    const allowed = Math.max(0, Math.floor(most + 1e-9));
+    const allowed = Math.max(0, units(most));
     if (allowed < qty) {
       qty = allowed;
       reasons.push(reason);
@@ -107,6 +108,7 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
     cut((ctx.limits.capital * ctx.limits.maxPerSymbolPct / 100 - (bySymbol.get(p.symbol) ?? 0)) / price, `Reduced to keep ${p.symbol} within ${ctx.limits.maxPerSymbolPct}% of the capital.`);
     cut((ctx.limits.capital * ctx.limits.maxPerSectorPct / 100 - sectorNow) / price, `Reduced to keep the ${stock.sector} sector within ${ctx.limits.maxPerSectorPct}% of the capital.`);
   }
-  if (qty < 1) return { verdict: 'veto', qty: 0, limitPrice, reasons: reasons.length ? reasons : ['Nothing left to trade after the limits.'] };
+  // Nothing left, or (in coins) less than a dollar's worth: not worth an order.
+  if (fractional ? qty * limitPrice < 1 : qty < 1) return { verdict: 'veto', qty: 0, limitPrice, reasons: reasons.length ? reasons : ['Nothing left to trade after the limits.'] };
   return { verdict: qty < p.qty ? 'resize' : 'pass', qty, limitPrice, reasons };
 }

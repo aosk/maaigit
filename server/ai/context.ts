@@ -158,7 +158,15 @@ export function tradingOverview(now = new Date()): string {
   const holders = h.changes.length
     ? `Substantial shareholders (5%+), latest changes (from web sources, information only):\n${h.changes.slice(0, 5).map((c) => `- ${c.date} ${nameOf(c.symbol)}: ${n(c.holder)} ${kinds[c.kind]}${c.toPct !== undefined ? ` to ${c.toPct}%` : ''}${c.official ? ' (official disclosure)' : ''}`).join('\n')}`
     : h.covered ? `Substantial shareholders: listings read for ${h.covered} of ${h.total} followed stocks, no changes recorded.` : '';
-  return [head, money, pulse, positions, orders, activity, holders, bot, usOverview(now)].filter(Boolean).join('\n');
+  return [head, money, pulse, positions, orders, activity, holders, bot, usOverview(now), cryptoOverview(now)].filter(Boolean).join('\n');
+}
+
+/** The crypto desk («أسهمي» → الكريبتو): paper money in dollars, open around the clock, fractions of a coin. */
+function cryptoOverview(now: Date): string {
+  const c = inDesk('crypto', () => tradingView(now));
+  const usd = (x: number) => `$${x.toFixed(2)}`;
+  const held = c.positions.map((p) => `${p.qty} ${p.symbol} @ ${usd(p.avgCost)}${p.price !== undefined ? ` (now ${usd(p.price)})` : ''}`).join(', ');
+  return `Crypto desk («أسهمي» → الكريبتو, PAPER only, open 24/7${c.halted ? ', STOPPED' : ''}, decided by ${c.decider === 'rules' ? 'the plain rule' : 'Claude'}): value ${usd(c.portfolioValue)}, cash ${usd(c.cash)}, today ${c.dayPnl >= 0 ? '+' : ''}${usd(c.dayPnl)}; holdings: ${held || 'none'}; market indicator ${c.pulse.score} (${MOOD_AR[c.pulse.mood]}).`;
 }
 
 /** The US desk («أسهمي» → أمريكا): paper money in dollars, a halal-screened list of ETFs and stocks. */

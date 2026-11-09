@@ -7,7 +7,7 @@ import { archiveRound, type RoundRecord } from './archive.js';
 import { botStale, cancelAllOpen, halt, openOrders, processOrders, submit } from './executor.js';
 import { currentIndex, currentQuotes, refreshQuotes } from './market.js';
 import { marketPulse } from './pulse.js';
-import { DESKS, deskConfig, inDesk, perDesk } from './desk.js';
+import { DESKS, deskConfig, inDesk, perDesk, unitAr } from './desk.js';
 import { holdersRound, holdersView } from './holders.js';
 import { bookValue, dayPnl, rollDay, round2 } from './portfolio.js';
 import { checkOrder } from './risk.js';
@@ -180,8 +180,8 @@ export function gate(d: Decision, now = new Date()): { decisionId: string; verdi
     verdict.verdict === 'veto'
       ? `رفضت ${d.side === 'buy' ? 'شراء' : 'بيع'} ${name}: ${why}`
       : verdict.verdict === 'resize'
-        ? `خفّضت الأمر إلى ${verdict.qty} سهم بحد ${verdict.limitPrice}: ${why}`
-        : `وافقت: ${verdict.qty} سهم ${name} بحد ${verdict.limitPrice} ضمن كل الحدود`;
+        ? `خفّضت الأمر إلى ${verdict.qty}${unitAr()} بحد ${verdict.limitPrice}: ${why}`
+        : `وافقت: ${verdict.qty}${unitAr()} ${name} بحد ${verdict.limitPrice} ضمن كل الحدود`;
   emit('risk.verdict', 'risk', text, { correlationId: d.id, data: { verdict: verdict.verdict, qty: verdict.qty, reasons: verdict.reasons } }, now);
   const order = verdict.verdict !== 'veto' ? submit(d.id, d.symbol, d.side, verdict.qty, verdict.limitPrice, now, currentQuotes().get(d.symbol)?.asOf) : undefined;
   return { decisionId: d.id, verdict: verdict.verdict, qty: verdict.qty, limitPrice: verdict.limitPrice, reasons: verdict.reasons, orderId: order?.id };
@@ -239,12 +239,12 @@ export function startTrading(): void {
   started = true;
   for (const id of DESKS) {
     inDesk(id, () => {
-      const label = id === 'us' ? 'أسهمي · أمريكا: ' : '';
+      const label = id === 'us' ? 'أسهمي · أمريكا: ' : id === 'crypto' ? 'أسهمي · الكريبتو: ' : '';
       onTradeEvent((e) => {
         if (TOLD.has(e.type)) void alertTrade(`trade:${id}:${e.id}`, `${label}${e.text}`).catch(() => {});
       });
       setInterval(() => void tick(), 60_000).unref();
-      setTimeout(() => void tick(), id === 'us' ? 8_000 : 5_000).unref();
+      setTimeout(() => void tick(), id === 'sa' ? 5_000 : id === 'us' ? 8_000 : 11_000).unref();
     });
   }
 }
@@ -290,6 +290,7 @@ export function tradingView(now = new Date()): TradingState {
     market: deskConfig().id,
     currency: deskConfig().currency,
     halalList: deskConfig().halalList,
+    fractional: deskConfig().fractional,
     liveAllowed: deskConfig().liveAllowed,
     indexName: { ar: deskConfig().indexAr, en: deskConfig().indexEn },
   };

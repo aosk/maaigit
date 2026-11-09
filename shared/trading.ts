@@ -256,8 +256,10 @@ export interface TradingState {
   /** Substantial shareholders of the followed stocks and their changes. */
   holders: HoldersView;
   /** Which desk this is: Tadawul or the US. */
-  market: 'sa' | 'us';
+  market: 'sa' | 'us' | 'crypto';
   currency: 'SAR' | 'USD';
+  /** Fractions of a unit can be bought (crypto). */
+  fractional: boolean;
   /** The list is halal-screened (the US desk, by the user's choice). */
   halalList: boolean;
   /** Real money is possible on this desk (a broker is connected). */

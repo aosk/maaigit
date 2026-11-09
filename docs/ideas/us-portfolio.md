@@ -11,7 +11,13 @@ The halal list (checked 9 November 2026; re-check each quarter against SP Funds'
 - Stocks, the largest held by SPUS (its Shariah board's screen passed them): NVDA, AAPL, MSFT, GOOGL, AVGO, TSLA, LLY,
   JNJ, XOM, HD, PG. Amazon and Meta were not found among SPUS holdings, so they are left out.
 
-Next: 2b crypto paper, 2c US live through IBKR or Alpaca, 2d crypto live (trade-only key, no withdrawals).
+**Phase 2b built on 9 November 2026:** a crypto paper desk (the third switch): $1,000, at most $200 an order, fractions
+of a coin (millionths), open around the clock (days start at midnight Riyadh), rounds every 30 minutes, a 3% daily
+loss stop, the plain rule deciding by default (Claude can be chosen), news every 3 hours, Bitcoin as its market
+indicator. Coins: BTC, ETH, SOL, XRP, ADA, AVAX, LINK, LTC (no lending or yield tokens, meme coins or exchange tokens;
+crypto's permissibility is debated, and no Shariah board certifies these). Its own file `trading-crypto.json`.
+
+Next: 2c US live through IBKR or Alpaca, 2d crypto live (trade-only key, no withdrawals, IP-locked).
 
 ## The reference: trader-skill
 

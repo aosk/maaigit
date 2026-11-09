@@ -84,13 +84,13 @@ const restartingMessage = () =>
   document.documentElement.lang === 'ar' ? '«معي» يُعاد تشغيله بعد تحديث. جرّب بعد دقيقة.' : 'MAAI is restarting after an update. Try again in a minute.';
 
 /** Which «أسهمي» desk the trading calls work on: Tadawul, or the US (chosen on the screen). */
-export type TradingMarket = 'sa' | 'us';
+export type TradingMarket = 'sa' | 'us' | 'crypto';
 let tradingMarket: TradingMarket = 'sa';
 export const setTradingMarket = (m: TradingMarket) => {
   tradingMarket = m;
 };
 /** A trading address for a desk: the US desk's carry ?market=us. */
-export const onMarket = (path: string, market: TradingMarket = tradingMarket) => (market === 'us' ? `${path}${path.includes('?') ? '&' : '?'}market=us` : path);
+export const onMarket = (path: string, market: TradingMarket = tradingMarket) => (market === 'sa' ? path : `${path}${path.includes('?') ? '&' : '?'}market=${market}`);
 
 async function call<T>(method: string, url: string, body?: unknown, background = false): Promise<T> {
   const res = await request(method, url, body, background);

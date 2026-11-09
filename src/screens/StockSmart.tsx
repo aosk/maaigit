@@ -43,7 +43,8 @@ export function StockSmart() {
   const lang = settings.lang;
   const [market, setMarket] = useState<TradingMarket>(() => {
     try {
-      return localStorage.getItem('maai.stocksMarket') === 'us' ? 'us' : 'sa';
+      const saved = localStorage.getItem('maai.stocksMarket');
+      return saved === 'us' || saved === 'crypto' ? saved : 'sa';
     } catch {
       return 'sa';
     }
@@ -99,9 +100,9 @@ export function StockSmart() {
 
   const switcher = (
     <div className="seg ss-market" role="radiogroup" aria-label={t.ss.marketPick}>
-      {(['sa', 'us'] as const).map((m) => (
+      {(['sa', 'us', 'crypto'] as const).map((m) => (
         <button key={m} type="button" role="radio" aria-checked={market === m} onClick={() => pickMarket(m)}>
-          {m === 'sa' ? t.ss.marketSa : t.ss.marketUs}
+          {m === 'sa' ? t.ss.marketSa : m === 'us' ? t.ss.marketUs : t.ss.marketCrypto}
         </button>
       ))}
     </div>
@@ -137,7 +138,7 @@ export function StockSmart() {
     <div className={`screen ss${live ? ' ss-live' : ''}`}>
       <header className="ss-head">
         <div>
-          <div className="eyebrow">{st.market === 'us' ? t.ss.subtitleUs : t.ss.subtitle} · <Clock st={st} t={t} /></div>
+          <div className="eyebrow">{st.market === 'us' ? t.ss.subtitleUs : st.market === 'crypto' ? t.ss.subtitleCrypto : t.ss.subtitle}{st.market !== 'crypto' && <> · <Clock st={st} t={t} /></>}</div>
           <h1 className="title">{t.stocks}</h1>
         </div>
         <div className="row" style={{ gap: 8 }}>
@@ -155,6 +156,12 @@ export function StockSmart() {
         <div className="ss-us-note row wrap" role="note">
           <span className="ss-halal">{t.ss.halalBadge}</span>
           <span className="sub">{t.ss.usNote}</span>
+        </div>
+      )}
+      {st.market === 'crypto' && (
+        <div className="ss-us-note row wrap" role="note">
+          <span className="ss-halal ss-crypto">{t.ss.cryptoBadge}</span>
+          <span className="sub">{t.ss.cryptoNote}</span>
         </div>
       )}
       {st.halted && <div className="error" role="alert">{t.ss.halted(st.haltReason ?? '')}</div>}
@@ -242,7 +249,7 @@ function Positions({ st, t }: { st: TradingState; t: T }) {
             <div key={p.symbol} className="ss-pos">
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="ss-sym"><bdi>{i?.nameAr ?? p.symbol}</bdi> · <bdi dir="ltr">{p.symbol}</bdi></div>
-                <div className="sub">{t.ss.shares(p.qty)} · {t.ss.avg(p.avgCost.toFixed(2))} · <bdi dir="ltr">{price.toFixed(2)}</bdi></div>
+                <div className="sub">{st.fractional ? <bdi dir="ltr">{p.qty} {p.symbol}</bdi> : t.ss.shares(p.qty)} · {t.ss.avg(p.avgCost.toFixed(2))} · <bdi dir="ltr">{price.toFixed(2)}</bdi></div>
               </div>
               <div style={{ textAlign: 'end' }}>
                 <div className={`ss-num ${tone(pnl)}`} dir="ltr">{signed(pnl)}</div>

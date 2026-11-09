@@ -53,14 +53,17 @@ export interface TradingData {
 export const DEFAULT_LIMITS: TradeLimits = { capital: 100_000, maxOrder: 10_000, maxPerSymbolPct: 20, maxPerSectorPct: 35, maxOrdersPerDay: 8, dailyLossPct: 2, cycleMinutes: 15 };
 /** The US desk starts small, in dollars: $1,000 of paper money, at most $300 an order (whole shares). */
 const US_LIMITS: TradeLimits = { capital: 1_000, maxOrder: 300, maxPerSymbolPct: 30, maxPerSectorPct: 60, maxOrdersPerDay: 6, dailyLossPct: 2, cycleMinutes: 15 };
-const limitsFor = (id: DeskId) => (id === 'us' ? US_LIMITS : DEFAULT_LIMITS);
+/** The crypto desk: $1,000 of paper money, $200 an order, rounds every 30 minutes around the clock, a 3% daily loss stop. */
+const CRYPTO_LIMITS: TradeLimits = { capital: 1_000, maxOrder: 200, maxPerSymbolPct: 40, maxPerSectorPct: 60, maxOrdersPerDay: 8, dailyLossPct: 3, cycleMinutes: 30 };
+const limitsFor = (id: DeskId) => (id === 'us' ? US_LIMITS : id === 'crypto' ? CRYPTO_LIMITS : DEFAULT_LIMITS);
 
 const KEEP_EVENTS = 2_000;
 const KEEP_ORDERS = 300;
 const CURVE_POINTS = 400;
 
 /** Each desk in its own file: Tadawul's where it always was, the US desk beside it. */
-const fileOf = (id: DeskId) => (id === 'us' ? process.env.MAAI_TRADING_US_FILE ?? path.join(path.dirname(process.env.MAAI_TRADING_FILE ?? path.join(config.dataDir, 'trading.json')), 'trading-us.json') : process.env.MAAI_TRADING_FILE ?? path.join(config.dataDir, 'trading.json'));
+const saFile = () => process.env.MAAI_TRADING_FILE ?? path.join(config.dataDir, 'trading.json');
+const fileOf = (id: DeskId) => (id === 'sa' ? saFile() : path.join(path.dirname(saFile()), `trading-${id}.json`));
 
 export function newBook(cash: number, now = new Date()): Book {
   return { cash, positions: [], realized: 0, dayStart: { day: tradingDay(now), value: cash, realized: 0 }, curve: [] };
@@ -70,7 +73,8 @@ function fresh(id: DeskId = deskId()): TradingData {
   const limits = limitsFor(id);
   return {
     mode: 'paper',
-    decider: 'claude',
+    // The crypto desk trades around the clock: the plain rule by default, so it does not run up Claude's bill overnight.
+    decider: id === 'crypto' ? 'rules' : 'claude',
     cautionAuto: true,
     halted: false,
     limits: { ...limits },

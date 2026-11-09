@@ -13,7 +13,7 @@ import { appendPrivate } from '../secure-fs.js';
 
 const SA_DIR = process.env.MAAI_ROUNDS_DIR ?? path.join(config.dataDir, 'stocksmart-rounds');
 /** Each desk's rounds in its own folder: Tadawul's where they always were, the US desk's beside it. */
-const dirOf = () => (deskId() === 'us' ? `${SA_DIR}-us` : SA_DIR);
+const dirOf = () => (deskId() === 'sa' ? SA_DIR : `${SA_DIR}-${deskId()}`);
 
 export interface RoundRecord {
   roundId: string;

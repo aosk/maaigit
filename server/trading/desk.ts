@@ -10,8 +10,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  * desk's data. Code run outside any desk works on Tadawul, as it always did.
  */
 
-export type DeskId = 'sa' | 'us';
-export const DESKS: DeskId[] = ['sa', 'us'];
+export type DeskId = 'sa' | 'us' | 'crypto';
+export const DESKS: DeskId[] = ['sa', 'us', 'crypto'];
 
 const als = new AsyncLocalStorage<DeskId>();
 
@@ -50,6 +50,10 @@ export interface DeskConfig {
   sectors: string[];
   /** Whether stocks here are a halal-screened list (shown on the screen and told to the agents). */
   halalList: boolean;
+  /** Fractions of a unit can be bought (crypto), rather than whole shares. */
+  fractional: boolean;
+  /** How often the news agent runs (it costs web searches). */
+  newsEveryMs: number;
 }
 
 const SAR = (n: number) => `${n.toFixed(2)} ر.س`;
@@ -70,6 +74,8 @@ const CONFIGS: Record<DeskId, DeskConfig> = {
     saudi: true,
     sectors: ['energy', 'banks', 'materials', 'telecom', 'utilities', 'food', 'retail', 'health', 'industrials'],
     halalList: false,
+    fractional: false,
+    newsEveryMs: 60 * 60_000,
   },
   us: {
     id: 'us',
@@ -85,7 +91,30 @@ const CONFIGS: Record<DeskId, DeskConfig> = {
     saudi: false,
     sectors: ['tech', 'health', 'energy', 'consumer', 'halal-etf', 'sukuk', 'real-estate'],
     halalList: true,
+    fractional: false,
+    newsEveryMs: 60 * 60_000,
+  },
+  crypto: {
+    id: 'crypto',
+    currency: 'USD',
+    money: USD,
+    marketEn: 'cryptocurrency (open around the clock)',
+    marketAr: 'العملات الرقمية',
+    yahoo: (s) => `${s}-USD`,
+    indexTicker: 'BTC-USD',
+    indexAr: 'بيتكوين',
+    indexEn: 'Bitcoin',
+    liveAllowed: false,
+    saudi: false,
+    sectors: ['bitcoin', 'layer1', 'payments', 'infrastructure'],
+    halalList: false,
+    fractional: true,
+    // Around the clock: every 3 hours, so the news does not run up the bill overnight.
+    newsEveryMs: 3 * 60 * 60_000,
   },
 };
 
 export const deskConfig = (): DeskConfig => CONFIGS[deskId()];
+
+/** «سهم» on the stock desks; nothing on the crypto desk ("0.05 إيثيريوم"), where coins are not shares. */
+export const unitAr = () => (deskId() === 'crypto' ? '' : ' سهم');

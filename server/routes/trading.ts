@@ -16,7 +16,7 @@ import { deskConfig, inDesk } from '../trading/desk.js';
 export const tradingRoutes = Router();
 
 /** `?market=us` works on the US desk; anything else on Tadawul (see trading/desk.ts). */
-tradingRoutes.use('/trading', (req, _res, next) => inDesk(req.query.market === 'us' ? 'us' : 'sa', next));
+tradingRoutes.use('/trading', (req, _res, next) => inDesk(req.query.market === 'us' ? 'us' : req.query.market === 'crypto' ? 'crypto' : 'sa', next));
 
 tradingRoutes.get('/trading', (_req, res) => res.json(tradingView()));
 

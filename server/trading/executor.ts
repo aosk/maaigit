@@ -3,7 +3,7 @@ import type { Position, Quote, Side, TradeMode, TradeOrder } from '../../shared/
 import { applyFill, round2 } from './portfolio.js';
 import { latestObserved, observedBetween } from './market.js';
 import { emit, saveTrading, trading } from './store.js';
-import { deskConfig } from './desk.js';
+import { deskConfig, unitAr } from './desk.js';
 import { instrument, tradingDay } from './tadawul.js';
 
 /**
@@ -47,7 +47,7 @@ export function submit(decisionId: string, symbol: string, side: Side, qty: numb
   trading.orders.push(order);
   const day = tradingDay(now);
   trading.ordersToday = trading.ordersToday.day === day ? { day, count: trading.ordersToday.count + 1 } : { day, count: 1 };
-  emit('order.queued', 'executor', `${sideAr(side)} ${qty} سهم ${label(symbol)} بحد ${limitPrice} · ${order.mode === 'paper' ? 'تجريبي' : 'إلى بوت SNB'}`, { correlationId: decisionId, data: { orderId: order.id, mode: order.mode } }, now);
+  emit('order.queued', 'executor', `${sideAr(side)} ${qty}${unitAr()} ${label(symbol)} بحد ${limitPrice} · ${order.mode === 'paper' ? 'تجريبي' : 'إلى بوت SNB'}`, { correlationId: decisionId, data: { orderId: order.id, mode: order.mode } }, now);
   if (order.mode === 'paper') tryPaperFill(order, now);
   saveTrading();
   return order;
