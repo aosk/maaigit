@@ -107,3 +107,31 @@ describe('the crypto desk', () => {
     expect((create.mock.calls[0][0] as { system: string }).system).toMatch(/cryptocurrency desk/);
   });
 });
+
+describe('the plain rule on each desk', () => {
+  const read = { symbol: 'ETH', price: 3_500, changePct: -1, trend: 'flat' as const, score: 0, signal: 'hold' as const };
+  /** Holds ETH bought at a cost that puts it at `ratio` of today's price (0.95 = down 5%). */
+  const holding = (ratio: number) => {
+    trading.decider = 'rules';
+    trading.books.paper.positions = [{ symbol: 'ETH', qty: 0.05, avgCost: currentQuotes().get('ETH')!.price / ratio }];
+  };
+
+  it('keeps a coin through an ordinary -5% day and cuts it at -8%', async () => {
+    await crypto(async () => {
+      holding(0.95); // -5%
+      expect(await decisionRound([read], [], 1440, SAT_NIGHT)).toEqual([]);
+      holding(0.91); // -9%
+      const [sell] = await decisionRound([read], [], 1440, SAT_NIGHT);
+      expect(sell).toMatchObject({ symbol: 'ETH', side: 'sell', rationale: 'وقف خسارة عند -8٪' });
+    });
+  });
+
+  it('takes profit on a coin at +12%, not at +6%', async () => {
+    await crypto(async () => {
+      holding(1.07); // +7%
+      expect(await decisionRound([read], [], 1440, SAT_NIGHT)).toEqual([]);
+      holding(1.13); // +13%
+      expect((await decisionRound([read], [], 1440, SAT_NIGHT))[0]).toMatchObject({ side: 'sell', rationale: 'جني ربح عند +12٪' });
+    });
+  });
+});

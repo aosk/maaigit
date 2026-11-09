@@ -54,6 +54,9 @@ export interface DeskConfig {
   fractional: boolean;
   /** How often the news agent runs (it costs web searches). */
   newsEveryMs: number;
+  /** The plain rule's exits, in percent from the average cost: a stop loss (negative) and a profit target. */
+  stopPct: number;
+  takePct: number;
 }
 
 const SAR = (n: number) => `${n.toFixed(2)} ر.س`;
@@ -76,6 +79,8 @@ const CONFIGS: Record<DeskId, DeskConfig> = {
     halalList: false,
     fractional: false,
     newsEveryMs: 60 * 60_000,
+    stopPct: -4,
+    takePct: 6,
   },
   us: {
     id: 'us',
@@ -93,6 +98,8 @@ const CONFIGS: Record<DeskId, DeskConfig> = {
     halalList: true,
     fractional: false,
     newsEveryMs: 60 * 60_000,
+    stopPct: -4,
+    takePct: 6,
   },
   crypto: {
     id: 'crypto',
@@ -111,6 +118,9 @@ const CONFIGS: Record<DeskId, DeskConfig> = {
     fractional: true,
     // Around the clock: every 3 hours, so the news does not run up the bill overnight.
     newsEveryMs: 3 * 60 * 60_000,
+    // Coins swing more than stocks: a -4% stop would sell on an ordinary day's move.
+    stopPct: -8,
+    takePct: 12,
   },
 };
 

@@ -294,8 +294,8 @@ const CRYPTO_DECISION_SYSTEM = DECISION_SYSTEM.replace('a Saudi stock (Tadawul) 
 const CRYPTO_DECISION_PROMPT_VERSION = createHash('sha256').update(CRYPTO_DECISION_SYSTEM).digest('hex').slice(0, 12);
 const decisionSystem = () => (deskConfig().saudi ? DECISION_SYSTEM : deskConfig().id === 'crypto' ? CRYPTO_DECISION_SYSTEM : US_DECISION_SYSTEM);
 const decisionVersion = () => (deskConfig().saudi ? DECISION_PROMPT_VERSION : deskConfig().id === 'crypto' ? CRYPTO_DECISION_PROMPT_VERSION : US_DECISION_PROMPT_VERSION);
-/** The plain rule's version: changed by hand whenever the rule changes. */
-const RULE_VERSION = 'momentum-2026-11-05';
+/** The plain rule's version: changed by hand whenever the rule changes (2026-11-09: exits per desk). */
+const RULE_VERSION = 'momentum-2026-11-09';
 
 /** What the last decision step saw and said, for the round archive (the exact input and Claude's own output). */
 interface DecisionRecord {
@@ -400,9 +400,12 @@ export async function decisionRound(reads: TechRead[], news: NewsItem[], minutes
 /** Without Claude: a plain momentum rule, so paper mode still shows the whole path working. */
 function ruleBased(reads: TechRead[], held: { symbol: string; qty: number; price: number; pnlPct: number }[], cash: number): { decisions: Omit<Decision, 'id'>[]; summary: string } {
   const out: Omit<Decision, 'id'>[] = [];
+  // Each desk's exits: -4% / +6% for stocks, -8% / +12% for coins.
+  const { stopPct, takePct } = deskConfig();
+  const ar = (n: number) => `${n > 0 ? '+' : ''}${n}٪`;
   for (const h of held) {
     const r = reads.find((x) => x.symbol === h.symbol);
-    if (h.pnlPct <= -4 || h.pnlPct >= 6 || r?.signal === 'sell') out.push({ symbol: h.symbol, side: 'sell', qty: h.qty, limitPrice: h.price, confidence: 0.6, rationale: h.pnlPct <= -4 ? 'وقف خسارة عند -٤٪' : h.pnlPct >= 6 ? 'جني ربح عند +٦٪' : 'الإشارة الفنية تحولت للبيع' });
+    if (h.pnlPct <= stopPct || h.pnlPct >= takePct || r?.signal === 'sell') out.push({ symbol: h.symbol, side: 'sell', qty: h.qty, limitPrice: h.price, confidence: 0.6, rationale: h.pnlPct <= stopPct ? `وقف خسارة عند ${ar(stopPct)}` : h.pnlPct >= takePct ? `جني ربح عند ${ar(takePct)}` : 'الإشارة الفنية تحولت للبيع' });
   }
   const buyable = (x: TechRead) => x.signal === 'buy' || (x.trend === 'up' && x.score >= 0.3 && (x.rsi ?? 50) < 70);
   for (const r of reads.filter((x) => buyable(x) && !held.some((h) => h.symbol === x.symbol)).sort((a, b) => b.score - a.score).slice(0, 1)) {
