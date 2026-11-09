@@ -38,6 +38,24 @@ function newYork(now: Date): { date: string; weekday: number; minute: number } {
 
 export const nyseDay = (now: Date) => newYork(now).date;
 
+/** New York's offset from UTC at `now`, in minutes (-300 in winter, -240 in summer). */
+function offsetMin(now: Date): number {
+  const p = Object.fromEntries(fmt.formatToParts(now).map((x) => [x.type, x.value]));
+  const asUtc = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour) % 24, Number(p.minute));
+  return Math.round((asUtc - Math.floor(now.getTime() / 60_000) * 60_000) / 60_000);
+}
+
+const riyadhHm = (ms: number) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(ms));
+
+/** Today's session in Riyadh time (it moves an hour when New York changes its clocks): {open, close} as HH:MM. */
+export function nyseHoursRiyadh(now: Date): { open: string; close: string } {
+  const { date } = newYork(now);
+  const [y, m, d] = date.split('-').map(Number);
+  const offset = offsetMin(now);
+  const at = (min: number) => Date.UTC(y, m - 1, d, Math.floor(min / 60), min % 60) - offset * 60_000;
+  return { open: riyadhHm(at(OPEN_MIN)), close: riyadhHm(at(closeOf(date))) };
+}
+
 const closeOf = (date: string) => (EARLY_CLOSES.has(date) ? EARLY_CLOSE_MIN : CLOSE_MIN);
 const isTradingDay = (date: string, weekday: number) => TRADING_DAYS.has(weekday) && !holidays().has(date);
 

@@ -12,7 +12,7 @@ import { holdersRound, holdersView } from './holders.js';
 import { bookValue, dayPnl, rollDay, round2 } from './portfolio.js';
 import { checkOrder } from './risk.js';
 import { emit, onTradeEvent, saveTrading, trading } from './store.js';
-import { instrument, marketClock, tradingDay, UNIVERSE } from './tadawul.js';
+import { hoursRiyadh, instrument, marketClock, tradingDay, UNIVERSE } from './tadawul.js';
 
 /**
  * The desk's heartbeat, once a minute: prices every five minutes while the market is open, paper orders filled,
@@ -293,5 +293,6 @@ export function tradingView(now = new Date()): TradingState {
     fractional: deskConfig().fractional,
     liveAllowed: deskConfig().liveAllowed,
     indexName: { ar: deskConfig().indexAr, en: deskConfig().indexEn },
+    hoursRiyadh: hoursRiyadh(now),
   };
 }

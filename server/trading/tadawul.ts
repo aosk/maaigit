@@ -1,6 +1,6 @@
 import type { Instrument, MarketClock } from '../../shared/trading.js';
 import { deskId } from './desk.js';
-import { nyseClock, nyseDay, US_UNIVERSE } from './nyse.js';
+import { nyseClock, nyseDay, nyseHoursRiyadh, US_UNIVERSE } from './nyse.js';
 import { cryptoClock, CRYPTO_UNIVERSE } from './crypto.js';
 
 /**
@@ -51,6 +51,14 @@ export function riyadh(now: Date): { date: string; weekday: number; minute: numb
 }
 
 /** Today's trading day in Riyadh, the key for daily counts. */
+/** The desk's trading hours in Riyadh time, for the screen; none for crypto (it never closes). */
+export function hoursRiyadh(now: Date): { open: string; close: string } | null {
+  if (deskId() === 'crypto') return null;
+  if (deskId() === 'us') return nyseHoursRiyadh(now);
+  const hm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  return { open: hm(OPEN_MIN), close: hm(CLOSE_MIN) };
+}
+
 export const tradingDay = (now: Date) => (deskId() === 'us' ? nyseDay(now) : riyadh(now).date);
 
 /** Whether the market is open, and how long until that changes. */

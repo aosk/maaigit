@@ -22,7 +22,7 @@ import { inDesk } from './desk';
 import { gate, round, tradingView } from './engine';
 import { setMode } from './executor';
 import { currentIndex, currentQuotes, refreshQuotes, resetQuotes } from './market';
-import { nyseClock } from './nyse';
+import { nyseClock, nyseHoursRiyadh } from './nyse';
 import { flushTrading, resetTrading, trading } from './store';
 import { marketClock, UNIVERSE } from './tadawul';
 import { createInnerApp, createOnlineSite } from '../site';
@@ -50,6 +50,15 @@ describe('the US market clock', () => {
     expect(nyseClock(new Date('2026-11-07T16:00:00Z')).label).toBe('weekend'); // a Saturday
     expect(nyseClock(new Date('2026-11-26T16:00:00Z')).label).toBe('holiday'); // Thanksgiving
     expect(nyseClock(new Date('2026-11-27T18:30:00Z'))).toMatchObject({ open: false }); // early close at 13:00
+  });
+
+  it('gives its hours in Saudi time, an hour earlier in the US summer', () => {
+    expect(nyseHoursRiyadh(new Date('2026-11-09T15:00:00Z'))).toEqual({ open: '17:30', close: '00:00' }); // winter
+    expect(nyseHoursRiyadh(new Date('2026-07-06T15:00:00Z'))).toEqual({ open: '16:30', close: '23:00' }); // summer
+    expect(nyseHoursRiyadh(new Date('2026-11-27T15:00:00Z'))).toEqual({ open: '17:30', close: '21:00' }); // early close
+    expect(us(() => tradingView(NY_OPEN).hoursRiyadh)).toEqual({ open: '17:30', close: '00:00' });
+    expect(tradingView(NY_OPEN).hoursRiyadh).toEqual({ open: '10:00', close: '15:00' });
+    expect(inDesk('crypto', () => tradingView(NY_OPEN).hoursRiyadh)).toBeNull();
   });
 });
 

@@ -266,6 +266,8 @@ export interface TradingState {
   liveAllowed: boolean;
   /** The market index the indicator reads. */
   indexName: { ar: string; en: string };
+  /** Trading hours in Riyadh time (HH:MM); null when it never closes (crypto). */
+  hoursRiyadh: { open: string; close: string } | null;
 }
 
 export interface Caution {

@@ -38,6 +38,14 @@ function Spark({ points, width = 320, height = 56 }: { points: number[]; width?:
   );
 }
 
+/** "17:30" as "5:30 م" (or "5:30 PM"); midnight is "12:00 ص". */
+function clock12(hm: string, lang: string): string {
+  const [h, m] = hm.split(':').map(Number);
+  const pm = h >= 12;
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${lang === 'ar' ? (pm ? 'م' : 'ص') : pm ? 'PM' : 'AM'}`;
+}
+
 export function StockSmart() {
   const { t, settings, layout } = useSettings();
   const lang = settings.lang;
@@ -140,6 +148,7 @@ export function StockSmart() {
         <div>
           <div className="eyebrow">{st.market === 'us' ? t.ss.subtitleUs : st.market === 'crypto' ? t.ss.subtitleCrypto : t.ss.subtitle}{st.market !== 'crypto' && <> · <Clock st={st} t={t} /></>}</div>
           <h1 className="title">{t.stocks}</h1>
+          <div className="sub ss-hours">{st.hoursRiyadh ? t.ss.hours(clock12(st.hoursRiyadh.open, lang), clock12(st.hoursRiyadh.close, lang)) : t.ss.hours247}</div>
         </div>
         <div className="row" style={{ gap: 8 }}>
           <span className={`ss-mode ${st.mode}`}>● {live ? t.ss.live : t.ss.paper}</span>
