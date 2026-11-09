@@ -15,8 +15,8 @@ const EDGES = [-100, -40, -12, 12, 40, 100];
 
 const signedPct = (n: number) => `${n > 0 ? '+' : ''}${n.toFixed(2)}%`;
 
-/** A half-dial: five coloured bands, and a needle at the score. */
-function Dial({ score, mood }: { score: number; mood: Pulse['mood'] }) {
+/** A half-dial: five coloured bands, and a needle at the score; `mini` leaves the number out (the Today header). */
+export function Dial({ score, mood, mini = false }: { score: number; mood: Pulse['mood']; mini?: boolean }) {
   const cx = 100;
   const cy = 96;
   const r = 78;
@@ -30,13 +30,13 @@ function Dial({ score, mood }: { score: number; mood: Pulse['mood'] }) {
   };
   const [nx, ny] = point(score, r - 18);
   return (
-    <svg viewBox="0 0 200 128" className="mp-dial" role="img" aria-label={`${score} / 100`}>
+    <svg viewBox={mini ? '0 0 200 106' : '0 0 200 128'} className={mini ? 'sx-dial' : 'mp-dial'} role="img" aria-label={`${score} / 100`}>
       {SEGMENTS.map((m, i) => (
         <path key={m} d={arc(EDGES[i] + (i ? 1.5 : 0), EDGES[i + 1] - (i < 4 ? 1.5 : 0))} stroke={MOOD_COLOR[m]} strokeWidth="14" fill="none" opacity={m === mood ? 1 : 0.28} strokeLinecap="butt" />
       ))}
       <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="currentColor" strokeWidth="4" strokeLinecap="round" className="mp-needle" />
       <circle cx={cx} cy={cy} r="7" fill="currentColor" />
-      <text x={cx} y={cy + 30} textAnchor="middle" fontSize="20" fontWeight="800" fill="currentColor" direction="ltr">{score > 0 ? `+${score}` : score}</text>
+      {!mini && <text x={cx} y={cy + 30} textAnchor="middle" fontSize="20" fontWeight="800" fill="currentColor" direction="ltr">{score > 0 ? `+${score}` : score}</text>}
     </svg>
   );
 }
