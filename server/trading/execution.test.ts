@@ -96,7 +96,7 @@ describe('the trading rules, in the risk gate', () => {
     setMode('live', 'user', 'live', OPEN);
     trading.books.live.cash = 50_000;
     const buy = { id: 'l1', symbol: '2222', side: 'buy' as const, qty: 10, limitPrice: currentQuotes().get('2222')!.price, confidence: 0.8, rationale: 't' };
-    expect(gate(buy, OPEN)).toMatchObject({ verdict: 'veto', reasons: [expect.stringMatching(/live SNB price/)] });
+    expect(gate(buy, OPEN)).toMatchObject({ verdict: 'veto', reasons: [expect.stringMatching(/live Broker price/)] });
     noteBotQuote('2222', buy.limitPrice, undefined, OPEN);
     expect(gate({ ...buy, id: 'l2' }, at(1)).verdict).toBe('pass');
     noteBotQuote('1120', 88, undefined, OPEN);

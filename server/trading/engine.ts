@@ -167,7 +167,7 @@ export function gate(d: Decision, now = new Date()): { decisionId: string; verdi
   const day = tradingDay(now);
   const verdict =
     trading.mode === 'live' && botStale(now.getTime())
-      ? { verdict: 'veto' as const, qty: 0, limitPrice: d.limitPrice, reasons: ['The SNB bot is not connected.'] }
+      ? { verdict: 'veto' as const, qty: 0, limitPrice: d.limitPrice, reasons: ['The Broker bot is not connected.'] }
       : checkOrder(d, {
           limits: trading.limits,
           book: trading.books[trading.mode],
@@ -213,13 +213,13 @@ function arabicReason(reason: string): string {
     [/cash available/, () => 'الكاش المتاح'],
     [/you allowed/, () => 'رأس المال المسموح'],
     [/within (\d+)% of the capital/, (m) => (reason.includes('sector') ? `حد القطاع ${m[1]}٪` : `حد السهم ${m[1]}٪`)],
-    [/SNB bot is not connected/, () => 'بوت SNB غير متصل'],
+    [/(?:SNB|Broker) bot is not connected/, () => 'بوت Broker غير متصل'],
     [/last 20 minutes/, () => 'ما فيه مراكز جديدة في آخر ٢٠ دقيقة'],
     [/Caution mode: no new buys/, () => 'وضع الحذر: ما فيه شراء جديد في هالقطاع'],
     [/Caution mode: half/, () => 'وضع الحذر: نص حد الأمر'],
     [/Results on (\S+): no new buys/, (m) => `نتائج الشركة ${m[1].replace(/\.$/, '')}: ما فيه شراء جديد قبلها بيوم ويومها`],
     [/Market event today/, () => 'حدث كبير في السوق اليوم: نص حد الأمر'],
-    [/live SNB price/, () => 'ما فيه سعر لحظي من SNB'],
+    [/live (?:SNB|Broker) price/, () => 'ما فيه سعر لحظي من Broker'],
     [/Nothing left/, () => 'ما بقي شي بعد تطبيق الحدود'],
   ];
   for (const [re, ar] of rules) {

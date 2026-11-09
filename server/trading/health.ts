@@ -12,7 +12,7 @@ import { marketClock } from './tadawul.js';
 
 /**
  * StockSmart's part in Settings → Connections and the server health checks: the desk (paper or live, stopped or not),
- * its prices, its agents, and the SNB desktop bot. It reads what the desk already knows, so checking costs nothing.
+ * its prices, its agents, and the Broker desktop bot. It reads what the desk already knows, so checking costs nothing.
  */
 
 /** StockSmart's part in the day's load (see server/stress.ts). */
@@ -65,11 +65,11 @@ export function tradingChecks(now = new Date()): HealthCheck[] {
   checks.push(
     s.halted
       ? { id: 'stocksmart', name: 'maai Stocks', status: 'warn', detail: `Stopped: ${s.haltReason ?? ''}`, fix: 'Resume it in maai Stocks when you are ready (only you can).' }
-      : { id: 'stocksmart', name: 'maai Stocks', status: 'ok', detail: `${live ? 'LIVE (real money at SNB Capital)' : 'Paper (no real money)'}; market ${s.marketOpen ? 'open' : 'closed'}; last round ${ago(s.lastRoundAt, now)}.` },
+      : { id: 'stocksmart', name: 'maai Stocks', status: 'ok', detail: `${live ? 'LIVE (real money at Broker)' : 'Paper (no real money)'}; market ${s.marketOpen ? 'open' : 'closed'}; last round ${ago(s.lastRoundAt, now)}.` },
   );
   // Prices matter only while the market is open; outside it the last close is expected to age.
-  if (!s.quotesAsOf) checks.push({ id: 'stocksmart-prices', name: 'maai Stocks prices', status: s.marketOpen ? 'fail' : 'ok', detail: s.marketOpen ? 'No prices could be read.' : 'Not read yet (the market is closed).', fix: s.marketOpen ? 'Yahoo Finance may be refusing the server; the SNB bot’s prices replace it once it runs.' : undefined });
-  else checks.push({ id: 'stocksmart-prices', name: 'maai Stocks prices', status: s.marketOpen && !s.quotesFresh ? 'fail' : 'ok', detail: `${s.quotesSource === 'bot' ? 'Live from SNB' : s.quotesSource === 'yahoo' ? 'Yahoo Finance, about 15 min delayed' : 'Simulated'}; newest price ${ago(s.quotesAsOf, now)}.`, fix: s.marketOpen && !s.quotesFresh ? 'The agents stop trading on old prices until they are fresh again.' : undefined });
+  if (!s.quotesAsOf) checks.push({ id: 'stocksmart-prices', name: 'maai Stocks prices', status: s.marketOpen ? 'fail' : 'ok', detail: s.marketOpen ? 'No prices could be read.' : 'Not read yet (the market is closed).', fix: s.marketOpen ? 'Yahoo Finance may be refusing the server; the Broker bot’s prices replace it once it runs.' : undefined });
+  else checks.push({ id: 'stocksmart-prices', name: 'maai Stocks prices', status: s.marketOpen && !s.quotesFresh ? 'fail' : 'ok', detail: `${s.quotesSource === 'bot' ? 'Live from Broker' : s.quotesSource === 'yahoo' ? 'Yahoo Finance, about 15 min delayed' : 'Simulated'}; newest price ${ago(s.quotesAsOf, now)}.`, fix: s.marketOpen && !s.quotesFresh ? 'The agents stop trading on old prices until they are fresh again.' : undefined });
   checks.push(
     !s.agentsCanDecide
       ? { id: 'stocksmart-agents', name: 'maai Stocks agents', status: 'warn', detail: 'No Claude key, so no decisions are made (the desk only watches).', fix: 'ANTHROPIC_API_KEY in Render → Environment, or choose the plain rule in maai Stocks → Limits and settings.' }
@@ -80,10 +80,10 @@ export function tradingChecks(now = new Date()): HealthCheck[] {
         : { id: 'stocksmart-agents', name: 'maai Stocks agents', status: 'ok', detail: `Technical, news and decision agents working; last round ${ago(s.lastRoundAt, now)}. Saudi Exchange announcements: ${officialAnnouncements().detail}${officialAnnouncements().at ? ` (${ago(officialAnnouncements().at, now)})` : ''}.` },
   );
   const bot = s.bot;
-  if (!bot.connected) checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: live ? 'fail' : 'off', detail: 'Not connected. Needed only for real money.', fix: 'maai Stocks → Limits and settings → Connect the SNB bot (a key and a signing secret, shown once).' });
-  else if (bot.stale) checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: live ? 'fail' : 'warn', detail: `Not heard from since ${ago(bot.lastSeen, now)}.`, fix: 'Start the bot on your computer and keep it awake; real orders wait until it is back.' });
-  else if (!bot.brokerSession) checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: live ? 'fail' : 'warn', detail: 'Running, but logged out at SNB Capital.', fix: 'Log in again on the bot (the OTP comes to your phone).' });
-  else if (bot.practice) checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: live ? 'warn' : 'ok', detail: `Running in practice mode: it goes through each order and places nothing; heard from ${ago(bot.lastSeen, now)}.`, fix: live ? 'Trading is LIVE but the bot only practises, so no order reaches SNB.' : undefined });
-  else checks.push({ id: 'snb-bot', name: 'SNB desktop bot', status: 'ok', detail: `Running and logged in at SNB; heard from ${ago(bot.lastSeen, now)}.` });
+  if (!bot.connected) checks.push({ id: 'snb-bot', name: 'Broker desktop bot', status: live ? 'fail' : 'off', detail: 'Not connected. Needed only for real money.', fix: 'maai Stocks → Limits and settings → Connect the Broker bot (a key and a signing secret, shown once).' });
+  else if (bot.stale) checks.push({ id: 'snb-bot', name: 'Broker desktop bot', status: live ? 'fail' : 'warn', detail: `Not heard from since ${ago(bot.lastSeen, now)}.`, fix: 'Start the bot on your computer and keep it awake; real orders wait until it is back.' });
+  else if (!bot.brokerSession) checks.push({ id: 'snb-bot', name: 'Broker desktop bot', status: live ? 'fail' : 'warn', detail: 'Running, but logged out at Broker.', fix: 'Log in again on the bot (the OTP comes to your phone).' });
+  else if (bot.practice) checks.push({ id: 'snb-bot', name: 'Broker desktop bot', status: live ? 'warn' : 'ok', detail: `Running in practice mode: it goes through each order and places nothing; heard from ${ago(bot.lastSeen, now)}.`, fix: live ? 'Trading is LIVE but the bot only practises, so no order reaches Broker.' : undefined });
+  else checks.push({ id: 'snb-bot', name: 'Broker desktop bot', status: 'ok', detail: `Running and logged in at Broker; heard from ${ago(bot.lastSeen, now)}.` });
   return checks;
 }

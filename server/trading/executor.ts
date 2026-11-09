@@ -9,7 +9,7 @@ import { instrument, tradingDay } from './tadawul.js';
 /**
  * Where an order goes once the risk gate passed it. Paper: filled inside the server, but only by a price that was true
  * at the exchange while the order was open (never one that happened before it, even if it arrived after) and that
- * traded through its limit (a touch is not a fill: the exchange fills by price and then time); it fills at its limit. Live: a signed command waits for the user's desktop bot, which places it at SNB Capital and reports back.
+ * traded through its limit (a touch is not a fill: the exchange fills by price and then time); it fills at its limit. Live: a signed command waits for the user's desktop bot, which places it at Broker and reports back.
  * Each command has one id; the bot keeps every id it has seen and never places one twice, so sending a command again
  * after a dropped connection is safe. The broker's own report of the account is the truth, and any difference halts.
  */
@@ -47,7 +47,7 @@ export function submit(decisionId: string, symbol: string, side: Side, qty: numb
   trading.orders.push(order);
   const day = tradingDay(now);
   trading.ordersToday = trading.ordersToday.day === day ? { day, count: trading.ordersToday.count + 1 } : { day, count: 1 };
-  emit('order.queued', 'executor', `${sideAr(side)} ${qty}${unitAr()} ${label(symbol)} بحد ${limitPrice} · ${order.mode === 'paper' ? 'تجريبي' : 'إلى بوت SNB'}`, { correlationId: decisionId, data: { orderId: order.id, mode: order.mode } }, now);
+  emit('order.queued', 'executor', `${sideAr(side)} ${qty}${unitAr()} ${label(symbol)} بحد ${limitPrice} · ${order.mode === 'paper' ? 'تجريبي' : 'إلى بوت Broker'}`, { correlationId: decisionId, data: { orderId: order.id, mode: order.mode } }, now);
   if (order.mode === 'paper') tryPaperFill(order, now);
   saveTrading();
   return order;
@@ -104,7 +104,7 @@ const LOST_AFTER_MS = 30 * 60_000;
 
 /**
  * Every minute. Paper orders are judged against exchange prices (above). A live order not yet with the bot is let go
- * at its expiry; one the bot has is asked to be cancelled at SNB at its expiry (it may be resting there), and if no
+ * at its expiry; one the bot has is asked to be cancelled at Broker at its expiry (it may be resting there), and if no
  * result comes long after, it becomes unknown: it keeps its cash and blocks its stock, and trading stops until the
  * broker's status is known.
  */
@@ -124,7 +124,7 @@ export function processOrders(now = new Date()): void {
       continue;
     }
     if (expired) requestCancel(order, 'انتهت مدة الأمر', now);
-    if (now.getTime() > Date.parse(order.expiresAt) + LOST_AFTER_MS) markUnknown(order, 'No result from the SNB bot long after the order expired.', now);
+    if (now.getTime() > Date.parse(order.expiresAt) + LOST_AFTER_MS) markUnknown(order, 'No result from the Broker bot long after the order expired.', now);
   }
   saveTrading();
 }
@@ -133,27 +133,27 @@ export function processOrders(now = new Date()): void {
 function markUnknown(order: TradeOrder, why: string, now: Date): void {
   order.status = 'unknown';
   order.error = why.slice(0, 300);
-  emit('order.unknown', 'executor', `حالة أمر ${sideAr(order.side)} ${label(order.symbol)} في SNB غير معروفة: تحقّق منه في تطبيق SNB، والتداول متوقف حتى يتضح`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
-  halt(`أمر ${label(order.symbol)} حالته في SNB غير معروفة`, 'system', now);
+  emit('order.unknown', 'executor', `حالة أمر ${sideAr(order.side)} ${label(order.symbol)} في Broker غير معروفة: تحقّق منه في تطبيق Broker، والتداول متوقف حتى يتضح`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
+  halt(`أمر ${label(order.symbol)} حالته في Broker غير معروفة`, 'system', now);
 }
 
 /**
  * Ask for an order to be let go: a paper order's window ends now (what traded before still counts); a live order not
- * yet with the bot is cancelled at once; one the bot has gets a signed cancel for SNB, sent until the bot confirms.
+ * yet with the bot is cancelled at once; one the bot has gets a signed cancel for Broker, sent until the bot confirms.
  */
 function requestCancel(order: TradeOrder, reason: string, now = new Date()): void {
   if (order.cancelRequestedAt || !OPEN.includes(order.status) || order.status === 'unknown') return;
   order.cancelRequestedAt = now.toISOString();
   order.error = reason;
   if (order.mode === 'live' && !order.ackedAt) cancel(order, reason, now);
-  else if (order.mode === 'live') emit('order.progress', 'executor', `طلبت من بوت SNB إلغاء أمر ${sideAr(order.side)} ${label(order.symbol)}: ${reason}`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
+  else if (order.mode === 'live') emit('order.progress', 'executor', `طلبت من بوت Broker إلغاء أمر ${sideAr(order.side)} ${label(order.symbol)}: ${reason}`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
 }
 
 /** Orders whose status at the broker is not known, for the screen and for resuming. */
 const unknownOrders = () => trading.orders.filter((o) => o.status === 'unknown');
 
 /**
- * The user checked SNB: the order was not executed (cancelled), or it was (filled; the live book follows the broker's
+ * The user checked Broker: the order was not executed (cancelled), or it was (filled; the live book follows the broker's
  * own account report, which is the truth for quantities and cost).
  */
 export function resolveUnknown(orderId: string, executed: boolean, now = new Date()): boolean {
@@ -162,16 +162,16 @@ export function resolveUnknown(orderId: string, executed: boolean, now = new Dat
   if (executed) {
     order.status = 'filled';
     order.filledQty = order.qty;
-    emit('order.filled', 'user', `أكدت أن أمر ${sideAr(order.side)} ${label(order.symbol)} نُفّذ في SNB؛ المراكز تُحدَّث من تقرير حساب SNB`, { correlationId: order.decisionId, data: { orderId: order.id, resolvedBy: 'user' } }, now);
+    emit('order.filled', 'user', `أكدت أن أمر ${sideAr(order.side)} ${label(order.symbol)} نُفّذ في Broker؛ المراكز تُحدَّث من تقرير حساب Broker`, { correlationId: order.decisionId, data: { orderId: order.id, resolvedBy: 'user' } }, now);
   } else {
     order.status = 'cancelled';
-    emit('order.cancelled', 'user', `أكدت أن أمر ${sideAr(order.side)} ${label(order.symbol)} ما نُفّذ في SNB`, { correlationId: order.decisionId, data: { orderId: order.id, resolvedBy: 'user' } }, now);
+    emit('order.cancelled', 'user', `أكدت أن أمر ${sideAr(order.side)} ${label(order.symbol)} ما نُفّذ في Broker`, { correlationId: order.decisionId, data: { orderId: order.id, resolvedBy: 'user' } }, now);
   }
   saveTrading();
   return true;
 }
 
-/** At the close (or the daily loss limit) every order still waiting is let go: tomorrow is a new decision. (A live order at SNB ends with SNB's session.) */
+/** At the close (or the daily loss limit) every order still waiting is let go: tomorrow is a new decision. (A live order at Broker ends with Broker's session.) */
 export function cancelAllOpen(reason: string, now = new Date()): void {
   for (const order of trading.orders.filter((o) => OPEN.includes(o.status) && !(o.mode === 'live' && o.ackedAt))) requestCancel(order, reason, now);
   saveTrading();
@@ -193,14 +193,14 @@ export function createBotKey(): { key: string; signSecret: string } {
   const key = `stk_${randomBytes(32).toString('base64url')}`;
   const signSecret = randomBytes(32).toString('hex');
   trading.bot = { keyHash: hash(key).toString('hex'), keyHint: key.slice(0, 8), signSecret };
-  emit('system.limits', 'user', 'مفتاح جديد لبوت SNB (المفتاح القديم توقف)');
+  emit('system.limits', 'user', 'مفتاح جديد لبوت Broker (المفتاح القديم توقف)');
   return { key, signSecret };
 }
 
 export function revokeBotKey(): void {
   trading.bot = {};
-  if (trading.mode === 'live') setMode('paper', 'system', 'فُصل بوت SNB، فرجع التداول للوضع التجريبي');
-  emit('system.limits', 'user', 'فُصل بوت SNB');
+  if (trading.mode === 'live') setMode('paper', 'system', 'فُصل بوت Broker، فرجع التداول للوضع التجريبي');
+  emit('system.limits', 'user', 'فُصل بوت Broker');
 }
 
 export function botKeyMatches(given: string): boolean {
@@ -238,7 +238,7 @@ export function takeCommands(now = new Date()): Command[] {
     order.sentAt = now.toISOString();
     if (order.status === 'queued') {
       order.status = 'sent';
-      emit('order.sent', 'executor', `أُرسل الأمر لبوت SNB: ${sideAr(order.side)} ${order.qty} × ${label(order.symbol)}`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
+      emit('order.sent', 'executor', `أُرسل الأمر لبوت Broker: ${sideAr(order.side)} ${order.qty} × ${label(order.symbol)}`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
     }
     const base = { commandId: order.id, symbol: order.symbol, side: order.side, qty: order.qty, limitPrice: order.limitPrice, issuedAt: now.toISOString(), expiresAt: order.expiresAt };
     out.push({ ...base, sig: signCommand(base, trading.bot.signSecret) });
@@ -247,7 +247,7 @@ export function takeCommands(now = new Date()): Command[] {
   return out;
 }
 
-/** A request to cancel an order at SNB. Signed like a command: HMAC-SHA256 of "cancel|commandId|issuedAt". */
+/** A request to cancel an order at Broker. Signed like a command: HMAC-SHA256 of "cancel|commandId|issuedAt". */
 export interface CancelCommand {
   commandId: string;
   issuedAt: string;
@@ -294,14 +294,14 @@ export function commandProgress(commandId: string, stage: string, now = new Date
   const order = trading.orders.find((o) => o.id === commandId && o.mode === 'live');
   if (!order) return;
   order.stage = stage.slice(0, 80);
-  emit('order.progress', 'executor', `بوت SNB: ${order.stage}`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
+  emit('order.progress', 'executor', `بوت Broker: ${order.stage}`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
 }
 
 export interface BotResult {
   commandId: string;
   /**
-   * accepted: at SNB, not filled yet · filled / partial · cancelled (at SNB, what filled before stays) · rejected by SNB ·
-   * failed: never reached SNB · unknown: it may have reached SNB (cut off after Submit, or a cancel that could not be confirmed).
+   * accepted: at Broker, not filled yet · filled / partial · cancelled (at Broker, what filled before stays) · rejected by Broker ·
+   * failed: never reached Broker · unknown: it may have reached Broker (cut off after Submit, or a cancel that could not be confirmed).
    */
   status: 'accepted' | 'filled' | 'partial' | 'cancelled' | 'rejected' | 'failed' | 'unknown';
   filledQty?: number;
@@ -318,14 +318,14 @@ export function commandResult(r: BotResult, now = new Date()): boolean {
   order.brokerOrderId = r.brokerOrderId?.slice(0, 60);
   if (r.status === 'accepted') {
     if (order.status === 'queued') order.status = 'sent';
-    order.stage = 'accepted at SNB, waiting to fill';
-    emit('order.progress', 'executor', `بوت SNB: الأمر عند SNB بانتظار التنفيذ${order.brokerOrderId ? ` (${order.brokerOrderId})` : ''}`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
+    order.stage = 'accepted at Broker, waiting to fill';
+    emit('order.progress', 'executor', `بوت Broker: الأمر عند Broker بانتظار التنفيذ${order.brokerOrderId ? ` (${order.brokerOrderId})` : ''}`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
   } else if (r.status === 'unknown') {
-    markUnknown(order, r.error ?? 'The bot could not tell whether SNB has this order.', now);
+    markUnknown(order, r.error ?? 'The bot could not tell whether Broker has this order.', now);
   } else if (r.status === 'cancelled') {
     order.status = 'cancelled';
     order.stage = undefined;
-    emit('order.cancelled', 'executor', `أُلغي أمر ${sideAr(order.side)} ${label(order.symbol)} في SNB${order.filledQty ? ` (نُفّذ منه ${order.filledQty} قبل الإلغاء)` : ''}`, { correlationId: order.decisionId, data: { orderId: order.id, filledQty: order.filledQty } }, now);
+    emit('order.cancelled', 'executor', `أُلغي أمر ${sideAr(order.side)} ${label(order.symbol)} في Broker${order.filledQty ? ` (نُفّذ منه ${order.filledQty} قبل الإلغاء)` : ''}`, { correlationId: order.decisionId, data: { orderId: order.id, filledQty: order.filledQty } }, now);
   } else if (r.status === 'filled' || r.status === 'partial') {
     const qty = Math.min(order.qty, Math.max(0, Math.floor(r.filledQty ?? 0)));
     const price = Number(r.avgPrice);
@@ -338,8 +338,8 @@ export function commandResult(r: BotResult, now = new Date()): boolean {
     if (!(qty > 0) || !(price > 0)) {
       order.status = 'failed';
       order.error = 'The bot reported a fill without a quantity or price.';
-      emit('order.failed', 'executor', `بوت SNB أبلغ عن تنفيذ ناقص البيانات لـ ${label(order.symbol)}: أوقفت التداول للتحقق`, { correlationId: order.decisionId }, now);
-      halt('تقرير تنفيذ غير مكتمل من بوت SNB', 'system', now);
+      emit('order.failed', 'executor', `بوت Broker أبلغ عن تنفيذ ناقص البيانات لـ ${label(order.symbol)}: أوقفت التداول للتحقق`, { correlationId: order.decisionId }, now);
+      halt('تقرير تنفيذ غير مكتمل من بوت Broker', 'system', now);
       return true;
     }
     let profit = 0;
@@ -377,8 +377,8 @@ export function reconcile(report: { cash: number; positions: Position[] }, now =
   }
   saveTrading();
   if (diffs.length && !firstReport) {
-    emit('position.drift', 'system', `حساب SNB يختلف عن المتوقع في: ${diffs.map((s) => `${s} (متوقع ${expected.get(s) ?? 0}، فعلي ${reported.get(s) ?? 0})`).join('، ')}`, { data: { diffs } }, now);
-    halt('اختلاف بين حساب SNB وسجل أسهمي', 'system', now);
+    emit('position.drift', 'system', `حساب Broker يختلف عن المتوقع في: ${diffs.map((s) => `${s} (متوقع ${expected.get(s) ?? 0}، فعلي ${reported.get(s) ?? 0})`).join('، ')}`, { data: { diffs } }, now);
+    halt('اختلاف بين حساب Broker وسجل أسهمي', 'system', now);
     return { drift: true };
   }
   return { drift: false };
@@ -392,11 +392,11 @@ export function halt(reason: string, by: 'user' | 'system' | 'risk', now = new D
   trading.halted = true;
   trading.haltReason = reason.slice(0, 200);
   emit('system.halted', by, `توقّف التداول: ${trading.haltReason}`, {}, now);
-  // Stop means stop: every order still waiting is let go, at SNB too (what already filled stays).
+  // Stop means stop: every order still waiting is let go, at Broker too (what already filled stays).
   for (const order of trading.orders.filter((o) => OPEN.includes(o.status))) requestCancel(order, 'توقّف التداول', now);
 }
 
-/** Only the user starts it again, and not while an order's status at SNB is unknown (it might fill, or be placed again). */
+/** Only the user starts it again, and not while an order's status at Broker is unknown (it might fill, or be placed again). */
 export function resume(now = new Date()): boolean {
   if (!trading.halted) return true;
   if (unknownOrders().length) return false;

@@ -299,7 +299,7 @@ function Orders({ st, t, lang }: { st: TradingState; t: T; lang: 'ar' | 'en' }) 
 /** The executor's own stage words, in the user's language when it is one the screen knows. */
 function stageText(stage: string, t: T): string {
   if (stage.startsWith('waiting for exchange prices')) return t.ss.stageWaitingPrices;
-  if (stage.startsWith('accepted at SNB')) return t.ss.stageAccepted;
+  if (stage.startsWith('accepted at Broker') || stage.startsWith('accepted at SNB')) return t.ss.stageAccepted;
   return stage;
 }
 

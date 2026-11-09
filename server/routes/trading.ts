@@ -45,22 +45,22 @@ tradingRoutes.post('/trading/halt', (req, res) => {
 });
 
 tradingRoutes.post('/trading/resume', (_req, res) => {
-  if (!resume()) throw new HttpError(409, 'An order\'s status at SNB is unknown: check it in the SNB app and say whether it was executed first.');
+  if (!resume()) throw new HttpError(409, 'An order\'s status at Broker is unknown: check it in the Broker app and say whether it was executed first.');
   saveTrading();
   res.json(tradingView());
 });
 
-/** Real money needs the desktop bot connected and logged in at SNB, and the word LIVE typed to confirm. */
+/** Real money needs the desktop bot connected and logged in at Broker, and the word LIVE typed to confirm. */
 tradingRoutes.post('/trading/mode', (req, res) => {
   const mode = req.body?.mode;
   if (mode === 'paper') setMode('paper', 'user', 'رجعت للوضع التجريبي');
   else if (mode === 'live') {
     if (!deskConfig().liveAllowed) throw new HttpError(409, 'This market is paper only: no broker is connected for it yet.');
     if (req.body?.confirm !== 'LIVE') throw new HttpError(400, 'Type LIVE to confirm trading with real money.');
-    if (!trading.bot.keyHash) throw new HttpError(409, 'Connect the SNB desktop bot first.');
-    if (botStale()) throw new HttpError(409, 'The SNB desktop bot is not running.');
-    if (!trading.bot.brokerSession) throw new HttpError(409, 'The SNB desktop bot is not logged in at SNB Capital.');
-    setMode('live', 'user', 'بدأ التداول الحقيقي عبر بوت SNB');
+    if (!trading.bot.keyHash) throw new HttpError(409, 'Connect the Broker desktop bot first.');
+    if (botStale()) throw new HttpError(409, 'The Broker desktop bot is not running.');
+    if (!trading.bot.brokerSession) throw new HttpError(409, 'The Broker desktop bot is not logged in at Broker.');
+    setMode('live', 'user', 'بدأ التداول الحقيقي عبر بوت Broker');
   } else throw new HttpError(400, 'mode is paper or live');
   saveTrading();
   res.json(tradingView());
@@ -210,7 +210,7 @@ tradingRoutes.put('/trading/caution-auto', (req, res) => {
   res.json(tradingView());
 });
 
-/** The user checked SNB about an order whose status was unknown: executed or not. */
+/** The user checked Broker about an order whose status was unknown: executed or not. */
 tradingRoutes.post('/trading/orders/:id/resolve', (req, res) => {
   const executed = req.body?.executed;
   if (typeof executed !== 'boolean') throw new HttpError(400, 'executed is true or false');
@@ -226,8 +226,8 @@ tradingRoutes.get('/trading/rounds', (req, res) => {
 
 /** The desktop bot's key and signing secret, shown once. A new one stops the old. */
 tradingRoutes.post('/trading/bot/key', (_req, res) => {
-  // The SNB desktop bot trades on Tadawul only.
-  if (!deskConfig().saudi) throw new HttpError(409, 'The SNB bot is for Tadawul only.');
+  // The Broker desktop bot trades on Tadawul only.
+  if (!deskConfig().saudi) throw new HttpError(409, 'The Broker bot is for Tadawul only.');
   res.json(createBotKey());
 });
 tradingRoutes.delete('/trading/bot/key', (_req, res) => {

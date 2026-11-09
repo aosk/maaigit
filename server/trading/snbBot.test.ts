@@ -260,7 +260,7 @@ describe('the SNB bot against StockSmart', () => {
     await bot.heartbeat();
     const { order, commands } = await liveOrder(key);
     await bot.handle(commands[0]);
-    expect(order).toMatchObject({ status: 'sent', brokerOrderId: 'SNB5', stage: expect.stringMatching(/accepted at SNB/) });
+    expect(order).toMatchObject({ status: 'sent', brokerOrderId: 'SNB5', stage: expect.stringMatching(/accepted at Broker/) });
     halt('stop', 'user');
     const res = await fetch(`${url}/trade/v1/commands`, { headers: { authorization: `Bearer ${key}` } });
     const { cancels } = (await res.json()) as { cancels: unknown[] };

@@ -64,7 +64,7 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
   if (!(p.qty > 0) || units(p.qty) !== p.qty || (!fractional && p.qty < 1)) return veto(fractional ? 'The amount is not a valid quantity.' : 'The quantity is not a whole number of shares.');
   const quote = ctx.quotes.get(p.symbol);
   if (!quote || ctx.now.getTime() - Date.parse(quote.asOf) > STALE_QUOTE_MS) return veto(`No fresh price for ${p.symbol}.`);
-  if (ctx.live && (quote.source !== 'bot' || ctx.now.getTime() - Date.parse(quote.asOf) > LIVE_QUOTE_MS)) return veto(`No live SNB price for ${p.symbol} in the last 2 minutes.`);
+  if (ctx.live && (quote.source !== 'bot' || ctx.now.getTime() - Date.parse(quote.asOf) > LIVE_QUOTE_MS)) return veto(`No live Broker price for ${p.symbol} in the last 2 minutes.`);
   if (p.side === 'buy' && ctx.clock.minutesToChange <= NO_NEW_POSITIONS_MIN) return veto('No new positions in the last 20 minutes before the close.');
   if (p.side === 'buy' && ctx.caution?.sectors.includes(stock.sector)) return veto(`Caution mode: no new buys in the ${stock.sector} sector.`);
   if (p.side === 'buy' && ctx.blackout?.symbols[p.symbol]) return veto(`Results on ${ctx.blackout.symbols[p.symbol]}: no new buys the day before and the day of.`);
