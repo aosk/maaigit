@@ -1000,3 +1000,25 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .dk-chip { font-size: 0.82em; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--sep); background: var(--raised); }
 .dk-chip.ok { color: var(--success); border-color: var(--success-soft); background: var(--success-soft); }
 .dk-chip.bad { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-soft); }
+
+/* «أسواقي» on «يومك»: one line per desk and today's trades */
+.sx { display: flex; flex-direction: column; border: 1px solid var(--sep); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.sx a { color: var(--text); text-decoration: none; }
+.sx-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
+.sx-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--sep); }
+.sx-row:hover, .sx-head:hover { background: var(--raised); }
+.sx-row.halted { background: var(--danger-soft); }
+.sx-line { display: flex; align-items: center; gap: 10px; }
+.sx-flag { flex: none; width: 24px; text-align: center; font-size: 1.1em; }
+.sx-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sx-name .sub { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.sx-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text2); opacity: 0.5; display: inline-block; }
+.sx-dot.on { opacity: 1; }
+.sx-dot.on { background: var(--success); }
+.sx-pnl { display: flex; flex-direction: column; align-items: flex-end; text-align: end; font-variant-numeric: tabular-nums; }
+.sx-pnl small { font-size: 0.7em; font-weight: 600; color: var(--text2); }
+.sx-none { padding-inline-start: 34px; }
+.sx-trades { display: flex; flex-wrap: wrap; gap: 6px; padding-inline-start: 34px; }
+.sx-trade { font-size: 0.78em; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--sep); background: var(--raised); white-space: nowrap; }
+.sx-trade.buy { color: var(--success); background: var(--success-soft); border-color: transparent; }
+.sx-trade.sell { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
