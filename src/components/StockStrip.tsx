@@ -3,11 +3,12 @@ import type { TradingState } from '../../shared/trading';
 import { api, type TradingMarket } from '../api';
 import { useSettings } from '../settings';
 import { signed } from '../screens/StockSmart';
+import { MOOD_COLOR } from './MarketPulse';
 
 const MARKETS: TradingMarket[] = ['sa', 'us', 'crypto'];
 const FLAG: Record<TradingMarket, string> = { sa: '🇸🇦', us: '🇺🇸', crypto: '₿' };
 
-/** «أسواقي» at the top of «يومك»: one line per desk, its flag, how its market moved today and the desk's profit or loss. */
+/** «أسواقي» at the top of «يومك»: one line per desk, its flag, the market's overall mood today and the desk's profit or loss in money. */
 export function StockStrip() {
   const { t } = useSettings();
   const s = t.ss;
@@ -42,14 +43,19 @@ export function StockStrip() {
       {shown.map((m) => {
         const st = desks[m]!;
         const tone = st.dayPnl > 0 ? 'up' : st.dayPnl < 0 ? 'down' : '';
-        const idx = st.pulse?.index?.changePct;
-        const idxTone = idx === undefined ? '' : idx > 0 ? 'up' : idx < 0 ? 'down' : '';
         return (
           <a key={m} className={`sx-row${st.halted ? ' halted' : ''}`} href="#/stocks" onClick={() => open(m)} aria-label={`${name[m]} · ${s.open}`} title={name[m]}>
             <span className="sx-flag" aria-hidden="true">{FLAG[m]}</span>
             <span className="sx-cell">
               <span className="sub">{s.stripMarket}</span>
-              <b className={`ss-num ${idxTone}`} dir="ltr">{idx === undefined ? '—' : `${idx > 0 ? '+' : ''}${idx.toFixed(2)}%`}</b>
+              {st.pulse ? (
+                <b className="sx-mood" style={{ color: MOOD_COLOR[st.pulse.mood] }}>
+                  <i aria-hidden="true" style={{ background: MOOD_COLOR[st.pulse.mood] }} />
+                  {s.pulseMood[st.pulse.mood]}
+                </b>
+              ) : (
+                <b>—</b>
+              )}
             </span>
             <span className="sx-cell">
               <span className="sub">{s.stripMine}</span>
