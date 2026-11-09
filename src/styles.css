@@ -1001,19 +1001,13 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .dk-chip.ok { color: var(--success); border-color: var(--success-soft); background: var(--success-soft); }
 .dk-chip.bad { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-soft); }
 
-/* «أسواقي» on «يومك»: one short line per desk, and today's trades under it */
+/* «أسواقي» on «يومك»: one line per desk, its market's move and today's profit or loss */
 .sx { display: flex; flex-direction: column; border: 1px solid var(--sep); border-radius: 12px; background: var(--surface); overflow: hidden; }
-.sx-row { display: flex; flex-direction: column; gap: 2px; padding: 7px 12px; color: var(--text); text-decoration: none; }
+.sx-row { display: flex; align-items: center; gap: 12px; padding: 6px 12px; color: var(--text); text-decoration: none; }
 .sx-row + .sx-row { border-top: 1px solid var(--sep); }
 .sx-row:hover { background: var(--raised); }
 .sx-row.halted { background: var(--danger-soft); }
-.sx-line { display: flex; align-items: center; gap: 8px; }
-.sx-flag { flex: none; width: 20px; text-align: center; }
-.sx-name { font-size: 0.92em; }
-.sx-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text2); opacity: 0.45; display: inline-block; flex: none; }
-.sx-dot.on { background: var(--success); opacity: 1; }
-.sx-pnl { margin-inline-start: auto; font-size: 0.92em; font-variant-numeric: tabular-nums; }
-.sx-pnl small { font-size: 0.72em; font-weight: 600; color: var(--text2); }
-.sx-trades { padding-inline-start: 28px; font-size: 0.8em; line-height: 1.5; }
-.sx-trades .up { color: var(--success); }
-.sx-trades .down { color: var(--danger); }
+.sx-flag { flex: none; width: 22px; text-align: center; font-size: 1.1em; }
+.sx-cell { flex: 1; display: flex; align-items: baseline; justify-content: space-between; gap: 6px; font-size: 0.9em; font-variant-numeric: tabular-nums; }
+.sx-cell .sub { font-size: 0.85em; }
+.sx-cell small { font-size: 0.72em; font-weight: 600; color: var(--text2); }
