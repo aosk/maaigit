@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
-  Object.assign(process.env, { MAAI_DATA_DIR: '/tmp/claude-0/fuzz-data', MAAI_DATA_FILE: '/tmp/claude-0/fuzz-data/store.json', ANTHROPIC_API_KEY: '', ASANA_TOKEN: '', GMAIL_USER: '', GMAIL_APP_PASSWORD: '' });
+  Object.assign(process.env, { MAAI_DATA_DIR: '/tmp/claude-0/fuzz-data', MAAI_DATA_FILE: '/tmp/claude-0/fuzz-data/store.json', ANTHROPIC_API_KEY: '', ASANA_TOKEN: '', GMAIL_USER: '', GMAIL_APP_PASSWORD: '',
+    // No real network in this test: the news route would fetch live RSS feeds, whose speed is the internet's, not the code's.
+    MAAI_NEWS: 'off' });
 });
 
 import { createInnerApp, createOnlineSite } from '../site';
