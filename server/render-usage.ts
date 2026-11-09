@@ -133,7 +133,10 @@ let sampler: NodeJS.Timeout | undefined;
  */
 export function startRenderWatch(): void {
   if (sampler) return;
-  sample();
+  // Count from here: starting up (loading and compiling the app, reading the data) is not the load it runs under, and
+  // counted as a minute's sample it read as two or three CPUs on a half-CPU plan, red for the hour after every deploy.
+  lastCpu = process.cpuUsage();
+  lastAt = Date.now();
   sampler = setInterval(() => sample(), 60_000);
   sampler.unref?.();
   if (!renderConfigured()) return;
