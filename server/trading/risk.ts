@@ -29,6 +29,8 @@ export interface RiskContext {
   live?: boolean;
   /** Caution mode: new buys at half the per-order limit, and none in these sectors. */
   caution?: { sectors: string[] };
+  /** From the calendar (confirmed events only): stocks with results today or on the next trading day (no new buys), and a market-wide event today (half-size buys). */
+  blackout?: { symbols: Record<string, string>; market?: string };
   ordersToday: number;
   openOrders: TradeOrder[];
   now: Date;
@@ -65,6 +67,7 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
   if (ctx.live && (quote.source !== 'bot' || ctx.now.getTime() - Date.parse(quote.asOf) > LIVE_QUOTE_MS)) return veto(`No live SNB price for ${p.symbol} in the last 2 minutes.`);
   if (p.side === 'buy' && ctx.clock.minutesToChange <= NO_NEW_POSITIONS_MIN) return veto('No new positions in the last 20 minutes before the close.');
   if (p.side === 'buy' && ctx.caution?.sectors.includes(stock.sector)) return veto(`Caution mode: no new buys in the ${stock.sector} sector.`);
+  if (p.side === 'buy' && ctx.blackout?.symbols[p.symbol]) return veto(`Results on ${ctx.blackout.symbols[p.symbol]}: no new buys the day before and the day of.`);
   if (ctx.ordersToday >= ctx.limits.maxOrdersPerDay) return veto(`Today's limit of ${ctx.limits.maxOrdersPerDay} orders is used up.`);
   if (ctx.openOrders.some((o) => o.symbol === p.symbol)) return veto(`An order for ${p.symbol} is still open.`);
 
@@ -103,6 +106,7 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
     const price = limitPrice * 1.002; // with fees
     cut(ctx.limits.maxOrder / price, `Reduced to the ${ctx.limits.maxOrder} ${deskConfig().currency} limit per order.`);
     if (ctx.caution) cut(ctx.limits.maxOrder / 2 / price, 'Caution mode: half the per-order limit.');
+    if (ctx.blackout?.market) cut(ctx.limits.maxOrder / 2 / price, 'Market event today: half the per-order limit.');
     cut((ctx.book.cash - reserved) / price, 'Reduced to the cash available.');
     cut((ctx.limits.capital - total - reserved) / price, `Reduced to keep within the ${ctx.limits.capital} ${deskConfig().currency} you allowed.`);
     cut((ctx.limits.capital * ctx.limits.maxPerSymbolPct / 100 - (bySymbol.get(p.symbol) ?? 0)) / price, `Reduced to keep ${p.symbol} within ${ctx.limits.maxPerSymbolPct}% of the capital.`);

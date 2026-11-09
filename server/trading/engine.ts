@@ -9,6 +9,9 @@ import { currentIndex, currentQuotes, refreshQuotes } from './market.js';
 import { marketPulse } from './pulse.js';
 import { DESKS, deskConfig, inDesk, perDesk, unitAr } from './desk.js';
 import { holdersRound, holdersView } from './holders.js';
+import { blackoutNow, calendarRound, upcoming } from './calendar.js';
+import { latestReview, weeklyReview } from './review.js';
+import { shariahRound, shariahView } from './shariah.js';
 import { bookValue, dayPnl, rollDay, round2 } from './portfolio.js';
 import { checkOrder } from './risk.js';
 import { emit, onTradeEvent, saveTrading, trading } from './store.js';
@@ -52,6 +55,9 @@ async function tick(now = new Date()): Promise<void> {
       saveTrading();
     }
     checkDailyLoss(now);
+    // Friday from noon: the week's review. Every 90 days (US): the Shariah check of the list.
+    await weeklyReview(now);
+    await shariahRound(now);
     if (trading.caution && Date.parse(trading.caution.until) <= now.getTime()) endCaution('system', now);
     if (!clock.open && openOrders(trading.mode).length) cancelAllOpen('أقفل السوق', now);
     if (clock.open && !trading.halted && now.getTime() - t.lastRound >= trading.limits.cycleMinutes * 60_000) {
@@ -99,6 +105,8 @@ async function runRound(now: Date): Promise<void> {
   const news = await newsRound(now);
   // Once a trading day: the substantial shareholders of a few stocks, and the week's ownership announcements.
   await holdersRound(now);
+  // Once a trading day: the next two weeks' results, rate decisions and reports.
+  await calendarRound(now);
   noteMarket(marketContext(), now);
   record.technical = reads;
   record.news = { fetchedAt: newsFetchedAt(), items: news, market: marketContext() };
@@ -170,6 +178,7 @@ export function gate(d: Decision, now = new Date()): { decisionId: string; verdi
           clock,
           live: trading.mode === 'live',
           caution: cautionNow(now),
+          blackout: blackoutNow(now),
           ordersToday: trading.ordersToday.day === day ? trading.ordersToday.count : 0,
           openOrders: openOrders(trading.mode),
           now,
@@ -208,6 +217,8 @@ function arabicReason(reason: string): string {
     [/last 20 minutes/, () => 'ما فيه مراكز جديدة في آخر ٢٠ دقيقة'],
     [/Caution mode: no new buys/, () => 'وضع الحذر: ما فيه شراء جديد في هالقطاع'],
     [/Caution mode: half/, () => 'وضع الحذر: نص حد الأمر'],
+    [/Results on (\S+): no new buys/, (m) => `نتائج الشركة ${m[1].replace(/\.$/, '')}: ما فيه شراء جديد قبلها بيوم ويومها`],
+    [/Market event today/, () => 'حدث كبير في السوق اليوم: نص حد الأمر'],
     [/live SNB price/, () => 'ما فيه سعر لحظي من SNB'],
     [/Nothing left/, () => 'ما بقي شي بعد تطبيق الحدود'],
   ];
@@ -294,5 +305,8 @@ export function tradingView(now = new Date()): TradingState {
     liveAllowed: deskConfig().liveAllowed,
     indexName: { ar: deskConfig().indexAr, en: deskConfig().indexEn },
     hoursRiyadh: hoursRiyadh(now),
+    calendar: upcoming(now),
+    review: latestReview(),
+    shariah: shariahView(),
   };
 }

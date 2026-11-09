@@ -75,9 +75,11 @@ describe('the crypto desk', () => {
       await round(SAT_NIGHT);
       flushTrading();
     });
-    // Claude only for the news (once, then every three hours): the plain rule decided.
-    expect(create).toHaveBeenCalledTimes(1);
-    expect((create.mock.calls[0][0] as { system: string }).system).toMatch(/news analyst on a cryptocurrency desk/);
+    // Claude only for the news and the day's calendar: the plain rule decided, with no call for the decision.
+    const systems = create.mock.calls.map((c) => (c[0] as { system: string }).system);
+    expect(systems.some((x) => /news analyst on a cryptocurrency desk/.test(x))).toBe(true);
+    expect(systems.some((x) => /event calendar/.test(x))).toBe(true);
+    expect(systems.some((x) => /portfolio manager/.test(x))).toBe(false);
     expect(fs.existsSync('/tmp/claude-0/trading-crypto/trading-crypto.json')).toBe(true);
     expect(fs.readdirSync('/tmp/claude-0/trading-crypto/rounds-crypto').length).toBeGreaterThan(0);
   });

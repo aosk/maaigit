@@ -979,3 +979,24 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .ss-halal { font-size: 0.78em; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--tint); color: var(--on-tint); white-space: nowrap; }
 
 .ss-halal.ss-crypto { background: #b54708; color: #fff; }
+
+/* Calendar, weekly review, Shariah check */
+.dk { display: flex; flex-direction: column; gap: 12px; }
+.dk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dk-list li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid var(--sep); }
+.dk-list li:last-child { border-bottom: none; }
+.dk-icon { flex: none; width: 22px; text-align: center; }
+.dk-line { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.dk-tag { flex: none; font-size: 0.72em; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--raised); color: var(--text2); border: 1px solid var(--sep); }
+.dk-tag.on { background: var(--tint-soft); color: var(--tint-text); border-color: transparent; }
+.dk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.dk-stats > div { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 10px; background: var(--raised); text-align: center; }
+.dk-stats b { font-size: 1.1em; font-variant-numeric: tabular-nums; }
+.dk-stats span { font-size: 0.75em; color: var(--text2); }
+@media (max-width: 420px) { .dk-stats { grid-template-columns: repeat(2, 1fr); } }
+.dk-bullets { margin: 0; padding-inline-start: 20px; display: grid; gap: 4px; }
+.dk-suggest { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--tint-soft); }
+.dk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.dk-chip { font-size: 0.82em; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--sep); background: var(--raised); }
+.dk-chip.ok { color: var(--success); border-color: var(--success-soft); background: var(--success-soft); }
+.dk-chip.bad { color: var(--danger); background: var(--danger-soft); border-color: var(--danger-soft); }

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AgentId, Caution, Decider, Holder, HolderChange, Position, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder } from '../../shared/trading.js';
+import type { AgentId, CalendarEvent, Caution, Decider, Holder, HolderChange, Position, ShariahCheck, WeeklyReview, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder } from '../../shared/trading.js';
 import { config } from '../config.js';
 import { writePrivate } from '../secure-fs.js';
 import { tradingDay } from './tadawul.js';
@@ -46,6 +46,12 @@ export interface TradingData {
   agents: Partial<Record<AgentId, { enabled: boolean; lastRunAt?: string; lastError?: string }>>;
   /** Substantial shareholders (5% or more): each stock's latest listing, and the changes seen (see holders.ts). */
   holders?: { listings: Record<string, { holders: Holder[]; asOf: string; source: string; readAt: string }>; changes: HolderChange[]; lastDay?: string; lastRunAt?: string };
+  /** Events ahead (see calendar.ts), read once a day. */
+  calendar?: { events: CalendarEvent[]; lastDay?: string; lastRunAt?: string };
+  /** Weekly reviews, newest first (see review.ts). */
+  reviews?: WeeklyReview[];
+  /** The US list's quarterly Shariah check (see shariah.ts). */
+  shariah?: ShariahCheck;
   /** The desktop bot: its key (only the hash), the secret commands are signed with, and what it last said. */
   bot: { keyHash?: string; keyHint?: string; signSecret?: string; lastSeen?: string; brokerSession?: boolean; expiresInSec?: number; practice?: boolean };
 }
@@ -198,6 +204,9 @@ export function resetTrading(): void {
   // Optional parts are not in a fresh copy, so they are cleared by hand.
   delete trading.caution;
   delete trading.holders;
+  delete trading.calendar;
+  delete trading.reviews;
+  delete trading.shariah;
   Object.assign(trading, fresh());
   listenersOf().clear();
 }

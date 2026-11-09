@@ -197,6 +197,46 @@ export interface HoldersView {
   listings: { symbol: string; holders: Holder[]; asOf: string; source: string }[];
 }
 
+/** An event ahead that can move a stock or the market: results, a rates decision, an inflation or jobs report. */
+export interface CalendarEvent {
+  id: string;
+  /** The day it happens (YYYY-MM-DD, the market's own day). */
+  date: string;
+  /** The time if known (HH:MM, Riyadh), else ''. */
+  timeRiyadh: string;
+  kind: 'earnings' | 'rates' | 'inflation' | 'jobs' | 'other';
+  /** The stocks it concerns; empty for the whole market. */
+  symbols: string[];
+  title: string;
+  source: string;
+  /** Officially scheduled (the company, the exchange or the central bank says so), not an estimate. */
+  confirmed: boolean;
+}
+
+/** The weekly review: what the desk did in a week, what worked and what did not, and what to change. */
+export interface WeeklyReview {
+  /** The Friday that closes the week (YYYY-MM-DD). */
+  week: string;
+  at: string;
+  stats: { orders: number; filled: number; vetoed: number; closed: number; wins: number; losses: number; realized: number; bestSymbol?: string; worstSymbol?: string };
+  /** Claude's review in Arabic (empty without Claude: the numbers stand alone). */
+  summary: string;
+  lessons: string[];
+  /** Instructions it suggests; the user adds any of them with one tap. */
+  suggestions: string[];
+}
+
+/** The quarterly Shariah check of the US list: whether each stock is still held by the S&P 500 Shariah ETF. */
+export interface ShariahCheck {
+  checkedAt?: string;
+  nextDue?: string;
+  results: { symbol: string; held: boolean | null; note: string }[];
+  /** Stocks found no longer held: trading in them stopped until the user decides. */
+  removed: string[];
+  source?: string;
+  error?: string;
+}
+
 /** The market as a whole, at a glance: the index, how the followed stocks move together, and the risk in the news. */
 export interface MarketPulse {
   /** -100 (falling hard) to +100 (rising strongly). */
@@ -268,6 +308,12 @@ export interface TradingState {
   indexName: { ar: string; en: string };
   /** Trading hours in Riyadh time (HH:MM); null when it never closes (crypto). */
   hoursRiyadh: { open: string; close: string } | null;
+  /** Events in the next two weeks, soonest first. */
+  calendar: CalendarEvent[];
+  /** The latest weekly review, if any. */
+  review: WeeklyReview | null;
+  /** The US list's Shariah check (US desk only). */
+  shariah: ShariahCheck | null;
 }
 
 export interface Caution {

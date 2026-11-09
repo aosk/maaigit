@@ -8,6 +8,7 @@ import { ChartUp, Chevron, Send, Stop } from '../components/Icons';
 import { PixelOffice } from '../components/PixelOffice';
 import { MarketPulse } from '../components/MarketPulse';
 import { Holders } from '../components/Holders';
+import { Calendar, Review, Shariah } from '../components/DeskAgents';
 import { TradeLog } from '../components/TradeLog';
 
 /**
@@ -190,7 +191,10 @@ export function StockSmart() {
           <Hero st={st} t={t} />
           {st.pulse && <MarketPulse pulse={st.pulse} indexName={st.indexName ? (lang === 'ar' ? st.indexName.ar : st.indexName.en) : undefined} />}
           {layout === 'phone' && <PixelOffice st={st} status={executorLabel(st, t)} />}
+          {st.calendar && <Calendar st={st} />}
           <Positions st={st} t={t} />
+          {st.market === 'us' && <Shariah st={st} busy={busy} act={act} />}
+          <Review st={st} busy={busy} act={act} />
           {st.market === 'sa' && st.holders && <Holders view={st.holders} universe={st.universe} />}
           <Orders st={st} t={t} lang={lang} />
           <SettingsPanel st={st} t={t} busy={busy} act={act} />

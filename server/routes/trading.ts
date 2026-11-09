@@ -8,6 +8,8 @@ import { emit, eventsSince, onTradeEvent, saveTrading, trading } from '../tradin
 import { marketClock, UNIVERSE } from '../trading/tadawul.js';
 import { HttpError, lang, text, wrap } from './http.js';
 import { deskConfig, inDesk } from '../trading/desk.js';
+import { weeklyReview } from '../trading/review.js';
+import { shariahRound } from '../trading/shariah.js';
 
 /**
  * StockSmart for the signed-in user: the state for the first paint, the live stream of the log, and the controls.
@@ -161,6 +163,19 @@ tradingRoutes.post('/trading/ask', wrap(async (req, res) => {
 }));
 
 /** A round now, without waiting for the next one (only while the market is open and trading is on). */
+/** The week's review now, whatever the day (the user asked). */
+tradingRoutes.post('/trading/review', wrap(async (_req, res) => {
+  await weeklyReview(new Date(), true);
+  res.json(tradingView());
+}));
+
+/** The US list's Shariah check now (the user asked). */
+tradingRoutes.post('/trading/shariah/check', wrap(async (_req, res) => {
+  if (deskConfig().id !== 'us') throw new HttpError(409, 'The Shariah check is for the US list.');
+  await shariahRound(new Date(), true);
+  res.json(tradingView());
+}));
+
 tradingRoutes.post('/trading/round', wrap(async (_req, res) => {
   if (!marketClock(new Date()).open) throw new HttpError(409, 'The market is closed.');
   if (trading.halted) throw new HttpError(409, 'Trading is halted.');
