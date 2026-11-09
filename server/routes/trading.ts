@@ -7,12 +7,16 @@ import { botStale, createBotKey, halt, resolveUnknown, resume, revokeBotKey, set
 import { emit, eventsSince, onTradeEvent, saveTrading, trading } from '../trading/store.js';
 import { marketClock, UNIVERSE } from '../trading/tadawul.js';
 import { HttpError, lang, text, wrap } from './http.js';
+import { deskConfig, inDesk } from '../trading/desk.js';
 
 /**
  * StockSmart for the signed-in user: the state for the first paint, the live stream of the log, and the controls.
  * Stopping is one tap; starting again, going live and changing the limits are the user's alone and always logged.
  */
 export const tradingRoutes = Router();
+
+/** `?market=us` works on the US desk; anything else on Tadawul (see trading/desk.ts). */
+tradingRoutes.use('/trading', (req, _res, next) => inDesk(req.query.market === 'us' ? 'us' : 'sa', next));
 
 tradingRoutes.get('/trading', (_req, res) => res.json(tradingView()));
 
@@ -49,6 +53,7 @@ tradingRoutes.post('/trading/mode', (req, res) => {
   const mode = req.body?.mode;
   if (mode === 'paper') setMode('paper', 'user', 'رجعت للوضع التجريبي');
   else if (mode === 'live') {
+    if (!deskConfig().liveAllowed) throw new HttpError(409, 'This market is paper only: no broker is connected for it yet.');
     if (req.body?.confirm !== 'LIVE') throw new HttpError(400, 'Type LIVE to confirm trading with real money.');
     if (!trading.bot.keyHash) throw new HttpError(409, 'Connect the SNB desktop bot first.');
     if (botStale()) throw new HttpError(409, 'The SNB desktop bot is not running.');
@@ -192,7 +197,11 @@ tradingRoutes.get('/trading/rounds', (req, res) => {
 });
 
 /** The desktop bot's key and signing secret, shown once. A new one stops the old. */
-tradingRoutes.post('/trading/bot/key', (_req, res) => res.json(createBotKey()));
+tradingRoutes.post('/trading/bot/key', (_req, res) => {
+  // The SNB desktop bot trades on Tadawul only.
+  if (!deskConfig().saudi) throw new HttpError(409, 'The SNB bot is for Tadawul only.');
+  res.json(createBotKey());
+});
 tradingRoutes.delete('/trading/bot/key', (_req, res) => {
   revokeBotKey();
   saveTrading();

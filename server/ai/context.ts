@@ -9,6 +9,7 @@ import { contactCount } from '../contacts.js';
 import { neutralize as n } from './untrusted.js';
 import { asanaConfigured, cachedProjects, cachedTasks, openTasks, projects, todayIso } from '../asana.js';
 import { tradingView } from '../trading/engine.js';
+import { inDesk } from '../trading/desk.js';
 import { instrument } from '../trading/tadawul.js';
 import { MOOD_AR } from '../trading/pulse.js';
 import { keysNote } from '../keys.js';
@@ -157,7 +158,15 @@ export function tradingOverview(now = new Date()): string {
   const holders = h.changes.length
     ? `Substantial shareholders (5%+), latest changes (from web sources, information only):\n${h.changes.slice(0, 5).map((c) => `- ${c.date} ${nameOf(c.symbol)}: ${n(c.holder)} ${kinds[c.kind]}${c.toPct !== undefined ? ` to ${c.toPct}%` : ''}${c.official ? ' (official disclosure)' : ''}`).join('\n')}`
     : h.covered ? `Substantial shareholders: listings read for ${h.covered} of ${h.total} followed stocks, no changes recorded.` : '';
-  return [head, money, pulse, positions, orders, activity, holders, bot].filter(Boolean).join('\n');
+  return [head, money, pulse, positions, orders, activity, holders, bot, usOverview(now)].filter(Boolean).join('\n');
+}
+
+/** The US desk («أسهمي» → أمريكا): paper money in dollars, a halal-screened list of ETFs and stocks. */
+function usOverview(now: Date): string {
+  const u = inDesk('us', () => tradingView(now));
+  const usd = (x: number) => `$${x.toFixed(2)}`;
+  const held = u.positions.map((p) => `${p.symbol} ${p.qty} @ ${usd(p.avgCost)}${p.price !== undefined ? ` (now ${usd(p.price)})` : ''}`).join(', ');
+  return `US desk («أسهمي» → أمريكا, PAPER only, halal-screened list, US market ${u.clock.open ? 'open' : u.clock.label}${u.halted ? ', STOPPED' : ''}): value ${usd(u.portfolioValue)}, cash ${usd(u.cash)}, today ${u.dayPnl >= 0 ? '+' : ''}${usd(u.dayPnl)}; holdings: ${held || 'none'}; market indicator ${u.pulse.score} (${MOOD_AR[u.pulse.mood]}).`;
 }
 
 export function contextNote(): string {

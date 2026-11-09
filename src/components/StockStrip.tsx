@@ -12,7 +12,7 @@ export function StockStrip() {
   const [st, setSt] = useState<TradingState | null>(null);
 
   useEffect(() => {
-    const load = () => api.trading(true).then(setSt).catch(() => setSt(null));
+    const load = () => api.trading(true, 'sa').then(setSt).catch(() => setSt(null));
     void load();
     const poll = setInterval(() => !document.hidden && load(), 60_000);
     return () => clearInterval(poll);

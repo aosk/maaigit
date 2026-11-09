@@ -1,6 +1,6 @@
 import type { Position, Side } from '../../shared/trading.js';
 import type { Book } from './store.js';
-import { FEE_RATE, tradingDay } from './tadawul.js';
+import { feeRate, tradingDay } from './tadawul.js';
 
 /** What a book is worth at these prices (a stock without a price counts at what it cost). */
 export function bookValue(book: Book, prices: Map<string, number>): number {
@@ -14,7 +14,7 @@ export function exposure(positions: Position[], prices: Map<string, number>): { 
   return { total: [...bySymbol.values()].reduce((a, b) => a + b, 0), bySymbol };
 }
 
-const fee = (value: number) => round2(value * FEE_RATE);
+const fee = (value: number) => round2(value * feeRate());
 
 /** Books a fill: cash, the position's average cost, and the profit a sale takes. Returns that profit (0 for a buy). */
 export function applyFill(book: Book, side: Side, symbol: string, qty: number, price: number): number {

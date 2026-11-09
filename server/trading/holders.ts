@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Holder, HolderChange, HoldersView } from '../../shared/trading.js';
 import { client, create, textOf, type ServerTool } from '../ai/claude.js';
 import { config } from '../config.js';
+import { deskConfig } from './desk.js';
 import { emit, saveTrading, trading } from './store.js';
 import { instrument, tradingDay, UNIVERSE } from './tadawul.js';
 
@@ -196,7 +197,8 @@ export function applyHolders(parsed: { listings?: Listing[]; announcements?: Ann
 export async function holdersRound(now = new Date()): Promise<void> {
   const d = data();
   const day = tradingDay(now);
-  if (!client || trading.agents.news?.enabled === false || d.lastDay === day) return;
+  // Saudi substantial-shareholder disclosures only: the US desk has no such listing here.
+  if (!deskConfig().saudi || !client || trading.agents.news?.enabled === false || d.lastDay === day) return;
   d.lastDay = day;
   const read = stalest(PER_DAY);
   const all = UNIVERSE.map((i) => `${i.symbol} ${i.nameEn} (${i.nameAr})`).join('; ');

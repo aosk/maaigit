@@ -972,3 +972,8 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .hd-investors ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
 .hd-stakes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .hd-stake { font-size: 0.8em; padding: 3px 9px; border-radius: 999px; background: var(--raised); border: 1px solid var(--sep); white-space: nowrap; }
+
+/* «أسهمي»: the market switch and the US desk's note */
+.ss-market { align-self: flex-start; max-width: 100%; }
+.ss-us-note { gap: 8px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--tint-soft); }
+.ss-halal { font-size: 0.78em; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--tint); color: var(--on-tint); white-space: nowrap; }

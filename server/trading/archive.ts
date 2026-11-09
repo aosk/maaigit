@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
+import { deskId } from './desk.js';
 import { appendPrivate } from '../secure-fs.js';
 
 /**
@@ -10,7 +11,9 @@ import { appendPrivate } from '../secure-fs.js';
  * month, a line per round, so any round can be reconstructed later without today's prices or asking Claude again.
  */
 
-const DIR = process.env.MAAI_ROUNDS_DIR ?? path.join(config.dataDir, 'stocksmart-rounds');
+const SA_DIR = process.env.MAAI_ROUNDS_DIR ?? path.join(config.dataDir, 'stocksmart-rounds');
+/** Each desk's rounds in its own folder: Tadawul's where they always were, the US desk's beside it. */
+const dirOf = () => (deskId() === 'us' ? `${SA_DIR}-us` : SA_DIR);
 
 export interface RoundRecord {
   roundId: string;
@@ -20,7 +23,7 @@ export interface RoundRecord {
   [key: string]: unknown;
 }
 
-const fileFor = (day: string) => path.join(DIR, `${day.slice(0, 7)}.jsonl`);
+const fileFor = (day: string) => path.join(dirOf(), `${day.slice(0, 7)}.jsonl`);
 
 export function archiveRound(record: RoundRecord): void {
   try {

@@ -1,6 +1,17 @@
 # Idea: a US stock portfolio in «أسهمي»
 
-Saved on 5 November 2026, for when we decide to add the US market next to Tadawul. Nothing here is built yet.
+Saved on 5 November 2026. **Phase 2a built on 9 November 2026:** a US paper desk in «أسهمي» (switch at the top of the
+screen), $1,000 of paper money, at most $300 an order, whole shares, a halal list, the NYSE clock with daylight saving
+and holidays, the S&P 500 as its market indicator, US news through web search. It runs as its own desk (its own file
+`trading-us.json`, rounds folder, prices, limits, log and Stop), sharing the tested engine through a desk context
+(`server/trading/desk.ts`). It cannot go live: no broker is connected.
+
+The halal list (checked 9 November 2026; re-check each quarter against SP Funds' daily holdings file):
+- ETFs: SPUS, HLAL, SPSK (sukuk), SPWO, SPTE, UMMA, SPRE, MNZL.
+- Stocks, the largest held by SPUS (its Shariah board's screen passed them): NVDA, AAPL, MSFT, GOOGL, AVGO, TSLA, LLY,
+  JNJ, XOM, HD, PG. Amazon and Meta were not found among SPUS holdings, so they are left out.
+
+Next: 2b crypto paper, 2c US live through IBKR or Alpaca, 2d crypto live (trade-only key, no withdrawals).
 
 ## The reference: trader-skill
 

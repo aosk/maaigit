@@ -24,11 +24,13 @@ export interface PulseInput {
   /** The most serious market item from the news agent, if any. */
   market?: { severity: 'low' | 'medium' | 'high'; headline: string; confirmed: boolean }[];
   caution: boolean;
+  /** The index's name in the reasons (TASI by default). */
+  indexName?: string;
 }
 
 export const MOOD_AR: Record<MarketPulse['mood'], string> = { strong_up: 'صاعد بقوة', up: 'إيجابي', mixed: 'متذبذب', down: 'سلبي', strong_down: 'هابط بقوة' };
 
-export function marketPulse({ index, quotes, market = [], caution }: PulseInput): MarketPulse {
+export function marketPulse({ index, quotes, market = [], caution, indexName = 'تاسي' }: PulseInput): MarketPulse {
   const reasons: { weight: number; text: string }[] = [];
   let score = 0;
 
@@ -44,7 +46,7 @@ export function marketPulse({ index, quotes, market = [], caution }: PulseInput)
     // ±1.5% in a day is a big day for TASI: that alone is ±50.
     const today = clamp((changePct / 1.5) * 50, -50, 50);
     score += today;
-    reasons.push({ weight: Math.abs(today), text: `تاسي ${changePct >= 0 ? 'مرتفع' : 'منخفض'} ${Math.abs(round(changePct))}٪ اليوم` });
+    reasons.push({ weight: Math.abs(today), text: `${indexName} ${changePct >= 0 ? 'مرتفع' : 'منخفض'} ${Math.abs(round(changePct))}٪ اليوم` });
     if (vsAvg20Pct !== undefined) {
       const trend = clamp(vsAvg20Pct * 5, -15, 15);
       score += trend;

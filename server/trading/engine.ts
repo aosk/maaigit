@@ -7,6 +7,7 @@ import { archiveRound, type RoundRecord } from './archive.js';
 import { botStale, cancelAllOpen, halt, openOrders, processOrders, submit } from './executor.js';
 import { currentIndex, currentQuotes, refreshQuotes } from './market.js';
 import { marketPulse } from './pulse.js';
+import { DESKS, deskConfig, inDesk, perDesk } from './desk.js';
 import { holdersRound, holdersView } from './holders.js';
 import { bookValue, dayPnl, rollDay, round2 } from './portfolio.js';
 import { checkOrder } from './risk.js';
@@ -24,29 +25,28 @@ const CURVE_EVERY_MS = 5 * 60_000;
 /** No new orders this close to the close: they could not be placed and filled in time. */
 const NO_NEW_ORDERS_MIN = 10;
 
-let busy = false;
-let lastQuotes = 0;
-let lastRound = 0;
-let lastCurve = 0;
+/** Each desk's own timing: whether a tick is running, and when prices, a round and the chart were last done. */
+const timing = perDesk(() => ({ busy: false, lastQuotes: 0, lastRound: 0, lastCurve: 0, rounding: false }));
 
 const prices = () => new Map([...currentQuotes()].map(([s, q]) => [s, q.price]));
 
 async function tick(now = new Date()): Promise<void> {
-  if (busy) return;
-  busy = true;
+  const t = timing();
+  if (t.busy) return;
+  t.busy = true;
   try {
     const clock = marketClock(now);
     // Prices while the market is open (and after the close while a paper order still waits for the prices that judge
     // it: the feed runs late), and once at start so the screen has something.
     const judging = !clock.open && openOrders('paper').length > 0;
-    if (((clock.open || judging) && now.getTime() - lastQuotes >= QUOTES_EVERY_MS) || currentQuotes().size === 0) {
-      lastQuotes = now.getTime();
+    if (((clock.open || judging) && now.getTime() - t.lastQuotes >= QUOTES_EVERY_MS) || currentQuotes().size === 0) {
+      t.lastQuotes = now.getTime();
       await refreshQuotes(now);
     }
     for (const book of Object.values(trading.books)) rollDay(book, prices(), now);
     processOrders(now);
-    if (clock.open && now.getTime() - lastCurve >= CURVE_EVERY_MS) {
-      lastCurve = now.getTime();
+    if (clock.open && now.getTime() - t.lastCurve >= CURVE_EVERY_MS) {
+      t.lastCurve = now.getTime();
       const book = trading.books[trading.mode];
       book.curve.push({ at: now.toISOString(), value: bookValue(book, prices()) });
       saveTrading();
@@ -54,27 +54,26 @@ async function tick(now = new Date()): Promise<void> {
     checkDailyLoss(now);
     if (trading.caution && Date.parse(trading.caution.until) <= now.getTime()) endCaution('system', now);
     if (!clock.open && openOrders(trading.mode).length) cancelAllOpen('أقفل السوق', now);
-    if (clock.open && !trading.halted && now.getTime() - lastRound >= trading.limits.cycleMinutes * 60_000) {
-      lastRound = now.getTime();
+    if (clock.open && !trading.halted && now.getTime() - t.lastRound >= trading.limits.cycleMinutes * 60_000) {
+      t.lastRound = now.getTime();
       await round(now);
     }
   } catch (error) {
     console.error('StockSmart tick failed:', (error as Error).message);
   } finally {
-    busy = false;
+    t.busy = false;
   }
 }
 
-let rounding = false;
-
 /** One round of the agents; a round asked for while one is running is skipped (the route and the timer share it). */
 export async function round(now = new Date()): Promise<void> {
-  if (rounding) return;
-  rounding = true;
+  const t = timing();
+  if (t.rounding) return;
+  t.rounding = true;
   try {
     await runRound(now);
   } finally {
-    rounding = false;
+    t.rounding = false;
   }
 }
 
@@ -119,7 +118,7 @@ async function runRound(now: Date): Promise<void> {
 
 /** The general market indicator right now: TASI, the followed stocks' breadth, and the news agent's market risk. */
 function livePulse(now = new Date()): MarketPulse {
-  return marketPulse({ index: currentIndex(), quotes: [...currentQuotes().values()], market: marketContext(), caution: Boolean(cautionNow(now)) });
+  return marketPulse({ index: currentIndex(), quotes: [...currentQuotes().values()], market: marketContext(), caution: Boolean(cautionNow(now)), indexName: deskConfig().indexAr });
 }
 
 /** How long caution mode lasts after the last serious development. */
@@ -225,23 +224,29 @@ export function checkDailyLoss(now = new Date()): void {
   const pnl = dayPnl(trading.books[trading.mode], prices());
   const most = (trading.limits.capital * trading.limits.dailyLossPct) / 100;
   if (pnl <= -most) {
-    halt(`بلغت خسارة اليوم ${Math.abs(pnl).toFixed(2)} ر.س (الحد ${trading.limits.dailyLossPct}٪)`, 'risk', now);
+    halt(`بلغت خسارة اليوم ${deskConfig().money(Math.abs(pnl))} (الحد ${trading.limits.dailyLossPct}٪)`, 'risk', now);
     cancelAllOpen('توقّف التداول عند حد الخسارة اليومي', now);
   }
 }
 
-let timer: NodeJS.Timeout | undefined;
+let started = false;
 /** The events worth a notification on the phone. */
 const TOLD = new Set(['order.filled', 'order.failed', 'system.halted', 'position.drift', 'order.unknown', 'system.caution']);
 
+/** Starts every desk: each ticks every minute in its own context, so its timers and rounds work on its own data. */
 export function startTrading(): void {
-  if (timer) return;
-  onTradeEvent((e) => {
-    if (TOLD.has(e.type)) void alertTrade(`trade:${e.id}`, e.text).catch(() => {});
-  });
-  timer = setInterval(() => void tick(), 60_000);
-  timer.unref();
-  setTimeout(() => void tick(), 5_000).unref();
+  if (started) return;
+  started = true;
+  for (const id of DESKS) {
+    inDesk(id, () => {
+      const label = id === 'us' ? 'أسهمي · أمريكا: ' : '';
+      onTradeEvent((e) => {
+        if (TOLD.has(e.type)) void alertTrade(`trade:${id}:${e.id}`, `${label}${e.text}`).catch(() => {});
+      });
+      setInterval(() => void tick(), 60_000).unref();
+      setTimeout(() => void tick(), id === 'us' ? 8_000 : 5_000).unref();
+    });
+  }
 }
 
 /** Everything the StockSmart screen shows, from the book of the current mode. */
@@ -282,5 +287,10 @@ export function tradingView(now = new Date()): TradingState {
     cautionAuto: trading.cautionAuto,
     pulse: livePulse(now),
     holders: holdersView(now),
+    market: deskConfig().id,
+    currency: deskConfig().currency,
+    halalList: deskConfig().halalList,
+    liveAllowed: deskConfig().liveAllowed,
+    indexName: { ar: deskConfig().indexAr, en: deskConfig().indexEn },
   };
 }

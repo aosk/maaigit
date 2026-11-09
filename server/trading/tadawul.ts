@@ -1,4 +1,6 @@
 import type { Instrument, MarketClock } from '../../shared/trading.js';
+import { deskId } from './desk.js';
+import { nyseClock, nyseDay, US_UNIVERSE } from './nyse.js';
 
 /**
  * The Tadawul Main Market rules StockSmart works by, in one dated place. Written 2026-11-04 from general knowledge:
@@ -31,13 +33,15 @@ function tickFor(price: number): number {
 
 /** A price on the tick grid: down for a buy limit, up for a sell, so rounding never makes an order worse for us. */
 export function onTick(price: number, side: 'buy' | 'sell'): number {
-  const tick = tickFor(price);
+  // US stocks and ETFs above $1 trade in cents.
+  const tick = deskId() === 'us' ? 0.01 : tickFor(price);
   const steps = side === 'buy' ? Math.floor(price / tick + 1e-9) : Math.ceil(price / tick - 1e-9);
   return Math.round(steps * tick * 100) / 100;
 }
 
 /** The day's allowed range around the previous close. */
-export const band = (prevClose: number) => ({ low: prevClose * (1 - PRICE_BAND), high: prevClose * (1 + PRICE_BAND) });
+// The US has no daily price limit (its pauses are per stock and short): a wide range keeps limit orders sane.
+export const band = (prevClose: number) => (deskId() === 'us' ? { low: prevClose * 0.5, high: prevClose * 1.5 } : { low: prevClose * (1 - PRICE_BAND), high: prevClose * (1 + PRICE_BAND) });
 
 /** Riyadh's calendar day and minute of the day. */
 export function riyadh(now: Date): { date: string; weekday: number; minute: number } {
@@ -46,10 +50,11 @@ export function riyadh(now: Date): { date: string; weekday: number; minute: numb
 }
 
 /** Today's trading day in Riyadh, the key for daily counts. */
-export const tradingDay = (now: Date) => riyadh(now).date;
+export const tradingDay = (now: Date) => (deskId() === 'us' ? nyseDay(now) : riyadh(now).date);
 
 /** Whether the market is open, and how long until that changes. */
 export function marketClock(now: Date): MarketClock {
+  if (deskId() === 'us') return nyseClock(now);
   const { date, weekday, minute } = riyadh(now);
   const tradingDayToday = TRADING_DAYS.has(weekday) && !holidays().has(date);
   if (tradingDayToday && minute >= OPEN_MIN && minute < CLOSE_MIN) return { open: true, minutesToChange: CLOSE_MIN - minute, label: 'open' };
@@ -64,7 +69,7 @@ export function marketClock(now: Date): MarketClock {
 }
 
 /** The stocks the agents may trade: large, liquid Main Market names. Codes and sectors to verify. */
-export const UNIVERSE: Instrument[] = [
+const SA_UNIVERSE: Instrument[] = [
   { symbol: '2222', nameAr: 'أرامكو السعودية', nameEn: 'Saudi Aramco', sector: 'energy' },
   { symbol: '1120', nameAr: 'مصرف الراجحي', nameEn: 'Al Rajhi Bank', sector: 'banks' },
   { symbol: '1180', nameAr: 'البنك الأهلي السعودي', nameEn: 'Saudi National Bank', sector: 'banks' },
@@ -85,7 +90,26 @@ export const UNIVERSE: Instrument[] = [
   { symbol: '1212', nameAr: 'أسترا الصناعية', nameEn: 'Astra Industrial', sector: 'industrials' },
 ];
 
-export const instrument = (symbol: string) => UNIVERSE.find((i) => i.symbol === symbol);
+/** The followed list of the desk in use (Tadawul, or the US list). Reads like an array wherever it is used. */
+const current = () => (deskId() === 'us' ? US_UNIVERSE : SA_UNIVERSE);
+export const UNIVERSE: Instrument[] = new Proxy([] as Instrument[], {
+  get: (_t, key) => {
+    const list = current();
+    const value = Reflect.get(list, key, list) as unknown;
+    return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(list) : value;
+  },
+  has: (_t, key) => Reflect.has(current(), key),
+  ownKeys: () => Reflect.ownKeys(current()),
+  getOwnPropertyDescriptor: (_t, key) => {
+    const d = Reflect.getOwnPropertyDescriptor(current(), key);
+    return d ? { ...d, configurable: true } : undefined;
+  },
+});
+
+export const instrument = (symbol: string) => current().find((i) => i.symbol === symbol);
 
 /** Broker commission and VAT on each trade, as a share of its value (approximate: verify with SNB Capital's price list). */
-export const FEE_RATE = 0.0016;
+const SA_FEE_RATE = 0.0016;
+/** US brokers charge little or nothing per trade: a small allowance for spreads and fees. */
+const US_FEE_RATE = 0.0005;
+export const feeRate = () => (deskId() === 'us' ? US_FEE_RATE : SA_FEE_RATE);

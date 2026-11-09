@@ -4,6 +4,7 @@ import type { AgentId, Caution, Decider, Holder, HolderChange, Position, TradeEv
 import { config } from '../config.js';
 import { writePrivate } from '../secure-fs.js';
 import { tradingDay } from './tadawul.js';
+import { deskId, perDesk, type DeskId } from './desk.js';
 
 /**
  * StockSmart's own data, in its own file beside MAAI's: the mode and limits, the paper and live books, the orders and
@@ -50,27 +51,32 @@ export interface TradingData {
 }
 
 export const DEFAULT_LIMITS: TradeLimits = { capital: 100_000, maxOrder: 10_000, maxPerSymbolPct: 20, maxPerSectorPct: 35, maxOrdersPerDay: 8, dailyLossPct: 2, cycleMinutes: 15 };
+/** The US desk starts small, in dollars: $1,000 of paper money, at most $300 an order (whole shares). */
+const US_LIMITS: TradeLimits = { capital: 1_000, maxOrder: 300, maxPerSymbolPct: 30, maxPerSectorPct: 60, maxOrdersPerDay: 6, dailyLossPct: 2, cycleMinutes: 15 };
+const limitsFor = (id: DeskId) => (id === 'us' ? US_LIMITS : DEFAULT_LIMITS);
 
 const KEEP_EVENTS = 2_000;
 const KEEP_ORDERS = 300;
 const CURVE_POINTS = 400;
 
-const FILE = process.env.MAAI_TRADING_FILE ?? path.join(config.dataDir, 'trading.json');
+/** Each desk in its own file: Tadawul's where it always was, the US desk beside it. */
+const fileOf = (id: DeskId) => (id === 'us' ? process.env.MAAI_TRADING_US_FILE ?? path.join(path.dirname(process.env.MAAI_TRADING_FILE ?? path.join(config.dataDir, 'trading.json')), 'trading-us.json') : process.env.MAAI_TRADING_FILE ?? path.join(config.dataDir, 'trading.json'));
 
 export function newBook(cash: number, now = new Date()): Book {
   return { cash, positions: [], realized: 0, dayStart: { day: tradingDay(now), value: cash, realized: 0 }, curve: [] };
 }
 
-function fresh(): TradingData {
+function fresh(id: DeskId = deskId()): TradingData {
+  const limits = limitsFor(id);
   return {
     mode: 'paper',
     decider: 'claude',
     cautionAuto: true,
     halted: false,
-    limits: { ...DEFAULT_LIMITS },
+    limits: { ...limits },
     excluded: [],
     directives: [],
-    books: { paper: newBook(DEFAULT_LIMITS.capital), live: newBook(0) },
+    books: { paper: newBook(limits.capital), live: newBook(0) },
     orders: [],
     events: [],
     nextEventId: 1,
@@ -80,58 +86,87 @@ function fresh(): TradingData {
   };
 }
 
-function read(): TradingData {
+function read(id: DeskId): TradingData {
+  const FILE = fileOf(id);
   let text: string;
   try {
     text = fs.readFileSync(FILE, 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return fresh();
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return fresh(id);
     // A file that exists but cannot be opened must not be replaced with an empty one.
     throw new Error(`StockSmart's data at ${FILE} could not be opened (${(error as Error).message}).`, { cause: error });
   }
   try {
     const saved = JSON.parse(text) as Partial<TradingData>;
-    const base = fresh();
+    const base = fresh(id);
     return { ...base, ...saved, limits: { ...base.limits, ...saved.limits }, books: { ...base.books, ...saved.books }, agents: saved.agents ?? {}, bot: saved.bot ?? {} };
   } catch {
     // Kept aside, never overwritten: the record of real trades matters more than starting cleanly.
     writePrivate(`${FILE}.damaged-${Date.now()}`, text);
     console.error('StockSmart data could not be read; a copy was kept and trading starts halted.');
-    return { ...fresh(), halted: true, haltReason: 'The saved trading data could not be read.' };
+    return { ...fresh(id), halted: true, haltReason: 'The saved trading data could not be read.' };
   }
 }
 
-export const trading: TradingData = read();
+/** Each desk's data, read from its file on first use. */
+const dataOf = perDesk((id) => read(id));
 
-let timer: NodeJS.Timeout | undefined;
+/**
+ * The desk in use's data (see desk.ts): Tadawul's outside any desk, the US desk's inside `inDesk('us', …)`. Read and
+ * written like a plain object.
+ */
+export const trading: TradingData = new Proxy({} as TradingData, {
+  get: (_t, key) => Reflect.get(dataOf(), key) as unknown,
+  set: (_t, key, value) => Reflect.set(dataOf(), key, value),
+  has: (_t, key) => Reflect.has(dataOf(), key),
+  deleteProperty: (_t, key) => Reflect.deleteProperty(dataOf(), key),
+  ownKeys: () => Reflect.ownKeys(dataOf()),
+  getOwnPropertyDescriptor: (_t, key) => {
+    const d = Reflect.getOwnPropertyDescriptor(dataOf(), key);
+    return d ? { ...d, configurable: true } : undefined;
+  },
+});
+
+const timers = new Map<DeskId, NodeJS.Timeout>();
 export function saveTrading(): void {
-  if (timer) return;
-  timer = setTimeout(flushTrading, 300);
+  const id = deskId();
+  if (timers.has(id)) return;
+  const timer = setTimeout(() => flushDesk(id), 300);
   timer.unref?.();
+  timers.set(id, timer);
 }
 
+/** Writes the desk in use now (and is what a test calls). */
 export function flushTrading(): void {
-  if (timer) clearTimeout(timer);
-  timer = undefined;
-  if (trading.events.length > KEEP_EVENTS) trading.events = trading.events.slice(-KEEP_EVENTS);
+  flushDesk(deskId());
+}
+
+function flushDesk(id: DeskId): void {
+  const pending = timers.get(id);
+  if (pending) clearTimeout(pending);
+  timers.delete(id);
+  const data = dataOf.of(id);
+  if (data.events.length > KEEP_EVENTS) data.events = data.events.slice(-KEEP_EVENTS);
   // Orders still in play, an unknown one above all, are never trimmed.
-  const open = trading.orders.filter((o) => o.status === 'queued' || o.status === 'sent' || o.status === 'partial' || o.status === 'unknown');
-  if (trading.orders.length > KEEP_ORDERS) trading.orders = [...trading.orders.filter((o) => !open.includes(o)).slice(-KEEP_ORDERS), ...open];
-  for (const book of Object.values(trading.books)) if (book.curve.length > CURVE_POINTS) book.curve = book.curve.filter((_, i, all) => i % 2 === 0 || i === all.length - 1);
+  const open = data.orders.filter((o) => o.status === 'queued' || o.status === 'sent' || o.status === 'partial' || o.status === 'unknown');
+  if (data.orders.length > KEEP_ORDERS) data.orders = [...data.orders.filter((o) => !open.includes(o)).slice(-KEEP_ORDERS), ...open];
+  for (const book of Object.values(data.books)) if (book.curve.length > CURVE_POINTS) book.curve = book.curve.filter((_, i, all) => i % 2 === 0 || i === all.length - 1);
   try {
-    writePrivate(FILE, JSON.stringify(trading));
+    writePrivate(fileOf(id), JSON.stringify(data));
   } catch (error) {
     console.error(`StockSmart could not save (${(error as Error).message}); trying again in 30 seconds.`);
-    timer = setTimeout(flushTrading, 30_000);
-    timer.unref?.();
+    const retry = setTimeout(() => flushDesk(id), 30_000);
+    retry.unref?.();
+    timers.set(id, retry);
   }
 }
 
 type Listener = (event: TradeEvent) => void;
-const listeners = new Set<Listener>();
+const listenersOf = perDesk(() => new Set<Listener>());
 
 /** Live screens follow the log; returns the unsubscribe. */
 export function onTradeEvent(listener: Listener): () => void {
+  const listeners = listenersOf();
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
@@ -141,7 +176,7 @@ export function emit(type: TradeEventType, actor: AgentId, text: string, extra: 
   const event: TradeEvent = { id: trading.nextEventId++, ts: now.toISOString(), type, actor, text: text.slice(0, 600), ...extra };
   trading.events.push(event);
   saveTrading();
-  for (const listener of listeners) {
+  for (const listener of listenersOf()) {
     try {
       listener(event);
     } catch {
@@ -160,5 +195,5 @@ export function resetTrading(): void {
   delete trading.caution;
   delete trading.holders;
   Object.assign(trading, fresh());
-  listeners.clear();
+  listenersOf().clear();
 }

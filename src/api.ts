@@ -83,6 +83,15 @@ async function request(method: string, url: string, body?: unknown, background =
 const restartingMessage = () =>
   document.documentElement.lang === 'ar' ? '«معي» يُعاد تشغيله بعد تحديث. جرّب بعد دقيقة.' : 'MAAI is restarting after an update. Try again in a minute.';
 
+/** Which «أسهمي» desk the trading calls work on: Tadawul, or the US (chosen on the screen). */
+export type TradingMarket = 'sa' | 'us';
+let tradingMarket: TradingMarket = 'sa';
+export const setTradingMarket = (m: TradingMarket) => {
+  tradingMarket = m;
+};
+/** A trading address for a desk: the US desk's carry ?market=us. */
+export const onMarket = (path: string, market: TradingMarket = tradingMarket) => (market === 'us' ? `${path}${path.includes('?') ? '&' : '?'}market=us` : path);
+
 async function call<T>(method: string, url: string, body?: unknown, background = false): Promise<T> {
   const res = await request(method, url, body, background);
   return (res.status === 204 ? undefined : await res.json()) as T;
@@ -188,23 +197,23 @@ export const api = {
   },
   contacts: () => call<ContactCount>('GET', '/contacts'),
   // StockSmart
-  trading: (background = false) => call<TradingState>('GET', '/trading', undefined, background),
-  tradingHalt: (reason?: string) => call<TradingState>('POST', '/trading/halt', { reason }),
-  tradingResume: () => call<TradingState>('POST', '/trading/resume', {}),
-  tradingCautionEnd: () => call<TradingState>('POST', '/trading/caution/end', {}),
-  tradingCautionAuto: (on: boolean) => call<TradingState>('PUT', '/trading/caution-auto', { on }),
-  tradingDecider: (decider: Decider) => call<TradingState>('PUT', '/trading/decider', { decider }),
-  tradingResolve: (orderId: string, executed: boolean) => call<TradingState>('POST', `/trading/orders/${encodeURIComponent(orderId)}/resolve`, { executed }),
-  tradingMode: (mode: TradeMode, confirm?: string) => call<TradingState>('POST', '/trading/mode', { mode, confirm }),
-  tradingLimits: (limits: Partial<TradeLimits>) => call<TradingState>('PUT', '/trading/limits', limits),
-  tradingDirective: (text: string) => call<TradingState>('POST', '/trading/directives', { text }),
-  tradingRemoveDirective: (id: string) => call<TradingState>('DELETE', `/trading/directives/${id}`),
-  tradingExcluded: (excluded: string[]) => call<TradingState>('PUT', '/trading/excluded', { excluded }),
-  tradingAgent: (id: AgentId, enabled: boolean) => call<TradingState>('POST', `/trading/agents/${id}`, { enabled }),
-  tradingAsk: (question: string, lang: Lang) => call<{ answer: string }>('POST', '/trading/ask', { question, lang }),
-  tradingRound: () => call<TradingState>('POST', '/trading/round', {}),
-  tradingBotKey: () => call<{ key: string; signSecret: string }>('POST', '/trading/bot/key', {}),
-  tradingRevokeBot: () => call<TradingState>('DELETE', '/trading/bot/key'),
+  trading: (background = false, market?: TradingMarket) => call<TradingState>('GET', onMarket('/trading', market), undefined, background),
+  tradingHalt: (reason?: string) => call<TradingState>('POST', onMarket('/trading/halt'), { reason }),
+  tradingResume: () => call<TradingState>('POST', onMarket('/trading/resume'), {}),
+  tradingCautionEnd: () => call<TradingState>('POST', onMarket('/trading/caution/end'), {}),
+  tradingCautionAuto: (on: boolean) => call<TradingState>('PUT', onMarket('/trading/caution-auto'), { on }),
+  tradingDecider: (decider: Decider) => call<TradingState>('PUT', onMarket('/trading/decider'), { decider }),
+  tradingResolve: (orderId: string, executed: boolean) => call<TradingState>('POST', onMarket(`/trading/orders/${encodeURIComponent(orderId)}/resolve`), { executed }),
+  tradingMode: (mode: TradeMode, confirm?: string) => call<TradingState>('POST', onMarket('/trading/mode'), { mode, confirm }),
+  tradingLimits: (limits: Partial<TradeLimits>) => call<TradingState>('PUT', onMarket('/trading/limits'), limits),
+  tradingDirective: (text: string) => call<TradingState>('POST', onMarket('/trading/directives'), { text }),
+  tradingRemoveDirective: (id: string) => call<TradingState>('DELETE', onMarket(`/trading/directives/${id}`)),
+  tradingExcluded: (excluded: string[]) => call<TradingState>('PUT', onMarket('/trading/excluded'), { excluded }),
+  tradingAgent: (id: AgentId, enabled: boolean) => call<TradingState>('POST', onMarket(`/trading/agents/${id}`), { enabled }),
+  tradingAsk: (question: string, lang: Lang) => call<{ answer: string }>('POST', onMarket('/trading/ask'), { question, lang }),
+  tradingRound: () => call<TradingState>('POST', onMarket('/trading/round'), {}),
+  tradingBotKey: () => call<{ key: string; signSecret: string }>('POST', onMarket('/trading/bot/key'), {}),
+  tradingRevokeBot: () => call<TradingState>('DELETE', onMarket('/trading/bot/key')),
   /** The cards were read from the file in the browser; only names, numbers, emails and companies are sent. */
   importContacts: async (cards: AddressCard[]): Promise<ContactCount> => {
     const res = await fetch('/api/contacts/import', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(cards) });

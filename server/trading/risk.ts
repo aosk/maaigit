@@ -1,3 +1,4 @@
+import { deskConfig } from './desk.js';
 import type { Instrument, MarketClock, Quote, Side, TradeLimits, TradeOrder } from '../../shared/trading.js';
 import type { Book } from './store.js';
 import { band, onTick } from './tadawul.js';
@@ -99,10 +100,10 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
     const sectorReserved = ctx.openOrders.filter((o) => o.side === 'buy' && sectorOf(o.symbol) === stock.sector).reduce((sum, o) => sum + (o.qty - o.filledQty) * o.limitPrice, 0);
     const sectorNow = ctx.book.positions.filter((x) => sectorOf(x.symbol) === stock.sector).reduce((sum, x) => sum + (bySymbol.get(x.symbol) ?? 0), 0) + sectorReserved;
     const price = limitPrice * 1.002; // with fees
-    cut(ctx.limits.maxOrder / price, `Reduced to the ${ctx.limits.maxOrder} SAR limit per order.`);
+    cut(ctx.limits.maxOrder / price, `Reduced to the ${ctx.limits.maxOrder} ${deskConfig().currency} limit per order.`);
     if (ctx.caution) cut(ctx.limits.maxOrder / 2 / price, 'Caution mode: half the per-order limit.');
     cut((ctx.book.cash - reserved) / price, 'Reduced to the cash available.');
-    cut((ctx.limits.capital - total - reserved) / price, `Reduced to keep within the ${ctx.limits.capital} SAR you allowed.`);
+    cut((ctx.limits.capital - total - reserved) / price, `Reduced to keep within the ${ctx.limits.capital} ${deskConfig().currency} you allowed.`);
     cut((ctx.limits.capital * ctx.limits.maxPerSymbolPct / 100 - (bySymbol.get(p.symbol) ?? 0)) / price, `Reduced to keep ${p.symbol} within ${ctx.limits.maxPerSymbolPct}% of the capital.`);
     cut((ctx.limits.capital * ctx.limits.maxPerSectorPct / 100 - sectorNow) / price, `Reduced to keep the ${stock.sector} sector within ${ctx.limits.maxPerSectorPct}% of the capital.`);
   }

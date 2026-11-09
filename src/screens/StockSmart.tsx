@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { TradeEvent, TradeLimits, TradingState } from '../../shared/trading';
-import { api } from '../api';
+import { api, onMarket, setTradingMarket, type TradingMarket } from '../api';
 import { ago, time } from '../format';
 import { useOnRefresh } from '../refresh';
 import { useSettings } from '../settings';
@@ -41,6 +41,14 @@ function Spark({ points, width = 320, height = 56 }: { points: number[]; width?:
 export function StockSmart() {
   const { t, settings, layout } = useSettings();
   const lang = settings.lang;
+  const [market, setMarket] = useState<TradingMarket>(() => {
+    try {
+      return localStorage.getItem('maai.stocksMarket') === 'us' ? 'us' : 'sa';
+    } catch {
+      return 'sa';
+    }
+  });
+  setTradingMarket(market);
   const [st, setSt] = useState<TradingState | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,13 +56,13 @@ export function StockSmart() {
 
   const load = useCallback((background = false) => {
     api
-      .trading(background)
+      .trading(background, market)
       .then((s) => {
         setSt(s);
         setError('');
       })
       .catch((e: Error) => setError(e.message));
-  }, []);
+  }, [market]);
 
   useEffect(() => {
     load();
@@ -62,10 +70,10 @@ export function StockSmart() {
     // The log as it happens; the numbers follow a moment after each event.
     let source: EventSource | undefined;
     if (typeof EventSource !== 'undefined') {
-      source = new EventSource('/api/trading/stream');
+      source = new EventSource(onMarket('/api/trading/stream', market));
       source.addEventListener('trade', (msg) => {
         const event = JSON.parse((msg as MessageEvent<string>).data) as TradeEvent;
-        setSt((prev) => (prev && !prev.events.some((e) => e.id === event.id) ? { ...prev, events: [...prev.events, event].slice(-150) } : prev));
+        setSt((prev) => (prev && prev.market === market && !prev.events.some((e) => e.id === event.id) ? { ...prev, events: [...prev.events, event].slice(-150) } : prev));
         clearTimeout(refetch.current);
         refetch.current = setTimeout(() => load(true), 800);
       });
@@ -75,7 +83,29 @@ export function StockSmart() {
       clearTimeout(refetch.current);
       source?.close();
     };
-  }, [load]);
+  }, [load, market]);
+
+  /** Switches between the Tadawul and US desks (remembered on this device). */
+  function pickMarket(next: TradingMarket) {
+    if (next === market) return;
+    try {
+      localStorage.setItem('maai.stocksMarket', next);
+    } catch {
+      // private mode: the choice lasts this visit only
+    }
+    setSt(null);
+    setMarket(next);
+  }
+
+  const switcher = (
+    <div className="seg ss-market" role="radiogroup" aria-label={t.ss.marketPick}>
+      {(['sa', 'us'] as const).map((m) => (
+        <button key={m} type="button" role="radio" aria-checked={market === m} onClick={() => pickMarket(m)}>
+          {m === 'sa' ? t.ss.marketSa : t.ss.marketUs}
+        </button>
+      ))}
+    </div>
+  );
   useOnRefresh(() => load());
 
   async function act(run: () => Promise<TradingState>): Promise<boolean> {
@@ -96,6 +126,7 @@ export function StockSmart() {
     return (
       <div className="screen">
         <h1 className="title">{t.stocks}</h1>
+        {switcher}
         {error ? <div className="error" role="alert">{error}</div> : <div className="skeleton" aria-label={t.loading}><span /><span /><span /></div>}
       </div>
     );
@@ -106,7 +137,7 @@ export function StockSmart() {
     <div className={`screen ss${live ? ' ss-live' : ''}`}>
       <header className="ss-head">
         <div>
-          <div className="eyebrow">{t.ss.subtitle} · <Clock st={st} t={t} /></div>
+          <div className="eyebrow">{st.market === 'us' ? t.ss.subtitleUs : t.ss.subtitle} · <Clock st={st} t={t} /></div>
           <h1 className="title">{t.stocks}</h1>
         </div>
         <div className="row" style={{ gap: 8 }}>
@@ -119,6 +150,13 @@ export function StockSmart() {
         </div>
       </header>
 
+      {switcher}
+      {st.market === 'us' && (
+        <div className="ss-us-note row wrap" role="note">
+          <span className="ss-halal">{t.ss.halalBadge}</span>
+          <span className="sub">{t.ss.usNote}</span>
+        </div>
+      )}
       {st.halted && <div className="error" role="alert">{t.ss.halted(st.haltReason ?? '')}</div>}
       <UnknownOrders st={st} t={t} busy={busy} act={act} />
       {st.caution && (
@@ -134,10 +172,10 @@ export function StockSmart() {
       <div className="ss-grid">
         <div className="ss-col">
           <Hero st={st} t={t} />
-          {st.pulse && <MarketPulse pulse={st.pulse} />}
+          {st.pulse && <MarketPulse pulse={st.pulse} indexName={st.indexName ? (lang === 'ar' ? st.indexName.ar : st.indexName.en) : undefined} />}
           {layout === 'phone' && <PixelOffice st={st} status={executorLabel(st, t)} />}
           <Positions st={st} t={t} />
-          {st.holders && <Holders view={st.holders} universe={st.universe} />}
+          {st.market === 'sa' && st.holders && <Holders view={st.holders} universe={st.universe} />}
           <Orders st={st} t={t} lang={lang} />
           <SettingsPanel st={st} t={t} busy={busy} act={act} />
         </div>
@@ -166,7 +204,7 @@ function Hero({ st, t }: { st: TradingState; t: T }) {
         <span className="ss-muted">{t.ss.totalPnl} <bdi dir="ltr">{signed(st.totalPnl)}</bdi></span>
       </div>
       <div className={`ss-pnl ${tone(st.dayPnl)}`} dir="ltr">
-        {signed(st.dayPnl)} <small>SAR ({st.dayPnlPct > 0 ? '+' : ''}{st.dayPnlPct.toFixed(2)}%)</small>
+        {signed(st.dayPnl)} <small>{st.currency} ({st.dayPnlPct > 0 ? '+' : ''}{st.dayPnlPct.toFixed(2)}%)</small>
       </div>
       <Spark points={st.curve.map((c) => c.value)} />
       <div className="ss-kv">
@@ -333,7 +371,7 @@ function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boo
         <form className="ss-limits" onSubmit={saveLimits}>
           {LIMIT_KEYS.map((k) => (
             <div key={k} className="field">
-              <label htmlFor={`lim-${k}`}>{t.ss.limits[k]}</label>
+              <label htmlFor={`lim-${k}`}>{st.currency === 'USD' ? t.ss.limits[k].replace('ر.س', '$').replace('SAR', 'USD') : t.ss.limits[k]}</label>
               <input id={`lim-${k}`} inputMode="decimal" dir="ltr" value={limits[k]} onChange={(e) => setLimits({ ...limits, [k]: e.target.value })} />
             </div>
           ))}
@@ -397,6 +435,12 @@ function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boo
           </ul>
         </div>
 
+        {!st.liveAllowed ? (
+          <div>
+            <div className="section-label">{t.ss.mode}: {t.ss.paperLong}</div>
+            <p className="sub">{t.ss.usPaperOnly}</p>
+          </div>
+        ) : (<>
         <div>
           <div className="section-label">{t.ss.mode}: {st.mode === 'live' ? t.ss.liveLong : t.ss.paperLong}</div>
           {st.mode === 'live' ? (
@@ -426,6 +470,7 @@ function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boo
             {st.executor.connected && <button className="btn danger" disabled={busy} onClick={() => window.confirm(t.ss.disconnectConfirm) && act(api.tradingRevokeBot).then(() => setKeys(null))}>{t.ss.disconnectBot}</button>}
           </div>
         </div>
+        </>)}
       </div>
     </details>
   );

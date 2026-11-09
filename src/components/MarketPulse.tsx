@@ -42,7 +42,7 @@ function Dial({ score, mood }: { score: number; mood: Pulse['mood'] }) {
 }
 
 /** The general market indicator: the dial and its word, TASI, how the followed stocks move together, and the news risk. */
-export function MarketPulse({ pulse }: { pulse: Pulse }) {
+export function MarketPulse({ pulse, indexName }: { pulse: Pulse; indexName?: string }) {
   const { t } = useSettings();
   const s = t.ss;
   const { up, down, flat } = pulse.breadth;
@@ -61,7 +61,7 @@ export function MarketPulse({ pulse }: { pulse: Pulse }) {
           {i ? (
             <>
               <span className="mp-index">
-                {s.pulseIndex} <bdi dir="ltr">{i.value.toLocaleString('en-US', { maximumFractionDigits: 2 })}</bdi>{' '}
+                {indexName ?? s.pulseIndex} <bdi dir="ltr">{i.value.toLocaleString('en-US', { maximumFractionDigits: 2 })}</bdi>{' '}
                 <bdi dir="ltr" className={i.changePct > 0 ? 'up' : i.changePct < 0 ? 'down' : ''}>{signedPct(i.changePct)}</bdi> <span className="sub">{s.pulseToday}</span>
               </span>
               {i.vsAvg20Pct !== undefined && <span className="sub">{i.vsAvg20Pct >= 0 ? s.pulseAboveAvg(Math.abs(i.vsAvg20Pct).toFixed(1)) : s.pulseBelowAvg(Math.abs(i.vsAvg20Pct).toFixed(1))}</span>}

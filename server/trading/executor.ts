@@ -3,6 +3,7 @@ import type { Position, Quote, Side, TradeMode, TradeOrder } from '../../shared/
 import { applyFill, round2 } from './portfolio.js';
 import { latestObserved, observedBetween } from './market.js';
 import { emit, saveTrading, trading } from './store.js';
+import { deskConfig } from './desk.js';
 import { instrument, tradingDay } from './tadawul.js';
 
 /**
@@ -93,7 +94,7 @@ function fill(order: TradeOrder, qty: number, price: number, now: Date, profit: 
   order.avgFillPrice = price;
   order.status = qty >= order.qty ? 'filled' : 'partial';
   order.stage = undefined;
-  const taken = order.side === 'sell' ? ` · ${profit >= 0 ? 'ربح' : 'خسارة'} ${Math.abs(profit).toFixed(2)} ر.س` : '';
+  const taken = order.side === 'sell' ? ` · ${profit >= 0 ? 'ربح' : 'خسارة'} ${deskConfig().money(Math.abs(profit))}` : '';
   const when = evidence ? ` · سعر البورصة ${evidence.price} الساعة ${evidence.asOf.slice(11, 16)} (توقيت عالمي)` : '';
   emit('order.filled', 'executor', `تم التنفيذ: ${sideAr(order.side)} ${qty} × ${label(order.symbol)} بسعر ${price}${taken}${when}`, { correlationId: order.decisionId, data: { orderId: order.id, qty, price, profit, ...(evidence ? { quoteAsOf: evidence.asOf, quoteReceivedAt: evidence.receivedAt, quotePrice: evidence.price } : {}) } }, now);
 }
@@ -406,7 +407,8 @@ export function resume(now = new Date()): boolean {
 }
 
 export function setMode(mode: TradeMode, by: 'user' | 'system', text: string, now = new Date()): void {
-  if (trading.mode === mode) return;
+  // A desk with no broker connected (the US desk, for now) never trades real money.
+  if (trading.mode === mode || (mode === 'live' && !deskConfig().liveAllowed)) return;
   // Orders of the other mode never carry over.
   for (const order of trading.orders.filter((o) => OPEN.includes(o.status) && o.mode !== mode && !o.ackedAt)) cancel(order, 'تغيّر وضع التداول', now);
   trading.mode = mode;
