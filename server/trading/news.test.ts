@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 
 describe('the news agent and the Saudi Exchange announcements', () => {
-  it('reads the official announcements page first, only from the exchange and Argaam, and marks official items', async () => {
+  it('looks for official announcements first, on Argaam and the exchange only, and marks official items', async () => {
     create.mockResolvedValue(reply([page('https://www.saudiexchange.sa/wps/portal/saudiexchange/newsandreports/issuer-news?locale=ar')], [
       { symbol: '2222', headline: 'أرامكو تعلن نتائج الربع الثالث', tone: 'positive', source: 'saudiexchange.sa', official: true },
       { symbol: '1120', headline: 'تقرير عن الراجحي', tone: 'neutral', source: 'Argaam', official: false },
@@ -34,7 +34,8 @@ describe('the news agent and the Saudi Exchange announcements', () => {
     ]));
     const items = await newsRound(OPEN);
     const req = create.mock.calls[0][0] as { system: string; tools: { name: string; allowed_domains?: string[] }[] };
-    expect(req.system).toMatch(/FIRST read the official company announcements/);
+    expect(req.system).toMatch(/FIRST find today's official company announcements/);
+    expect(req.system).toMatch(/start with Argaam/);
     // web_fetch only opens addresses in the messages, not in the system prompt.
     expect((create.mock.calls[0][0] as { messages: { content: string }[] }).messages[0].content).toContain('saudiexchange.sa/wps/portal/saudiexchange/newsandreports/issuer-news?locale=ar');
     expect(req.tools.map((t) => t.name)).toEqual(['web_fetch', 'web_search']);
@@ -42,13 +43,16 @@ describe('the news agent and the Saudi Exchange announcements', () => {
     expect(items.map((i) => [i.symbol, i.official])).toEqual([['2222', true], ['1120', false]]); // a stock not followed is dropped
     expect(trading.events.find((e) => e.text.includes('أرامكو'))?.text).toMatch(/^📢 إعلان رسمي/);
     expect(trading.events.find((e) => e.text.includes('الراجحي'))?.text).not.toMatch(/إعلان رسمي/);
-    expect(officialAnnouncements()).toMatchObject({ ok: true, detail: '1 page(s) read' });
+    expect(officialAnnouncements()).toMatchObject({ ok: true, detail: '1 page(s) read (saudiexchange.sa)' });
   });
 
-  it('says so when the exchange page could not be read (the agent then relies on searching)', async () => {
+  it('counts an announcement read on Argaam when the exchange refuses, and says so when neither opens', async () => {
     create.mockResolvedValue(reply([asked('https://www.saudiexchange.sa/x'), refused(), asked('https://www.argaam.com/ar/company/announcements', 't3'), { ...page('https://www.argaam.com/ar/company/announcements'), tool_use_id: 't3' }], []));
     await newsRound(new Date(OPEN.getTime() + 2 * 3_600_000));
-    expect(officialAnnouncements()).toMatchObject({ ok: false, detail: 'not read (url_not_accessible)' });
+    expect(officialAnnouncements()).toMatchObject({ ok: true, detail: '1 page(s) read (argaam.com)' });
+    create.mockResolvedValue(reply([asked('https://www.saudiexchange.sa/x'), refused()], []));
+    await newsRound(new Date(OPEN.getTime() + 3 * 3_600_000));
+    expect(officialAnnouncements()).toMatchObject({ ok: false, detail: 'not read (saudiexchange.sa url_not_accessible)' });
   });
 
   it('treats a missing "official" as not official', async () => {

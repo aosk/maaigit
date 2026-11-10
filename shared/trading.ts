@@ -46,7 +46,8 @@ export interface Quote {
   asOf: string;
   /** When StockSmart received it, ISO. A fill is judged by `asOf`, never by when it arrived. */
   receivedAt: string;
-  source: 'yahoo' | 'sim' | 'bot';
+  /** `exchange`: a live price from a crypto exchange's public feed. */
+  source: 'yahoo' | 'sim' | 'bot' | 'exchange';
 }
 
 export interface Position {
@@ -264,6 +265,29 @@ export interface Scorecard {
   recent: ScoredDecision[];
 }
 
+/** A company's fundamentals, as a financial source states them (see server/trading/fundamentals.ts). */
+export interface Fundamentals {
+  symbol: string;
+  /** Trailing price-to-earnings (absent for a loss, or when not found). */
+  pe?: number;
+  /** Latest reported period against a year earlier, in %. */
+  epsGrowthPct?: number;
+  revenueGrowthPct?: number;
+  dividendYieldPct?: number;
+  period: string;
+  /** One line on the business's state, in Arabic. */
+  note: string;
+  source: string;
+  readAt: string;
+}
+
+export interface FundamentalsView {
+  updatedAt?: string;
+  covered: number;
+  total: number;
+  companies: Fundamentals[];
+}
+
 /** The desk against its index since the first day noted (both start at 100). */
 export interface Benchmark {
   since: string;
@@ -386,6 +410,8 @@ export interface TradingState {
   shariah: ShariahCheck | null;
   /** Each filled trade scored against the index after its holding window. */
   scorecard: Scorecard;
+  /** Each company's valuation and growth (stock desks only). */
+  fundamentals: FundamentalsView | null;
   /** The desk's return against its index since it started. */
   benchmark: Benchmark | null;
   /** The latest replay of the plain rule over history. */

@@ -31,6 +31,10 @@ export interface RiskContext {
   caution?: { sectors: string[] };
   /** From the calendar (confirmed events only): stocks with results today or on the next trading day (no new buys), and a market-wide event today (half-size buys). */
   blackout?: { symbols: Record<string, string>; market?: string };
+  /** Each stock's usual daily move in % (see indicators.ts): the more volatile, the smaller the order. */
+  volatility?: Map<string, number>;
+  /** The daily move a full-size order is meant for (2% for stocks, 4% for coins). */
+  calmVolatility?: number;
   ordersToday: number;
   openOrders: TradeOrder[];
   now: Date;
@@ -107,6 +111,9 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
     cut(ctx.limits.maxOrder / price, `Reduced to the ${ctx.limits.maxOrder} ${deskConfig().currency} limit per order.`);
     if (ctx.caution) cut(ctx.limits.maxOrder / 2 / price, 'Caution mode: half the per-order limit.');
     if (ctx.blackout?.market) cut(ctx.limits.maxOrder / 2 / price, 'Market event today: half the per-order limit.');
+    // Sized by volatility: a stock that moves twice as much in a day gets half the order (never below half, never above the limit).
+    const vol = ctx.volatility?.get(p.symbol);
+    if (vol && ctx.calmVolatility && vol > ctx.calmVolatility) cut((ctx.limits.maxOrder * Math.max(0.5, ctx.calmVolatility / vol)) / price, `Volatile: it moves about ${vol.toFixed(1)}% a day, so the order is smaller.`);
     cut((ctx.book.cash - reserved) / price, 'Reduced to the cash available.');
     cut((ctx.limits.capital - total - reserved) / price, `Reduced to keep within the ${ctx.limits.capital} ${deskConfig().currency} you allowed.`);
     cut((ctx.limits.capital * ctx.limits.maxPerSymbolPct / 100 - (bySymbol.get(p.symbol) ?? 0)) / price, `Reduced to keep ${p.symbol} within ${ctx.limits.maxPerSymbolPct}% of the capital.`);

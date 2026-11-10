@@ -16,6 +16,8 @@ const LABELS: Record<UsagePurpose, string> = {
   'trading-shariah': 'Stocks · Shariah check',
   'trading-ask': 'Stocks · Your questions',
   'trading-lessons': 'Stocks · Decision lessons',
+  'trading-fundamentals': 'Stocks · Fundamentals',
+  'trading-challenge': 'Stocks · Second opinion on big buys',
 };
 const DESKS: Record<UsageDesk, string> = { sa: 'Saudi', us: 'US', crypto: 'Crypto' };
 

@@ -8,6 +8,7 @@ import type { Quote } from '../../shared/trading';
 import { marketClock, onTick, riyadh, UNIVERSE } from './tadawul';
 import { applyFill, bookValue, dayPnl, rollDay } from './portfolio';
 import { checkOrder, type RiskContext } from './risk';
+import { dailyVolatility, readStock } from './indicators';
 import { DEFAULT_LIMITS, emit, eventsSince, newBook, onTradeEvent, resetTrading, trading } from './store';
 
 // Sunday 2 November 2026, 11:00 in Riyadh (08:00 UTC): the market is open.
@@ -103,6 +104,23 @@ describe('the risk gate', () => {
     expect(checkOrder({ symbol: '2222', side: 'buy', qty: 1, limitPrice: 27.4 }, ctx({ quotes: old })).reasons[0]).toMatch(/fresh price/);
   });
 
+  it('makes the order smaller for a volatile stock, never below half and never for a calm one', () => {
+    const buy = { symbol: '2222', side: 'buy' as const, qty: 1000, limitPrice: 27.4 };
+    const full = checkOrder(buy, ctx()).qty;
+    const calm = checkOrder(buy, ctx({ volatility: new Map([['2222', 1.5]]), calmVolatility: 2 }));
+    expect(calm.qty).toBe(full);
+    const lively = checkOrder(buy, ctx({ volatility: new Map([['2222', 3]]), calmVolatility: 2 }));
+    expect(lively.qty * 27.4).toBeLessThanOrEqual((DEFAULT_LIMITS.maxOrder * 2) / 3);
+    expect(lively.qty * 27.4).toBeGreaterThan(DEFAULT_LIMITS.maxOrder / 2);
+    expect(lively.reasons.join(' ')).toMatch(/Volatile: it moves about 3\.0% a day/);
+    const wild = checkOrder(buy, ctx({ volatility: new Map([['2222', 9]]), calmVolatility: 2 }));
+    expect(Math.round((wild.qty * 27.4) / 100)).toBe(Math.round(DEFAULT_LIMITS.maxOrder / 2 / 100));
+    // A sale is never held back by it.
+    const book = newBook(100_000, OPEN);
+    applyFill(book, 'buy', '2222', 300, 27.4);
+    expect(checkOrder({ symbol: '2222', side: 'sell', qty: 300, limitPrice: 27.4 }, ctx({ book, volatility: new Map([['2222', 9]]), calmVolatility: 2 })).qty).toBe(300);
+  });
+
   it('only trades the allowed stocks, and leaves alone what the user excluded (a stock or a sector)', () => {
     expect(checkOrder({ symbol: '9999', side: 'buy', qty: 1, limitPrice: 10 }, ctx()).verdict).toBe('veto');
     expect(checkOrder({ symbol: '1120', side: 'buy', qty: 1, limitPrice: 88 }, ctx({ excluded: ['banks'] })).verdict).toBe('veto');
@@ -153,5 +171,27 @@ describe('the event log', () => {
     expect(heard).toEqual([a.id, b.id]);
     expect(eventsSince(a.id).map((e) => e.text)).toEqual(['two']);
     expect(trading.events).toHaveLength(2);
+  });
+});
+
+describe('the technical readings', () => {
+  const flat = Array.from({ length: 60 }, () => 20);
+  it('measures the usual daily move', () => {
+    expect(dailyVolatility(flat)).toBe(0);
+    // Up 2%, down 2%, and so on: about 2% a day.
+    const zig = Array.from({ length: 30 }, (_, i) => 20 * (i % 2 ? 1.02 : 1));
+    expect(dailyVolatility(zig)).toBeCloseTo(1.98, 1);
+    expect(dailyVolatility([20, 21])).toBeUndefined();
+  });
+
+  it('reads the short trend and the strength against the index without changing the score', () => {
+    const rising = Array.from({ length: 60 }, (_, i) => 20 + i * 0.1);
+    const plain = readStock('2222', rising, rising.map(() => 1000), 26.2, 25.9);
+    const withIndex = readStock('2222', rising, rising.map(() => 1000), 26.2, 25.9, Array.from({ length: 61 }, () => 11_000));
+    expect(withIndex.score).toBe(plain.score);
+    expect(withIndex.trendShort).toBe('up');
+    expect(plain.relStrength).toBeUndefined();
+    expect(withIndex.relStrength).toBeGreaterThan(5); // the stock rose about 8% in 20 days, the index stood still
+    expect(withIndex.volatilityPct).toBeGreaterThan(0);
   });
 });

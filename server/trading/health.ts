@@ -69,7 +69,7 @@ export function tradingChecks(now = new Date()): HealthCheck[] {
   );
   // Prices matter only while the market is open; outside it the last close is expected to age.
   if (!s.quotesAsOf) checks.push({ id: 'stocksmart-prices', name: 'maai Stocks prices', status: s.marketOpen ? 'fail' : 'ok', detail: s.marketOpen ? 'No prices could be read.' : 'Not read yet (the market is closed).', fix: s.marketOpen ? 'Yahoo Finance may be refusing the server; the Broker bot’s prices replace it once it runs.' : undefined });
-  else checks.push({ id: 'stocksmart-prices', name: 'maai Stocks prices', status: s.marketOpen && !s.quotesFresh ? 'fail' : 'ok', detail: `${s.quotesSource === 'bot' ? 'Live from Broker' : s.quotesSource === 'yahoo' ? 'Yahoo Finance, about 15 min delayed' : 'Simulated'}; newest price ${ago(s.quotesAsOf, now)}.`, fix: s.marketOpen && !s.quotesFresh ? 'The agents stop trading on old prices until they are fresh again.' : undefined });
+  else checks.push({ id: 'stocksmart-prices', name: 'maai Stocks prices', status: s.marketOpen && !s.quotesFresh ? 'fail' : 'ok', detail: `${s.quotesSource === 'bot' ? 'Live from Broker' : s.quotesSource === 'yahoo' ? 'Yahoo Finance, about 15 min delayed' : s.quotesSource === 'exchange' ? 'Live from Coinbase' : 'Simulated'}; newest price ${ago(s.quotesAsOf, now)}.`, fix: s.marketOpen && !s.quotesFresh ? 'The agents stop trading on old prices until they are fresh again.' : undefined });
   checks.push(
     !s.agentsCanDecide
       ? { id: 'stocksmart-agents', name: 'maai Stocks agents', status: 'warn', detail: 'No Claude key, so no decisions are made (the desk only watches).', fix: 'ANTHROPIC_API_KEY in Render → Environment, or choose the plain rule in maai Stocks → Limits and settings.' }

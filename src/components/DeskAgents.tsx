@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { CalendarEvent, TradingState } from '../../shared/trading';
 import { api } from '../api';
 import { useSettings } from '../settings';
@@ -98,6 +98,58 @@ export function Review({ st, busy, act }: { st: TradingState; busy: boolean; act
           )}
         </>
       )}
+    </section>
+  );
+}
+
+/** «أساسيات الشركات»: each company's valuation, growth against a year earlier and dividend yield, with one line on its state. */
+export function FundamentalsCard({ st }: { st: TradingState }) {
+  const { t, settings } = useSettings();
+  const s = t.ss;
+  const f = st.fundamentals;
+  if (!f) return null;
+  const name = (symbol: string) => {
+    const i = st.universe.find((u) => u.symbol === symbol);
+    return i && st.market === 'sa' ? (settings.lang === 'ar' ? i.nameAr : i.nameEn) : symbol;
+  };
+  const growth = (n: number | undefined) => (n === undefined ? '—' : `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(0)}%`);
+  const tone = (n: number | undefined) => (n === undefined || n === 0 ? '' : n > 0 ? 'up' : 'down');
+  return (
+    <section className="card dk" aria-label={s.fdTitle}>
+      <div>
+        <h2 className="h2" style={{ margin: 0 }}>{s.fdTitle}</h2>
+        <span className="sub">{s.fdSub(f.covered, f.total)}</span>
+      </div>
+      {f.companies.length === 0 ? (
+        <p className="sub" style={{ margin: 0 }}>{s.fdEmpty}</p>
+      ) : (
+        <div className="fd-wrap" role="region" aria-label={s.fdTitle} tabIndex={0}>
+          <table className="fd-table">
+            <thead>
+              <tr><th>{s.fdCompany}</th><th>{s.fdPe}</th><th>{s.fdEps}</th><th>{s.fdRev}</th><th>{s.fdYield}</th></tr>
+            </thead>
+            <tbody>
+              {f.companies.map((c) => (
+                <Fragment key={c.symbol}>
+                  <tr className={c.note ? 'fd-has-note' : ''}>
+                    <td><b><bdi>{name(c.symbol)}</bdi></b></td>
+                    <td dir="ltr">{c.pe === undefined ? '—' : c.pe.toFixed(1)}</td>
+                    <td dir="ltr" className={tone(c.epsGrowthPct)}>{growth(c.epsGrowthPct)}</td>
+                    <td dir="ltr" className={tone(c.revenueGrowthPct)}>{growth(c.revenueGrowthPct)}</td>
+                    <td dir="ltr">{c.dividendYieldPct === undefined ? '—' : `${c.dividendYieldPct.toFixed(1)}%`}</td>
+                  </tr>
+                  {c.note && (
+                    <tr className="fd-note-row">
+                      <td colSpan={5} dir="auto">{c.note}</td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="sub" style={{ margin: 0 }}>{s.fdNote}</p>
     </section>
   );
 }

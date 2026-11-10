@@ -1034,3 +1034,16 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .pf-index { stroke: var(--text2); stroke-dasharray: 4 4; opacity: 0.8; }
 .pf-base { stroke: var(--sep); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .pf-replay { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--sep); }
+
+/* Company fundamentals */
+.fd-wrap { overflow-x: auto; }
+.fd-table { width: 100%; border-collapse: collapse; font-size: 0.88em; font-variant-numeric: tabular-nums; }
+.fd-table th { text-align: end; font-weight: 600; color: var(--text2); font-size: 0.8em; padding: 6px 4px; border-bottom: 1px solid var(--sep); }
+.fd-table th:first-child, .fd-table td:first-child { text-align: start; }
+.fd-table td { padding: 8px 4px; border-bottom: 1px solid var(--sep); text-align: end; white-space: nowrap; }
+.fd-table td:first-child { white-space: normal; }
+.fd-table tr.fd-has-note td { border-bottom: none; padding-bottom: 2px; }
+.fd-table tr.fd-note-row td { white-space: normal; text-align: start; font-size: 0.85em; color: var(--text2); line-height: 1.4; padding-top: 0; }
+.fd-table tbody tr:last-child td { border-bottom: none; }
+.fd-table td.up { color: var(--success); }
+.fd-table td.down { color: var(--danger); }

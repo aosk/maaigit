@@ -30,6 +30,18 @@ function volumeRatio(volumes: number[], n = 20): number | undefined {
   return avg > 0 ? volumes[volumes.length - 1] / avg : undefined;
 }
 
+/** How much a stock moves in a usual day: the average size of its daily change over `n` days, in %. */
+export function dailyVolatility(closes: number[], n = 14): number | undefined {
+  if (closes.length <= n) return undefined;
+  const last = closes.slice(-n - 1);
+  let sum = 0;
+  for (let i = 1; i < last.length; i++) sum += Math.abs(last[i] / last[i - 1] - 1);
+  return (sum / n) * 100;
+}
+
+/** The change over the last `n` days, in %. */
+const changeOver = (closes: number[], n: number): number | undefined => (closes.length > n && closes[closes.length - 1 - n] > 0 ? (closes[closes.length - 1] / closes[closes.length - 1 - n] - 1) * 100 : undefined);
+
 export interface TechRead {
   symbol: string;
   price: number;
@@ -37,6 +49,12 @@ export interface TechRead {
   trend: 'up' | 'down' | 'flat';
   rsi?: number;
   volumeRatio?: number;
+  /** The short trend (5-day average against the 20-day), beside `trend` (20-day against 50-day). */
+  trendShort?: 'up' | 'down' | 'flat';
+  /** The usual size of a day's move, in % (see dailyVolatility). */
+  volatilityPct?: number;
+  /** 20-day change minus the index's: above 0 the stock is stronger than the market. */
+  relStrength?: number;
   /** Closed above the highest close of the previous 20 days, or below the lowest. */
   breakout?: 'up' | 'down';
   signal: 'buy' | 'sell' | 'hold';
@@ -45,8 +63,11 @@ export interface TechRead {
 }
 
 /** One stock's read from its daily closes and volumes, plus today's price. */
-export function readStock(symbol: string, closes: number[], volumes: number[], price: number, prevClose: number): TechRead {
+export function readStock(symbol: string, closes: number[], volumes: number[], price: number, prevClose: number, indexCloses?: number[]): TechRead {
   const all = [...closes, price];
+  const quick = sma(all, 5);
+  const own20 = changeOver(all, 20);
+  const index20 = indexCloses ? changeOver(indexCloses, 20) : undefined;
   const fast = sma(all, 20);
   const slow = sma(all, 50);
   const r = rsi(all);
@@ -71,6 +92,10 @@ export function readStock(symbol: string, closes: number[], volumes: number[], p
     trend,
     rsi: r,
     volumeRatio: vr,
+    // Readings for the decision agent and the risk gate; the score (and so the plain rule) does not use them.
+    trendShort: quick && fast ? (quick > fast * 1.003 ? 'up' : quick < fast * 0.997 ? 'down' : 'flat') : undefined,
+    volatilityPct: dailyVolatility(all),
+    relStrength: own20 !== undefined && index20 !== undefined ? own20 - index20 : undefined,
     breakout,
     signal: score >= 0.5 ? 'buy' : score <= -0.5 ? 'sell' : 'hold',
     score,

@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { decisionRound, lastDecisionRecord, marketContext, newsFetchedAt, newsRound, technicalRound, type Decision, type MarketItem } from './agents.js';
 import { archiveRound, type RoundRecord } from './archive.js';
 import { botStale, cancelAllOpen, halt, openOrders, processOrders, submit } from './executor.js';
-import { currentIndex, currentQuotes, refreshQuotes } from './market.js';
+import { currentIndex, currentQuotes, refreshQuotes, historyOf } from './market.js';
 import { marketPulse } from './pulse.js';
 import { DESKS, deskConfig, inDesk, perDesk, unitAr } from './desk.js';
 import { holdersRound, holdersView } from './holders.js';
@@ -14,6 +14,10 @@ import { latestReview, weeklyReview } from './review.js';
 import { shariahRound, shariahView } from './shariah.js';
 import { scoreRound, scorecardView } from './scoring.js';
 import { benchmarkView, latestReplay, noteBenchmark } from './replay.js';
+import { filingItems, filingsRound } from './edgar.js';
+import { dailyVolatility } from './indicators.js';
+import { fundamentalsRound, fundamentalsView } from './fundamentals.js';
+import { challengeBuys } from './challenge.js';
 import { bookValue, dayPnl, rollDay, round2 } from './portfolio.js';
 import { checkOrder } from './risk.js';
 import { emit, onTradeEvent, saveTrading, trading } from './store.js';
@@ -105,11 +109,15 @@ async function runRound(now: Date): Promise<void> {
     quotes: [...currentQuotes().values()].map((q) => ({ ...q })),
   };
   const reads = technicalRound(now);
-  const news = await newsRound(now);
+  // The US desk also reads each company's filings from the SEC itself (in code, every half hour): official, and first.
+  await filingsRound(now);
+  const news = [...filingItems(now), ...(await newsRound(now))];
   // Once a trading day: the substantial shareholders of a few stocks, and the week's ownership announcements.
   await holdersRound(now);
   // Once a trading day: the next two weeks' results, rate decisions and reports.
   await calendarRound(now);
+  // Once a trading day: a few companies' valuation and growth (each company again only after 90 days).
+  await fundamentalsRound(now);
   // Trades whose holding window has passed: scored against the index, with a lesson each where Claude decides.
   await scoreRound(now);
   noteMarket(marketContext(), now);
@@ -123,10 +131,23 @@ async function runRound(now: Date): Promise<void> {
     archiveRound({ ...record, skipped: 'closing' });
     return;
   }
-  const decisions = await decisionRound(reads, news, clock.minutesToChange, now, pulse);
+  // Large buys get a second opinion (the case against) before the risk gate; it can only shrink or stop them.
+  const decisions = await challengeBuys(await decisionRound(reads, news, clock.minutesToChange, now, pulse), { reads, news, pulse }, now);
   record.decision = { ...lastDecisionRecord() };
   record.verdicts = decisions.map((d) => gate(d, now));
   archiveRound(record);
+}
+
+/** Each stock's usual daily move, from its daily closes and today's price. */
+function volatilityNow(): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const { symbol } of UNIVERSE) {
+    const closes = historyOf(symbol)?.closes;
+    const price = currentQuotes().get(symbol)?.price;
+    const vol = closes && price ? dailyVolatility([...closes, price]) : undefined;
+    if (vol) out.set(symbol, vol);
+  }
+  return out;
 }
 
 /** The general market indicator right now: TASI, the followed stocks' breadth, and the news agent's market risk. */
@@ -184,6 +205,8 @@ export function gate(d: Decision, now = new Date()): { decisionId: string; verdi
           live: trading.mode === 'live',
           caution: cautionNow(now),
           blackout: blackoutNow(now),
+          volatility: volatilityNow(),
+          calmVolatility: deskConfig().id === 'crypto' ? 4 : 2,
           ordersToday: trading.ordersToday.day === day ? trading.ordersToday.count : 0,
           openOrders: openOrders(trading.mode),
           now,
@@ -224,6 +247,7 @@ function arabicReason(reason: string): string {
     [/Caution mode: half/, () => 'وضع الحذر: نص حد الأمر'],
     [/Results on (\S+): no new buys/, (m) => `نتائج الشركة ${m[1].replace(/\.$/, '')}: ما فيه شراء جديد قبلها بيوم ويومها`],
     [/Market event today/, () => 'حدث كبير في السوق اليوم: نص حد الأمر'],
+    [/Volatile: it moves about ([\d.]+)%/, (m) => `سهم متذبذب (يتحرك حوالي ${m[1]}٪ باليوم): صغّرنا الأمر`],
     [/live (?:SNB|Broker) price/, () => 'ما فيه سعر لحظي من Broker'],
     [/Nothing left/, () => 'ما بقي شي بعد تطبيق الحدود'],
   ];
@@ -313,6 +337,7 @@ export function tradingView(now = new Date()): TradingState {
     calendar: upcoming(now),
     review: latestReview(),
     scorecard: scorecardView(),
+    fundamentals: fundamentalsView(),
     benchmark: benchmarkView(),
     replay: latestReplay(),
     shariah: shariahView(),

@@ -8,7 +8,7 @@ import { ChartUp, Chevron, Send, Stop } from '../components/Icons';
 import { PixelOffice } from '../components/PixelOffice';
 import { MarketPulse } from '../components/MarketPulse';
 import { Holders } from '../components/Holders';
-import { Calendar, Review, Scorecard, Shariah } from '../components/DeskAgents';
+import { Calendar, FundamentalsCard, Review, Scorecard, Shariah } from '../components/DeskAgents';
 import { Performance } from '../components/Performance';
 import { TradeLog } from '../components/TradeLog';
 
@@ -195,6 +195,7 @@ export function StockSmart() {
           {st.calendar && <Calendar st={st} />}
           <Positions st={st} t={t} />
           {st.market === 'us' && <Shariah st={st} busy={busy} act={act} />}
+          <FundamentalsCard st={st} />
           <Performance st={st} busy={busy} act={act} />
           <Scorecard st={st} />
           <Review st={st} busy={busy} act={act} />

@@ -100,6 +100,8 @@ export async function refreshQuotes(now = new Date(), fetcher: typeof fetch = fe
         // A feed time in the future would let a price count before it happened: never later than when it arrived.
         const asOf = new Date(at > 0 ? Math.min(at, now.getTime()) : now.getTime()).toISOString();
         setQuote({ symbol, price, prevClose: closes.length > 1 ? closes[closes.length - 2] : prevClose, asOf, receivedAt: now.toISOString(), source: 'yahoo' });
+        // Coins trade around the clock on exchanges: a live price from one beats Yahoo's delayed one (which stays as the fallback).
+        if (deskId() === 'crypto') await liveCoin(symbol, now, fetcher);
       } catch (error) {
         console.error(`StockSmart: no price for ${symbol} (${(error as Error).message})`);
       }
@@ -159,6 +161,28 @@ async function yahooChart(ticker: string, interval: string, range: string, fetch
   const chart = body.chart?.result?.[0];
   if (!chart) throw new Error('empty chart');
   return chart;
+}
+
+/** Whether the exchange feed answered last time, so a change is logged once, not every minute. */
+let exchangeUp: boolean | undefined;
+
+/** A coin's last trade on Coinbase's public market feed (no key). A failure leaves the Yahoo price in place. */
+async function liveCoin(symbol: string, now: Date, fetcher: typeof fetch): Promise<void> {
+  try {
+    const res = await fetcher(`https://api.exchange.coinbase.com/products/${symbol}-USD/ticker`, { headers: { 'User-Agent': 'MAAI', Accept: 'application/json' }, signal: AbortSignal.timeout(6_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const t = (await res.json()) as { price?: string; time?: string };
+    const price = Number(t.price);
+    const at = Date.parse(t.time ?? '');
+    if (!(price > 0) || !(at > 0)) throw new Error('no price');
+    const known = prices().quotes.get(symbol);
+    setQuote({ symbol, price, prevClose: known?.prevClose ?? price, asOf: new Date(Math.min(at, now.getTime())).toISOString(), receivedAt: now.toISOString(), source: 'exchange' });
+    if (exchangeUp !== true) console.log('StockSmart: live coin prices from Coinbase.');
+    exchangeUp = true;
+  } catch (error) {
+    if (exchangeUp !== false) console.error(`StockSmart: no live price from Coinbase for ${symbol} (${(error as Error).message}); using Yahoo's delayed price.`);
+    exchangeUp = false;
+  }
 }
 
 /** Daily bars, oldest first: each trading day's date, close and volume. */

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AgentId, CalendarEvent, Caution, Decider, Holder, HolderChange, Position, ShariahCheck, WeeklyReview, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder, ReplayResult, ScoredDecision } from '../../shared/trading.js';
+import type { AgentId, CalendarEvent, Caution, Decider, Holder, HolderChange, Position, ShariahCheck, WeeklyReview, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder, Fundamentals, ReplayResult, ScoredDecision } from '../../shared/trading.js';
 import { config } from '../config.js';
 import { writePrivate } from '../secure-fs.js';
 import { tradingDay } from './tadawul.js';
@@ -54,6 +54,10 @@ export interface TradingData {
   shariah?: ShariahCheck;
   /** Filled trades and how they did against the index (see scoring.ts), newest first. */
   scores?: ScoredDecision[];
+  /** Each company's fundamentals, read a few a day (see fundamentals.ts). */
+  fundamentals?: { bySymbol: Record<string, Fundamentals>; lastDay?: string; lastRunAt?: string };
+  /** US filings read from the SEC (see edgar.ts): each ticker's SEC number, the last days' filings, and the ones already logged. */
+  edgar?: { ciks: Record<string, number>; filings: { id: string; symbol: string; form: string; items: string[]; at: string }[]; seen: string[]; lastRunAt?: string; lastError?: string };
   /** One point a trading day: the book's value and the index (see replay.ts). */
   track?: { day: string; value: number; index: number }[];
   /** The latest replay of the plain rule over history. */
@@ -215,6 +219,8 @@ export function resetTrading(): void {
   delete trading.shariah;
   delete trading.scores;
   delete trading.track;
+  delete trading.edgar;
+  delete trading.fundamentals;
   delete trading.replay;
   Object.assign(trading, fresh());
   listenersOf().clear();
