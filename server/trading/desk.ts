@@ -116,8 +116,8 @@ const CONFIGS: Record<DeskId, DeskConfig> = {
     sectors: ['bitcoin', 'layer1', 'payments', 'infrastructure'],
     halalList: false,
     fractional: true,
-    // Around the clock: every 3 hours, so the news does not run up the bill overnight.
-    newsEveryMs: 3 * 60 * 60_000,
+    // Around the clock: every 6 hours, so the news does not run up the bill (the plain rule decides here, and it does not read the news).
+    newsEveryMs: 6 * 60 * 60_000,
     // Coins swing more than stocks: a -4% stop would sell on an ordinary day's move.
     stopPct: -8,
     takePct: 12,

@@ -142,6 +142,7 @@ function simulateIndex(now: Date, day: string): IndexQuote {
 export const historyOf = (symbol: string): History | undefined => prices().histories.get(symbol)?.history;
 
 interface Chart {
+  timestamp?: number[];
   meta?: { regularMarketPrice?: number; chartPreviousClose?: number; previousClose?: number; regularMarketTime?: number };
   indicators?: { quote?: { close?: (number | null)[]; volume?: (number | null)[] }[] };
 }
@@ -158,6 +159,50 @@ async function yahooChart(ticker: string, interval: string, range: string, fetch
   const chart = body.chart?.result?.[0];
   if (!chart) throw new Error('empty chart');
   return chart;
+}
+
+/** Daily bars, oldest first: each trading day's date, close and volume. */
+export interface DailyBars {
+  days: string[];
+  closes: number[];
+  volumes: number[];
+}
+
+/** A stock's (or, with `index`, the desk's index's) daily bars over `range` ("2y"), for replaying a rule over history. */
+export async function dailyBars(symbol: string | { index: true }, range: string, fetcher: typeof fetch = fetch): Promise<DailyBars> {
+  const isIndex = typeof symbol !== 'string';
+  if (SOURCE === 'sim') return simulateBars(isIndex ? deskConfig().indexTicker : symbol);
+  const chart = isIndex ? await yahooChart(deskConfig().indexTicker, '1d', range, fetcher) : await yahoo(symbol, '1d', range, fetcher);
+  const bars = chart.indicators?.quote?.[0];
+  const out: DailyBars = { days: [], closes: [], volumes: [] };
+  (chart.timestamp ?? []).forEach((t, i) => {
+    const close = bars?.close?.[i];
+    if (typeof close !== 'number' || !(close > 0)) return;
+    out.days.push(new Date(t * 1000).toISOString().slice(0, 10));
+    out.closes.push(close);
+    const volume = bars?.volume?.[i];
+    out.volumes.push(typeof volume === 'number' ? volume : 0);
+  });
+  return out;
+}
+
+/** Two years of believable daily bars, the same every run (for development and tests). */
+function simulateBars(key: string): DailyBars {
+  let seed = [...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 11);
+  const rand = () => ((seed = (seed * 1_103_515_245 + 12_345) >>> 0) / 2 ** 32);
+  const out: DailyBars = { days: [], closes: [], volumes: [] };
+  let p = 50 + rand() * 100;
+  const start = Date.UTC(2024, 10, 1);
+  for (let i = 0; i < 520; i++) {
+    const d = new Date(start + i * 86_400_000);
+    if (d.getUTCDay() === 5 || d.getUTCDay() === 6) continue;
+    // A slow tide with noise on top, so trends and breakouts both occur.
+    p *= 1 + Math.sin(i / 40 + seed % 7) * 0.002 + (rand() - 0.5) * 0.03;
+    out.days.push(d.toISOString().slice(0, 10));
+    out.closes.push(Math.round(p * 100) / 100);
+    out.volumes.push(Math.round(1e6 * (0.6 + rand())));
+  }
+  return out;
 }
 
 /** A believable random walk per stock, the same every run for the same day (for development and tests). */

@@ -212,6 +212,7 @@ export const api = {
   tradingAgent: (id: AgentId, enabled: boolean) => call<TradingState>('POST', onMarket(`/trading/agents/${id}`), { enabled }),
   tradingAsk: (question: string, lang: Lang) => call<{ answer: string }>('POST', onMarket('/trading/ask'), { question, lang }),
   tradingRound: () => call<TradingState>('POST', onMarket('/trading/round'), {}),
+  tradingReplay: () => call<TradingState>('POST', onMarket('/trading/replay'), {}),
   tradingReview: () => call<TradingState>('POST', onMarket('/trading/review'), {}),
   tradingShariahCheck: () => call<TradingState>('POST', onMarket('/trading/shariah/check'), {}),
   tradingBotKey: () => call<{ key: string; signSecret: string }>('POST', onMarket('/trading/bot/key'), {}),

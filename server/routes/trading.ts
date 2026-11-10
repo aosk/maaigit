@@ -9,6 +9,7 @@ import { marketClock, UNIVERSE } from '../trading/tadawul.js';
 import { HttpError, lang, text, wrap } from './http.js';
 import { deskConfig, inDesk } from '../trading/desk.js';
 import { weeklyReview } from '../trading/review.js';
+import { runReplay } from '../trading/replay.js';
 import { shariahRound } from '../trading/shariah.js';
 
 /**
@@ -163,6 +164,16 @@ tradingRoutes.post('/trading/ask', wrap(async (req, res) => {
 }));
 
 /** A round now, without waiting for the next one (only while the market is open and trading is on). */
+/** Replays the plain rule over about two years of daily prices (the user asked: it reads a lot of history). */
+tradingRoutes.post('/trading/replay', wrap(async (_req, res) => {
+  try {
+    await runReplay(new Date());
+  } catch (error) {
+    throw new HttpError(502, (error as Error).message);
+  }
+  res.json(tradingView());
+}));
+
 /** The week's review now, whatever the day (the user asked). */
 tradingRoutes.post('/trading/review', wrap(async (_req, res) => {
   await weeklyReview(new Date(), true);

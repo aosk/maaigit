@@ -264,6 +264,38 @@ export interface Scorecard {
   recent: ScoredDecision[];
 }
 
+/** The desk against its index since the first day noted (both start at 100). */
+export interface Benchmark {
+  since: string;
+  days: number;
+  deskPct: number;
+  indexPct: number;
+  points: { day: string; desk: number; index: number }[];
+}
+
+/** The plain rule replayed over about two years of daily prices, against holding the index (see server/trading/replay.ts). */
+export interface ReplayResult {
+  ranAt: string;
+  from: string;
+  to: string;
+  days: number;
+  symbols: number;
+  /** The rule's version, and the exits it used. */
+  rule: string;
+  stopPct: number;
+  takePct: number;
+  rulePct: number;
+  indexPct: number;
+  /** The deepest fall from a peak along the way. */
+  maxDrawdownPct: number;
+  /** Fills in all, and the sales that closed with a profit or a loss. */
+  trades: number;
+  wins: number;
+  losses: number;
+  /** Both start at 100. */
+  curve: { day: string; rule: number; index: number }[];
+}
+
 /** The quarterly Shariah check of the US list: whether each stock is still held by the S&P 500 Shariah ETF. */
 export interface ShariahCheck {
   checkedAt?: string;
@@ -354,6 +386,10 @@ export interface TradingState {
   shariah: ShariahCheck | null;
   /** Each filled trade scored against the index after its holding window. */
   scorecard: Scorecard;
+  /** The desk's return against its index since it started. */
+  benchmark: Benchmark | null;
+  /** The latest replay of the plain rule over history. */
+  replay: ReplayResult | null;
 }
 
 export interface Caution {

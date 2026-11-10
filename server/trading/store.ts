@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AgentId, CalendarEvent, Caution, Decider, Holder, HolderChange, Position, ShariahCheck, WeeklyReview, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder, ScoredDecision } from '../../shared/trading.js';
+import type { AgentId, CalendarEvent, Caution, Decider, Holder, HolderChange, Position, ShariahCheck, WeeklyReview, TradeEvent, TradeEventType, TradeLimits, TradeMode, TradeOrder, ReplayResult, ScoredDecision } from '../../shared/trading.js';
 import { config } from '../config.js';
 import { writePrivate } from '../secure-fs.js';
 import { tradingDay } from './tadawul.js';
@@ -54,6 +54,10 @@ export interface TradingData {
   shariah?: ShariahCheck;
   /** Filled trades and how they did against the index (see scoring.ts), newest first. */
   scores?: ScoredDecision[];
+  /** One point a trading day: the book's value and the index (see replay.ts). */
+  track?: { day: string; value: number; index: number }[];
+  /** The latest replay of the plain rule over history. */
+  replay?: ReplayResult;
   /** The desktop bot: its key (only the hash), the secret commands are signed with, and what it last said. */
   bot: { keyHash?: string; keyHint?: string; signSecret?: string; lastSeen?: string; brokerSession?: boolean; expiresInSec?: number; practice?: boolean };
 }
@@ -210,6 +214,8 @@ export function resetTrading(): void {
   delete trading.reviews;
   delete trading.shariah;
   delete trading.scores;
+  delete trading.track;
+  delete trading.replay;
   Object.assign(trading, fresh());
   listenersOf().clear();
 }

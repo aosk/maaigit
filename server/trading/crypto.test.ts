@@ -98,12 +98,12 @@ describe('the crypto desk', () => {
     expect(system).not.toMatch(/Tadawul/);
   });
 
-  it('reads the news every three hours, about coins', async () => {
+  it('reads the news every six hours, about coins', async () => {
     create.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ items: [], market: [] }) }] });
     await crypto(async () => {
       await newsRound(SAT_NIGHT);
-      await newsRound(new Date(SAT_NIGHT.getTime() + 2 * 3_600_000));
-      await newsRound(new Date(SAT_NIGHT.getTime() + 3 * 3_600_000));
+      await newsRound(new Date(SAT_NIGHT.getTime() + 5 * 3_600_000));
+      await newsRound(new Date(SAT_NIGHT.getTime() + 6 * 3_600_000));
     });
     expect(create).toHaveBeenCalledTimes(2);
     expect((create.mock.calls[0][0] as { system: string }).system).toMatch(/cryptocurrency desk/);

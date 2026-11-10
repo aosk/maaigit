@@ -13,6 +13,7 @@ import { blackoutNow, calendarRound, upcoming } from './calendar.js';
 import { latestReview, weeklyReview } from './review.js';
 import { shariahRound, shariahView } from './shariah.js';
 import { scoreRound, scorecardView } from './scoring.js';
+import { benchmarkView, latestReplay, noteBenchmark } from './replay.js';
 import { bookValue, dayPnl, rollDay, round2 } from './portfolio.js';
 import { checkOrder } from './risk.js';
 import { emit, onTradeEvent, saveTrading, trading } from './store.js';
@@ -53,6 +54,7 @@ async function tick(now = new Date()): Promise<void> {
       t.lastCurve = now.getTime();
       const book = trading.books[trading.mode];
       book.curve.push({ at: now.toISOString(), value: bookValue(book, prices()) });
+      noteBenchmark(prices(), now);
       saveTrading();
     }
     checkDailyLoss(now);
@@ -311,6 +313,8 @@ export function tradingView(now = new Date()): TradingState {
     calendar: upcoming(now),
     review: latestReview(),
     scorecard: scorecardView(),
+    benchmark: benchmarkView(),
+    replay: latestReplay(),
     shariah: shariahView(),
   };
 }
