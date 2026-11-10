@@ -49,7 +49,7 @@ function clock12(hm: string, lang: string): string {
 }
 
 export function StockSmart() {
-  const { t, settings, layout } = useSettings();
+  const { t, settings } = useSettings();
   const lang = settings.lang;
   const [market, setMarket] = useState<TradingMarket>(() => {
     try {
@@ -191,7 +191,7 @@ export function StockSmart() {
         <div className="ss-col">
           <Hero st={st} t={t} />
           {st.pulse && <MarketPulse pulse={st.pulse} indexName={st.indexName ? (lang === 'ar' ? st.indexName.ar : st.indexName.en) : undefined} />}
-          {layout === 'phone' && <AgentOrbit st={st} status={executorLabel(st, t)} />}
+          <AgentOrbit st={st} status={executorLabel(st, t)} />
           {st.calendar && <Calendar st={st} />}
           <Positions st={st} t={t} />
           {st.market === 'us' && <Shariah st={st} busy={busy} act={act} />}
@@ -204,7 +204,6 @@ export function StockSmart() {
           <SettingsPanel st={st} t={t} busy={busy} act={act} />
         </div>
         <div className="ss-col ss-side">
-          {layout !== 'phone' && <AgentOrbit st={st} status={executorLabel(st, t)} />}
           <Feed st={st} t={t} lang={lang} onAsk={(q) => api.tradingAsk(q, lang).then((r) => r.answer)} onKeep={(text) => act(() => api.tradingDirective(text))} />
         </div>
       </div>

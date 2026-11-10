@@ -832,8 +832,6 @@ html[dir='rtl'] .ss-chev svg { transform: scaleX(-1); }
 /* The office always keeps its full size (a capped flex column would otherwise squeeze it to nothing when the log grows);
    the log under it scrolls on its own, so the office stays in view whichever way the log is grouped. */
 .ss-side > * { flex-shrink: 0; }
-/* On a computer the agents' orbit takes at most about half the screen's height, so the log keeps room under it. */
-:root[data-layout='desktop'] .ss-side .ob-svg, :root[data-layout='tablet'] .ss-side .ob-svg { max-height: 48dvh; }
 :root[data-layout='desktop'] .ss-side .ss-feedbox, :root[data-layout='tablet'] .ss-side .ss-feedbox { flex: 0 1 auto; min-height: 280px; overflow-y: auto; overscroll-behavior: contain; margin-inline-end: -8px; padding-inline-end: 8px; }
 @media (min-height: 720px) { :root[data-layout='desktop'] .ss-side, :root[data-layout='tablet'] .ss-side { display: flex; flex-direction: column; overflow: hidden; } }
 
