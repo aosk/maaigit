@@ -832,8 +832,8 @@ html[dir='rtl'] .ss-chev svg { transform: scaleX(-1); }
 /* The office always keeps its full size (a capped flex column would otherwise squeeze it to nothing when the log grows);
    the log under it scrolls on its own, so the office stays in view whichever way the log is grouped. */
 .ss-side > * { flex-shrink: 0; }
-/* On a computer the office takes at most about 40% of the screen's height, so the log keeps room under it. */
-:root[data-layout='desktop'] .ss-side .ss-office:not(.full) .ss-office-stage { width: min(100%, calc(40dvh * 256 / 176)); margin-inline: auto; }
+/* On a computer the agents' orbit takes at most about half the screen's height, so the log keeps room under it. */
+:root[data-layout='desktop'] .ss-side .ob-svg, :root[data-layout='tablet'] .ss-side .ob-svg { max-height: 48dvh; }
 :root[data-layout='desktop'] .ss-side .ss-feedbox, :root[data-layout='tablet'] .ss-side .ss-feedbox { flex: 0 1 auto; min-height: 280px; overflow-y: auto; overscroll-behavior: contain; margin-inline-end: -8px; padding-inline-end: 8px; }
 @media (min-height: 720px) { :root[data-layout='desktop'] .ss-side, :root[data-layout='tablet'] .ss-side { display: flex; flex-direction: column; overflow: hidden; } }
 
@@ -908,19 +908,6 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .ss-unknown-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--sep); }
 
 /* The agents' office (pixel art), live. The plates sit on each desk's front. */
-.ss-office { display: flex; flex-direction: column; border-radius: 16px; overflow: hidden; border: 1px solid var(--sep); background: var(--surface); }
-.ss-office-stage { position: relative; line-height: 0; background: #0e1411; }
-.ss-office canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; cursor: pointer; }
-.ss-plate { position: absolute; transform: translate(-50%, -50%); line-height: 1.25; white-space: nowrap; font: 700 clamp(7px, 1.8vw, 10.5px) var(--font); color: #161616; background: #ffffff; border: 1px solid #d2d6db; border-inline-start: 3px solid var(--ag, #1b8354); border-radius: 2px; padding: 1px 5px 0; pointer-events: none; box-shadow: 0 1px 0 #0003; transition: opacity 0.4s; }
-.ss-plate.snb { --ag: #1b8354; }
-.ss-office.night .ss-plate { opacity: 0.55; }
-.ss-office-full { position: absolute; bottom: 6px; left: 6px; width: 30px; height: 30px; border-radius: 4px; border: 1px solid #ffffff55; background: #0e1411aa; color: #fff; font-size: 15px; line-height: 1; cursor: pointer; }
-.ss-office-foot { padding: 8px 12px; font-size: 0.8em; line-height: 1.5; color: var(--text2); min-height: 2.4em; }
-.ss-office-foot b { color: var(--ag, var(--text)); }
-.ss-office.full { position: fixed; inset: 0; z-index: 80; border-radius: 0; border: 0; justify-content: center; background: #0e1411; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
-.ss-office.full .ss-office-stage { width: min(100%, calc((100dvh - 80px) * 256 / 176)); margin: 0 auto; }
-.ss-office.full .ss-office-foot { color: #c7cbd1; background: transparent; text-align: center; }
-:root[data-layout='phone'] .ss-office:not(.full) { margin-inline: -16px; border-radius: 0; border-inline: 0; }
 .ss-caution { border: 1px solid var(--warn-bar, #f79009); background: var(--warn-soft); display: flex; flex-direction: column; gap: 6px; }
 
 /* Market indicator */
@@ -1047,3 +1034,45 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .fd-table tbody tr:last-child td { border-bottom: none; }
 .fd-table td.up { color: var(--success); }
 .fd-table td.down { color: var(--danger); }
+
+/* «وكلاء أسهمي»: the orbit, the order's route from the market to the broker */
+.ob { gap: 10px; }
+.ob-svg { display: block; width: 100%; height: auto; max-width: 420px; margin: 0 auto; direction: ltr; overflow: visible; }
+.ob-svg text { font-family: var(--font); }
+.ob-pill { border-radius: 999px; padding: 4px 12px; font-size: 0.76em; font-weight: 600; background: var(--tint-soft); color: var(--tint-text); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ob-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--tint); box-shadow: 0 0 8px var(--tint); }
+.ob.asleep .ob-pill i, .ob.halted .ob-pill i { background: var(--muted); box-shadow: none; }
+.ob-orbit { fill: none; stroke: var(--sep); stroke-width: 1.2; }
+.ob-orbit.outer { stroke-dasharray: 2 6; }
+.ob-route { fill: none; stroke: var(--tint); stroke-opacity: 0.4; stroke-width: 1.6; stroke-dasharray: 5 6; stroke-linejoin: round; }
+.ob-route.moving { stroke-opacity: 0.7; animation: ob-dash 1.1s linear infinite; }
+@keyframes ob-dash { to { stroke-dashoffset: -22; } }
+.ob-core { transform-origin: 178px 270px; animation: ob-breathe 2.6s ease-in-out infinite; }
+@keyframes ob-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+.ob.asleep .ob-core, .ob.halted .ob-core { animation: none; opacity: 0.5; }
+.ob-me { font-size: 14px; font-weight: 700; fill: var(--on-tint); }
+.ob-sway { transform-origin: 178px 270px; animation: ob-sway 8s ease-in-out infinite alternate; }
+@keyframes ob-sway { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+.ob-unsway { transform-box: fill-box; transform-origin: center; animation: ob-unsway 8s ease-in-out infinite alternate; }
+@keyframes ob-unsway { from { transform: rotate(6deg); } to { transform: rotate(-6deg); } }
+.ob.asleep .ob-sway, .ob.asleep .ob-unsway { animation-play-state: paused; }
+.ob-n { cursor: pointer; outline: none; }
+.ob-n .ob-ring { stroke-width: 1.3; transition: stroke-width 0.3s; }
+.ob-n .ob-halo { opacity: 0; transition: opacity 0.35s; }
+.ob-n .ob-spinner { opacity: 0; transition: opacity 0.3s; transform-box: fill-box; transform-origin: center; }
+.ob-n.hot .ob-halo { opacity: 0.5; }
+.ob-n.hot .ob-ring, .ob-n.picked .ob-ring, .ob-n:focus-visible .ob-ring { stroke-width: 2.6; }
+.ob-n.hot .ob-spinner { opacity: 1; animation: ob-spin 5s linear infinite; }
+@keyframes ob-spin { to { transform: rotate(360deg); } }
+.ob-n.idle { opacity: 0.5; }
+.ob-label { font-size: 11px; font-weight: 600; fill: var(--text); }
+.ob-cap .ob-body { stroke-width: 1.3; transition: stroke-width 0.3s; }
+.ob-cap .ob-halo { opacity: 0; transition: opacity 0.35s; }
+.ob-cap.hot .ob-halo { opacity: 0.5; }
+.ob-cap.hot .ob-body { stroke-width: 2.4; }
+.ob-cap-title { font-size: 13.5px; font-weight: 700; fill: var(--text); }
+.ob-cap-sub { font-size: 10px; fill: var(--text2); }
+.ob-tag { font-size: 10.5px; font-weight: 700; fill: var(--surface); }
+.ob-steps { display: flex; gap: 4px; }
+.ob-steps i { flex: 1; height: 4px; border-radius: 2px; background: var(--sep); transition: background 0.3s; }
+.ob-now { display: flex; gap: 10px; align-items: flex-start; border-radius: 12px; padding: 10px 12px; font-size: 0.87em; line-height: 1.5; min-height: 44px; background: var(--raised); transition: background 0.3s; overflow-wrap: anywhere; }

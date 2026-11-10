@@ -73,6 +73,7 @@ describe('the fundamentals agent', () => {
     await inDesk('crypto', async () => {
       resetTrading();
       await fundamentalsRound(SUN);
+      expect(fundamentalsView()).toBeNull();
     });
     expect(create).toHaveBeenCalledTimes(1);
   });

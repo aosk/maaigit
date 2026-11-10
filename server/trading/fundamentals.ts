@@ -123,7 +123,8 @@ Use null for any number you could not find stated: never estimate, calculate fro
 /** For the screen. */
 export function fundamentalsView(): FundamentalsView | null {
   const all = companies();
-  if (all.length === 0) return null;
+  // Coins have no earnings to read.
+  if (deskId() === 'crypto' || all.length === 0) return null;
   const d = data();
   return { updatedAt: d.lastRunAt, covered: all.filter((s) => d.bySymbol[s]).length, total: all.length, companies: all.map((s) => d.bySymbol[s]).filter((f): f is Fundamentals => Boolean(f)) };
 }

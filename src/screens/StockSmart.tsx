@@ -5,7 +5,7 @@ import { ago, time } from '../format';
 import { useOnRefresh } from '../refresh';
 import { useSettings } from '../settings';
 import { ChartUp, Chevron, Send, Stop } from '../components/Icons';
-import { PixelOffice } from '../components/PixelOffice';
+import { AgentOrbit } from '../components/AgentOrbit';
 import { MarketPulse } from '../components/MarketPulse';
 import { Holders } from '../components/Holders';
 import { Calendar, FundamentalsCard, Review, Scorecard, Shariah } from '../components/DeskAgents';
@@ -191,7 +191,7 @@ export function StockSmart() {
         <div className="ss-col">
           <Hero st={st} t={t} />
           {st.pulse && <MarketPulse pulse={st.pulse} indexName={st.indexName ? (lang === 'ar' ? st.indexName.ar : st.indexName.en) : undefined} />}
-          {layout === 'phone' && <PixelOffice st={st} status={executorLabel(st, t)} />}
+          {layout === 'phone' && <AgentOrbit st={st} status={executorLabel(st, t)} />}
           {st.calendar && <Calendar st={st} />}
           <Positions st={st} t={t} />
           {st.market === 'us' && <Shariah st={st} busy={busy} act={act} />}
@@ -204,7 +204,7 @@ export function StockSmart() {
           <SettingsPanel st={st} t={t} busy={busy} act={act} />
         </div>
         <div className="ss-col ss-side">
-          {layout !== 'phone' && <PixelOffice st={st} status={executorLabel(st, t)} />}
+          {layout !== 'phone' && <AgentOrbit st={st} status={executorLabel(st, t)} />}
           <Feed st={st} t={t} lang={lang} onAsk={(q) => api.tradingAsk(q, lang).then((r) => r.answer)} onKeep={(text) => act(() => api.tradingDirective(text))} />
         </div>
       </div>
