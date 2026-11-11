@@ -8,7 +8,7 @@ vi.hoisted(() => {
 const create = vi.hoisted(() => vi.fn());
 vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof import('../ai/claude')>()), client: {}, create }));
 
-import { DECISION_PROMPT_VERSION, decisionRound, lastDecisionRecord, marketContext, newsRound, officialAnnouncements } from './agents';
+import { DECISION_PROMPT_VERSION, decisionRound, lastDecisionRecord, marketContext, newsRound, officialAnnouncements, resetAgentMemory } from './agents';
 import { resetTrading, trading } from './store';
 
 const OPEN = new Date('2026-11-01T08:00:00Z');
@@ -22,6 +22,7 @@ const refused = (id = 't2') => ({ type: 'web_fetch_tool_result', tool_use_id: id
 
 beforeEach(() => {
   resetTrading();
+  resetAgentMemory();
   create.mockReset();
 });
 
