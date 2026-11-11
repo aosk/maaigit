@@ -1115,3 +1115,10 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .ob-detail li { display: flex; gap: 8px; align-items: baseline; }
 .ob-detail li time { flex: none; font-size: 0.85em; font-variant-numeric: tabular-nums; }
 .ob-note { display: block; }
+
+/* Long unbroken text (a name, a subject, an address) wraps instead of widening the page. */
+.wrap-anywhere { overflow-wrap: anywhere; min-width: 0; }
+.link-host { color: var(--text2); font-size: 0.9em; }
+.inbox-phone { color: var(--text2); font-size: 0.85em; unicode-bidi: isolate; }
+.inbox-row-main, .detail-head > div, .attention-list button > span { overflow-wrap: anywhere; }
+.detail-head h2, .detail-subject, .detail-body, .inbox-rows li, .attention-list li { overflow-wrap: anywhere; min-width: 0; }

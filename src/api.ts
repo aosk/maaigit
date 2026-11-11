@@ -1,3 +1,4 @@
+import { confirmSession } from './inboxCache';
 import type { AddressCard } from '../shared/vcard';
 import type { AgentId, Decider, TradeLimits, TradeMode, TradingState } from '../shared/trading';
 import type { AuthenticationResponseJSON, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
@@ -152,7 +153,8 @@ export interface Passkey {
 }
 
 export const api = {
-  status: () => call<StatusInfo>('GET', '/status'),
+  // /status sits behind the sign-in, so an answer proves the session is good: the saved Inbox may be shown.
+  status: () => call<StatusInfo>('GET', '/status').then((s) => (confirmSession(), s)),
   unlock: (pin: string) => call<void>('POST', '/unlock', { pin }),
   logout: (everywhere = false) => call<void>('POST', '/logout', { everywhere }),
   setLockMinutes: (minutes: number) => call<{ minutes: number }>('PUT', '/security/lock', { minutes }),

@@ -3,6 +3,7 @@ import type { Proposal } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
 import { useAction } from '../useAction';
+import { stripBidi } from '../links';
 import { Send } from './Icons';
 
 type WhatsAppProposal = Extract<Proposal, { kind: 'whatsapp' }>;
@@ -21,7 +22,7 @@ export function WhatsAppCard({ proposal, onChange }: { proposal: WhatsAppProposa
 
   return (
     <section className={`card approval${done ? ' done' : ''}`} aria-label={t.whatsappDraft}>
-      <div className="card-label"><Send size={18} />{t.whatsappDraft} · {proposal.toName}</div>
+      <div className="card-label"><Send size={18} />{t.whatsappDraft} · <bdi className="wrap-anywhere">{stripBidi(proposal.toName)}</bdi></div>
       {/* The number itself, always: a name alone cannot show a wrong recipient. */}
       <div className="sub"><bdi dir="ltr">+{proposal.phone}</bdi></div>
       {proposal.newNumber && !done && <div className="error" role="alert">{t.whatsappNewNumber}</div>}
@@ -34,7 +35,7 @@ export function WhatsAppCard({ proposal, onChange }: { proposal: WhatsAppProposa
 
       {done ? (
         <div className={`status-tag ${proposal.status}`} role="status">
-          {proposal.status === 'approved' ? `✓ ${t.whatsappSentTo(proposal.toName)}` : t.cancelled}
+          {proposal.status === 'approved' ? `✓ ${t.whatsappSentTo(stripBidi(proposal.toName))}` : t.cancelled}
         </div>
       ) : (
         <>

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef } from 'react';
 import type { CalendarEvent } from '../../shared/types';
 import { eventEnd, leaveTime } from '../../shared/schedule';
 import { dayHeading, time } from '../format';
-import { safeWebAddress, splitLinks } from '../links';
+import { realHost, safeWebAddress, splitLinks, stripBidi } from '../links';
 import { useSettings } from '../settings';
 
 /** Text with its web addresses made tappable (and nothing else interpreted). */
@@ -11,22 +11,20 @@ function Linkified({ text }: { text: string }) {
     <>
       {splitLinks(text).map((piece, i) =>
         piece.link ? (
-          <a key={i} href={piece.link} target="_blank" rel="noopener noreferrer" dir="ltr">{piece.text}</a>
+          // The text is the sender's and can name another site than the one opened: the real host always follows it.
+          <Fragment key={i}>
+            <a href={piece.link} target="_blank" rel="noopener noreferrer" dir="ltr" className="wrap-anywhere">{stripBidi(piece.text)}</a>
+            {piece.host && <bdi dir="ltr" className="link-host wrap-anywhere"> ({piece.host})</bdi>}
+          </Fragment>
         ) : (
-          <Fragment key={i}>{piece.text}</Fragment>
+          <Fragment key={i}>{stripBidi(piece.text)}</Fragment>
         ),
       )}
     </>
   );
 }
 
-const host = (url: string) => {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return '';
-  }
-};
+const host = (url: string) => realHost(url).replace(/^www\./, '');
 
 /** Everything about one calendar event: when, where, the link to join, and its notes. */
 export function EventSheet({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
@@ -56,7 +54,7 @@ export function EventSheet({ event, onClose }: { event: CalendarEvent; onClose: 
     <div className="sheet-backdrop" onClick={onClose}>
       <section className="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" onClick={(e) => e.stopPropagation()}>
         <div className="between" style={{ alignItems: 'flex-start', gap: 12 }}>
-          <h2 id="sheet-title" className="h2" dir="auto" style={{ margin: 0 }}>{event.title}</h2>
+          <h2 id="sheet-title" className="h2 wrap-anywhere" dir="auto" style={{ margin: 0 }}><bdi>{stripBidi(event.title)}</bdi></h2>
           <button ref={closeButton} className="icon-btn" aria-label={t.close} onClick={onClose}>✕</button>
         </div>
 
@@ -69,14 +67,14 @@ export function EventSheet({ event, onClose }: { event: CalendarEvent; onClose: 
         {event.meetingUrl && safeWebAddress(event.meetingUrl) && (
           <a className="btn primary big" href={safeWebAddress(event.meetingUrl)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
             {t.joinMeeting}
-            <span style={{ fontWeight: 400, opacity: 0.85 }}> · {host(event.meetingUrl)}</span>
+            <bdi dir="ltr" style={{ fontWeight: 400, opacity: 0.85 }}> · {host(event.meetingUrl)}</bdi>
           </a>
         )}
 
         {event.place && event.place !== event.meetingUrl && (
           <div>
             <div className="sub">{t.eventWhere}</div>
-            <div dir="auto">{placeIsLink ? <Linkified text={event.place} /> : event.place}</div>
+            <div dir="auto" className="wrap-anywhere">{placeIsLink ? <Linkified text={event.place} /> : <bdi>{stripBidi(event.place)}</bdi>}</div>
           </div>
         )}
 
@@ -89,7 +87,7 @@ export function EventSheet({ event, onClose }: { event: CalendarEvent; onClose: 
           !event.meetingUrl && !event.place && <p className="sub">{t.eventNoDetails}</p>
         )}
 
-        <div className="sub">{t.eventCalendar}: {origin}</div>
+        <div className="sub">{t.eventCalendar}: <bdi>{stripBidi(origin)}</bdi></div>
       </section>
     </div>
   );

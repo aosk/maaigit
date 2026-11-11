@@ -21,8 +21,16 @@ if (fs.existsSync(envFile)) {
   }
 }
 
-fs.mkdirSync(DATA, { recursive: true });
-const logFile = fs.createWriteStream(path.join(DATA, 'bot.log'), { flags: 'a' });
+// The log and the ledger hold orders and prices: readable by this user only (the folder may sit in a synced drive).
+fs.mkdirSync(DATA, { recursive: true, mode: 0o700 });
+const logPath = path.join(DATA, 'bot.log');
+try {
+  fs.chmodSync(DATA, 0o700);
+  if (fs.existsSync(logPath)) fs.chmodSync(logPath, 0o600);
+} catch {
+  // Windows has no such modes.
+}
+const logFile = fs.createWriteStream(logPath, { flags: 'a', mode: 0o600 });
 const log = (text) => {
   const line = `${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Riyadh' })}  ${text}`;
   console.log(line);
