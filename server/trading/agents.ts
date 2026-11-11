@@ -72,6 +72,11 @@ const mem = perDesk<AgentMemory>(() => ({
   decision: { source: 'none', decisions: [] },
 }));
 
+/** For the tests: forget what every desk's agents last read (the news already fetched, the last decision). */
+export function resetAgentMemory(): void {
+  for (const id of ['sa', 'us', 'crypto'] as const) Object.assign(mem.of(id), { lastRead: new Map<string, string>(), news: { at: 0, items: [], market: [] }, official: { ok: false, detail: 'not tried yet' }, decision: { source: 'none', decisions: [] } });
+}
+
 /** Reads every stock; tells the log only about the ones with something to say, plus one line for the round. */
 export function technicalRound(now = new Date()): TechRead[] {
   if (!enabled('technical')) return [];

@@ -47,6 +47,7 @@ beforeEach(() => {
   state.bot = { commands: [] };
   state.whatsappAcks = {};
   state.proposals = [];
+  state.contacts = [];
   state.intake = {};
   state.replyMode = 'smart';
   state.notifyPrefs.messages = false;
