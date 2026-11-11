@@ -57,6 +57,10 @@ const P = (id: string) => {
 };
 const ROUTE = `M${CX} 56L${P('news')}L${CX} ${CY}L${P('decision')}A${RI} ${RI} 0 0 1 ${P('risk')}L${P('executor')}L${CX} 474`;
 const ROUTE_2 = `M${CX} 56L${P('technical')}L${CX} ${CY}`;
+/** Where an order's light leaves the ring: from the risk gate down to the executor and on to the broker. */
+const EXIT = `M${P('risk')}L${P('executor')}L${CX} 474`;
+/** The agents' places on the inner ring, in degrees (clockwise); the market's light waits at the top. */
+const RING_AT: Partial<Record<Stop, number>> = { start: -90, technical: -135, news: -45, decision: 45, risk: 135 };
 
 /** Where an event shows on the route. */
 function stopOf(e: TradeEvent): Stop | undefined {
@@ -85,7 +89,13 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
   const [hot, setHot] = useState<{ stop: Stop; text: string } | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const played = useRef<number | null>(null);
-  const queue = useRef<{ stop: Stop; text: string }[]>([]);
+  const queue = useRef<{ stop: Stop; text: string; order?: boolean }[]>([]);
+  // The travelling light: white on the ring, burgundy once a round decided on no order, on to the executor and the broker when one was placed.
+  const tokenRef = useRef<SVGGElement>(null);
+  const exitRef = useRef<SVGPathElement>(null);
+  const stopRef = useRef<Stop | null>(null);
+  const goesRef = useRef(false);
+  const burgundyUntil = useRef(0);
   const timer = useRef<number | undefined>(undefined);
 
   // Only what happens from now on is played: the log's past stays in the log.
@@ -97,7 +107,7 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
     }
     const fresh = st.events.filter((e) => e.id > played.current!).flatMap((e) => {
       const stop = stopOf(e);
-      return stop ? [{ stop, text: e.text }] : [];
+      return stop ? [{ stop, text: e.text, order: e.type === 'order.queued' || e.type === 'order.filled' }] : [];
     });
     played.current = Math.max(played.current, newest);
     if (fresh.length === 0) return;
@@ -106,12 +116,20 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
     queue.current.push(...fresh.slice(-12));
     const next = () => {
       const item = queue.current.shift();
+      // At the decision it is known whether an order follows in this burst (the executor's events come with it).
+      if (item?.stop === 'start') goesRef.current = false;
+      if (item?.stop === 'decision') goesRef.current = Boolean(item.order) || queue.current.some((q) => q.order);
       setHot(item ?? null);
       timer.current = item ? window.setTimeout(next, reducedMotion() ? 2200 : 1500) : undefined;
     };
     if (timer.current === undefined) next();
   }, [st.events, s.obArrived]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  useEffect(() => {
+    stopRef.current = hot ? hot.stop : null;
+    if (hot?.stop === 'start') burgundyUntil.current = 0;
+    if (hot?.stop === 'decision' && !goesRef.current) burgundyUntil.current = Date.now() + 25_000;
+  }, [hot]);
 
   const enabled = (id: string) => st.agents.find((a) => a.id === id)?.enabled !== false;
 
@@ -159,6 +177,47 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
   const moving = Boolean(hot) && !reducedMotion();
   // While the market is open the route always flows (slowly between rounds, fast and with three lights when an agent works).
   const flowing = !asleep && !st.halted && !reducedMotion();
+  // The light's own loop (no re-rendering): circles the ring, follows the stop being played, turns burgundy or leaves for the executor.
+  useEffect(() => {
+    const g = tokenRef.current;
+    const exit = exitRef.current;
+    if (!flowing || !g || !exit) return;
+    const total = exit.getTotalLength();
+    const toExecutor = Math.hypot(MAIN[4].x - MAIN[3].x, MAIN[4].y - MAIN[3].y) / total;
+    let ang = -90;
+    let prog = 0;
+    let onExit = false;
+    let last = performance.now();
+    let raf = 0;
+    const place = (x: number, y: number) => g.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+    const tick = (nowT: number) => {
+      const dt = Math.min(0.05, (nowT - last) / 1000);
+      last = nowT;
+      const stop = stopRef.current;
+      if (stop === 'executor' || stop === 'end') {
+        // An order: the light leaves the ring at the risk gate for the executor, then the broker.
+        if (!onExit) { onExit = true; prog = 0; }
+        const goal = stop === 'end' ? 1 : toExecutor;
+        prog += Math.max(-0.9 * dt, Math.min(0.9 * dt, goal - prog));
+        const pt = exit.getPointAtLength(prog * total);
+        place(pt.x, pt.y);
+      } else {
+        if (onExit) { onExit = false; ang = RING_AT.risk!; }
+        const goal = stop ? RING_AT[stop] : undefined;
+        if (goal === undefined) ang += (360 / 14) * dt;
+        else {
+          let d = (((goal - ang) % 360) + 360) % 360;
+          if (d > 359) d = 0;
+          ang += Math.min(d, 260 * dt);
+        }
+        place(CX + RI * Math.cos((ang * Math.PI) / 180), CY + RI * Math.sin((ang * Math.PI) / 180));
+      }
+      g.classList.toggle('burgundy', Date.now() < burgundyUntil.current);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [flowing]);
 
   // The line under the picture: what is playing now, else the last thing that happened.
   const last = [...st.events].reverse().find((e) => stopOf(e));
@@ -239,13 +298,6 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
         <circle cx={CX} cy={CY} r={RO} className="ob-orbit outer" />
         <path d={ROUTE} className={`ob-route${flowing ? ' flowing' : ''}${moving ? ' moving' : ''}`} />
         <path d={ROUTE_2} className={`ob-route${flowing ? ' flowing' : ''}${moving ? ' moving' : ''}`} />
-        {flowing && Array.from({ length: moving ? 3 : 1 }, (_, i) => (
-          <g key={i} opacity={moving ? 1 : 0.8}>
-            <circle r="5" style={{ fill: 'var(--tint)' }} filter="url(#ob-blur-s)" opacity=".9" />
-            <circle r="2.6" fill="#fff" />
-            <animateMotion dur={moving ? '4.8s' : '8s'} begin={`${-i * 1.6}s`} repeatCount="indefinite" path={ROUTE} />
-          </g>
-        ))}
         <g className="ob-core"><circle cx={CX} cy={CY} r="52" fill="url(#ob-core)" /></g>
         <circle cx={CX} cy={CY} r="26" className="ob-me-dot" style={{ fill: 'var(--tint)' }} />
         <text x={CX} y={CY + 5} textAnchor="middle" className="ob-me">{s.obMe}</text>
@@ -257,6 +309,16 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
         {MAIN.map((m) => node(m.id, m.group, m.x, m.y, m.id === 'executor' ? 19 : 20, s.agentNames[m.id], hot?.stop === m.id ? 'hot' : !enabled(m.id) ? 'idle' : asleep ? 'sleep' : 'on'))}
         {capsule('start', 10, 'read', 'market', s.obStart, s.obStartSub(st.clock.open), s.obStartTag)}
         {capsule('end', 474, 'exec', 'broker', s.obEnd, st.mode === 'live' ? status : s.obEndPaper, s.obEndTag)}
+        {/* The light is drawn last: it passes over the agents, not under them. */}
+        {flowing && (
+          <>
+            <path ref={exitRef} d={EXIT} fill="none" stroke="none" />
+            <g ref={tokenRef} className="ob-token" transform={`translate(${CX} ${CY - RI})`} aria-hidden="true">
+              <circle r="10" className="ob-token-glow" filter="url(#ob-blur-s)" />
+              <circle r="5" className="ob-token-core" />
+            </g>
+          </>
+        )}
       </svg>
       <div className="ob-steps" aria-hidden="true">
         {STAGE_GROUP.map((g, i) => <i key={i} style={i <= stage ? { background: ink(g) } : undefined} />)}
