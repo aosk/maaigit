@@ -41,7 +41,7 @@ export const outcomesLine = (o: FetchOutcome[]) => (o.length ? o.map((x) => `${x
 export const SEARCH_RULE = "Today's events and figures are not in your memory. You MUST use your tools (search, and open the pages named above) before you answer: an answer written from memory is wrong. An empty list is a valid answer only after you have searched.";
 
 /** Whether a reply used any search or page tool. */
-export const usedTools = (content: Anthropic.Beta.Messages.BetaContentBlock[]) =>
+const usedTools = (content: Anthropic.Beta.Messages.BetaContentBlock[]) =>
   content.some((b) => b.type === 'server_tool_use' || b.type === 'web_search_tool_result' || b.type === 'web_fetch_tool_result');
 
 /**

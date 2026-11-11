@@ -210,9 +210,7 @@ The admin portal shows what **Anthropic itself** reports for the key MAAI uses:
 
 ### Talking to MAAI in Arabic and English
 
-The phone's built-in dictation listens for **one language at a time**, so a sentence that mixes Arabic and English comes out wrong. Two ways to deal with that:
-- **Without smart voice** the microphone listens for the app's language (the ع / EN button at the top of the Assistant changes it). MAAI tells Claude the words were dictated, so it reads mistakes by sound and context, but a sentence that mixes both languages can still come out wrong.
-- **Smart voice (recommended for mixing):** add `STT_API_KEY` on Render, from a transcription service such as OpenAI, or Groq (also set `STT_BASE_URL=https://api.groq.com/openai/v1` and `STT_MODEL=whisper-large-v3-turbo`). The microphone then records your voice and sends it to that service, which understands both languages in one sentence, and MAAI gives it your names and project words so it spells them right. Your recording goes to that service. **Settings → Talking to MAAI** shows whether it is on. "Check my voice before sending" (Settings) keeps the words in the box for you to correct before they are sent.
+The microphone uses the phone's own dictation. No recording is sent to any outside voice service (the OpenAI link was removed). The dictation listens for **one language at a time**, the app's language (the ع / EN button at the top of the Assistant changes it), so a sentence that mixes Arabic and English can come out wrong. MAAI tells Claude the words were dictated, so it reads mistakes by sound and context. WhatsApp voice notes sent to your order number are not read: MAAI answers asking you to type the order.
 
 ### Screens: phone, tablet or fold, computer
 

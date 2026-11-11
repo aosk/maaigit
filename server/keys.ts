@@ -41,8 +41,6 @@ const ENV_KEYS: { env: string; service: KeyService; name: string }[] = [
   { env: 'ANTHROPIC_API_KEY', service: 'anthropic', name: 'MAAI’s Claude key' },
   { env: 'ANTHROPIC_ADMIN_KEY', service: 'anthropic', name: 'Anthropic admin key (usage and cost)' },
   { env: 'RENDER_API_KEY', service: 'render', name: 'Render API key (usage and cost)' },
-  { env: 'STT_API_KEY', service: 'openai', name: 'Smart voice (speech to text)' },
-  { env: 'OPENAI_API_KEY', service: 'openai', name: 'OpenAI key' },
   { env: 'ASANA_TOKEN', service: 'asana', name: 'Asana token' },
   { env: 'GMAIL_APP_PASSWORD', service: 'google', name: 'Gmail app password' },
   { env: 'TWILIO_AUTH_TOKEN', service: 'twilio', name: 'Twilio auth token' },
