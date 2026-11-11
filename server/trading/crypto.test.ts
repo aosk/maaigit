@@ -99,7 +99,7 @@ describe('the crypto desk', () => {
   });
 
   it('reads the news every six hours, about coins', async () => {
-    create.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ items: [], market: [] }) }] });
+    create.mockResolvedValue({ content: [{ type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } }, { type: 'text', text: JSON.stringify({ items: [], market: [] }) }] });
     await crypto(async () => {
       await newsRound(SAT_NIGHT);
       await newsRound(new Date(SAT_NIGHT.getTime() + 5 * 3_600_000));

@@ -26,6 +26,36 @@ beforeEach(() => {
 });
 
 describe('the news agent and the Saudi Exchange announcements', () => {
+  it('sends an agent back once when it answers without using its tools, and keeps the second answer', async () => {
+    const empty = { content: [{ type: 'text', text: JSON.stringify({ items: [], market: [] }) }] };
+    const searched = { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } };
+    create.mockResolvedValueOnce(empty).mockResolvedValueOnce({ content: [searched, { type: 'text', text: JSON.stringify({ items: [{ symbol: '2222', headline: 'أرامكو توزع أرباحاً', tone: 'positive', source: 'Argaam', official: false }], market: [] }) }] });
+    const items = await newsRound(OPEN);
+    expect(create).toHaveBeenCalledTimes(2);
+    const retry = create.mock.calls[1][0] as { messages: { role: string; content: unknown }[]; effort: string };
+    expect(retry.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(retry.messages[2].content).toMatch(/without using your search/);
+    expect(retry.effort).toBe('medium');
+    expect(items.map((i) => i.symbol)).toEqual(['2222']);
+  });
+
+  it('asks only twice at most: a second answer with no search is taken as it is', async () => {
+    const empty = { content: [{ type: 'text', text: JSON.stringify({ items: [], market: [] }) }] };
+    create.mockResolvedValue(empty);
+    await newsRound(OPEN);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it('tells every news reader that today is not in its memory', async () => {
+    create.mockResolvedValue({ content: [{ type: 'server_tool_use', id: 's1', name: 'web_search', input: {} }, { type: 'text', text: JSON.stringify({ items: [], market: [] }) }] });
+    await newsRound(OPEN);
+    const req = create.mock.calls[0][0] as { system: string; tools: { name: string; max_uses?: number }[] };
+    expect(req.system).toMatch(/MUST use your tools/);
+    // the Saudi desk gets four searches and three pages
+    expect(req.tools.find((t) => t.name === 'web_search')?.max_uses).toBe(4);
+    expect(req.tools.find((t) => t.name === 'web_fetch')?.max_uses).toBe(3);
+  });
+
   it('looks for official announcements first, on Argaam and the exchange only, and marks official items', async () => {
     create.mockResolvedValue(reply([page('https://www.saudiexchange.sa/wps/portal/saudiexchange/newsandreports/issuer-news?locale=ar')], [
       { symbol: '2222', headline: 'أرامكو تعلن نتائج الربع الثالث', tone: 'positive', source: 'saudiexchange.sa', official: true },

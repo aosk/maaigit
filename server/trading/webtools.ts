@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { create } from '../ai/claude.js';
 
 /** One page Claude tried to open with web_fetch: where, and whether it could be read. */
 export interface FetchOutcome {
@@ -35,3 +36,28 @@ export const searchLine = (response: { content: Anthropic.Beta.Messages.BetaCont
 
 /** "argaam.com ok, saudiexchange.sa url_not_accessible", for a log line. */
 export const outcomesLine = (o: FetchOutcome[]) => (o.length ? o.map((x) => `${x.host} ${x.ok ? 'ok' : x.error}`).join(', ') : 'no page opened');
+
+/** Said to every agent that reads today's events or figures: its own memory has none of them. */
+export const SEARCH_RULE = "Today's events and figures are not in your memory. You MUST use your tools (search, and open the pages named above) before you answer: an answer written from memory is wrong. An empty list is a valid answer only after you have searched.";
+
+/** Whether a reply used any search or page tool. */
+export const usedTools = (content: Anthropic.Beta.Messages.BetaContentBlock[]) =>
+  content.some((b) => b.type === 'server_tool_use' || b.type === 'web_search_tool_result' || b.type === 'web_fetch_tool_result');
+
+/**
+ * Like create(), but an agent that answers without using its tools at all (and so reports "nothing found" from memory)
+ * is sent back once to do the work. Two calls are the most it ever costs.
+ */
+export async function createSearching(req: Parameters<typeof create>[0]): Promise<Awaited<ReturnType<typeof create>>> {
+  const first = await create(req);
+  if (!req.tools?.length || usedTools(first.content)) return first;
+  console.warn(`StockSmart ${req.purpose}: answered without searching; asking once more.`);
+  return create({
+    ...req,
+    messages: [
+      ...req.messages,
+      { role: 'assistant', content: first.content },
+      { role: 'user', content: 'You answered without using your search or page tools, and nothing you remember counts. Run the searches and open the pages now, then give the answer again in the same format.' },
+    ],
+  });
+}

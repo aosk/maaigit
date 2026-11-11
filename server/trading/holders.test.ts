@@ -14,7 +14,9 @@ const DAY1 = new Date('2026-11-01T08:00:00Z'); // Sunday, Tadawul open
 const DAY2 = new Date('2026-11-02T08:00:00Z');
 const PIF = 'صندوق الاستثمارات العامة';
 const listing = (symbol: string, holders: [string, number][], asOf = '2026-10-31') => ({ symbol, holders: holders.map(([name, pct]) => ({ name, pct })), asOf, source: 'Argaam' });
-const answer = (listings: unknown[], announcements: unknown[] = []) => ({ content: [{ type: 'text', text: JSON.stringify({ listings, announcements }) }] });
+/** What the API returns when an agent really searched (an agent that answers with no search is sent back once). */
+const searched = { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } };
+const answer = (listings: unknown[], announcements: unknown[] = []) => ({ content: [searched, { type: 'text', text: JSON.stringify({ listings, announcements }) }] });
 
 beforeEach(() => {
   resetTrading();
@@ -82,7 +84,7 @@ describe('the daily run', () => {
   });
 
   it('never throws when the answer cannot be read', async () => {
-    create.mockResolvedValueOnce({ content: [{ type: 'text', text: 'not json' }] });
+    create.mockResolvedValueOnce({ content: [searched, { type: 'text', text: 'not json' }] });
     await expect(holdersRound(DAY1)).resolves.toBeUndefined();
     expect(holdersView(DAY1).covered).toBe(0);
   });
