@@ -157,6 +157,8 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
   const pill = st.halted ? s.obPillStopped : asleep && !doing ? s.obPillSleep(opensAt) : doing ? s.obPillHot(s.agentNames[doing]) : s.obPillReady(working, nextRound);
   const pillTone = st.halted || (asleep && !doing) ? 'off' : doing ? 'hot' : 'ready';
   const moving = Boolean(hot) && !reducedMotion();
+  // While the market is open the route always flows (slowly between rounds, fast and with three lights when an agent works).
+  const flowing = !asleep && !st.halted && !reducedMotion();
 
   // The line under the picture: what is playing now, else the last thing that happened.
   const last = [...st.events].reverse().find((e) => stopOf(e));
@@ -235,13 +237,13 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
         </defs>
         <circle cx={CX} cy={CY} r={RI} className="ob-orbit" />
         <circle cx={CX} cy={CY} r={RO} className="ob-orbit outer" />
-        <path d={ROUTE} className={`ob-route${moving ? ' moving' : ''}`} />
-        <path d={ROUTE_2} className={`ob-route${moving ? ' moving' : ''}`} />
-        {moving && [0, 1, 2].map((i) => (
-          <g key={i}>
+        <path d={ROUTE} className={`ob-route${flowing ? ' flowing' : ''}${moving ? ' moving' : ''}`} />
+        <path d={ROUTE_2} className={`ob-route${flowing ? ' flowing' : ''}${moving ? ' moving' : ''}`} />
+        {flowing && Array.from({ length: moving ? 3 : 1 }, (_, i) => (
+          <g key={i} opacity={moving ? 1 : 0.8}>
             <circle r="5" style={{ fill: 'var(--tint)' }} filter="url(#ob-blur-s)" opacity=".9" />
             <circle r="2.6" fill="#fff" />
-            <animateMotion dur="4.8s" begin={`${-i * 1.6}s`} repeatCount="indefinite" path={ROUTE} />
+            <animateMotion dur={moving ? '4.8s' : '8s'} begin={`${-i * 1.6}s`} repeatCount="indefinite" path={ROUTE} />
           </g>
         ))}
         <g className="ob-core"><circle cx={CX} cy={CY} r="52" fill="url(#ob-core)" /></g>
