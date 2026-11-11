@@ -1,6 +1,6 @@
 import type { Lang, Proposal } from '../../shared/types.js';
 import { agentEnabled, audit, id, save, state, type Conversation } from '../store.js';
-import { client, stream, textOf, type MessageParam, type OnEvent, type ServerTool, type ToolUse } from './claude.js';
+import { apiErrorMessage, client, stream, textOf, type MessageParam, type OnEvent, type ServerTool, type ToolUse } from './claude.js';
 import { config } from '../config.js';
 import { dayTime, refreshContext, withContext } from './context.js';
 import { runTool, tools } from './tools.js';
@@ -208,7 +208,16 @@ async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[]
   let readOthers = false;
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const search = !readOthers && searches < MAX_SEARCHES ? [{ ...WEB_SEARCH, max_uses: MAX_SEARCHES - searches }] : [];
-    const response = await stream({ purpose: 'chat', system, messages, tools: [...tools, ...search], effort: spoken ? 'low' : 'medium', maxTokens: 16000 }, onEvent);
+    const ask = () => stream({ purpose: 'chat', system, messages, tools: [...tools, ...search], effort: spoken ? 'low' : 'medium', maxTokens: 16000 }, onEvent);
+    let response: Awaited<ReturnType<typeof ask>>;
+    try {
+      response = await ask();
+    } catch (error) {
+      // Saved reasoning that no longer matches (the tools changed between rounds): ask again once without it.
+      if ((error as { status?: number }).status !== 400 || !/thinking|signature/i.test(apiErrorMessage(error))) throw error;
+      dropThinking(messages);
+      response = await ask();
+    }
     searches += response.content.filter((b) => b.type === 'server_tool_use' && b.name === 'web_search').length;
     messages.push({ role: 'assistant', content: response.content });
     reply = textOf(response.content) || reply;

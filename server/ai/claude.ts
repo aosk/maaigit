@@ -65,7 +65,7 @@ function params(req: Request) {
 
 const EXTRAS = {
   // If a safety check declines a request, the API retries it on a suitable model.
-  betas: ['server-side-fallback-2026-07-01'],
+  betas: ['server-side-fallback-2026-07-01', 'thinking-binding-controls-2026-08-01'],
   fallbacks: 'default' as const,
   cache_control: { type: 'ephemeral' as const },
 };
@@ -113,7 +113,9 @@ export function stream(req: Request, onEvent: OnEvent): Promise<Message> {
       ...params(req),
       ...extras,
       // A readable summary of the reasoning, shown to the user as "what MAAI is thinking".
-      thinking: { type: 'adaptive', display: 'summarized' },
+      // Reasoning kept in the history is bound to the tools and messages it was made with. When something has changed
+      // since (the tools of the next round, an edited message), the block is dropped instead of failing the request.
+      thinking: { type: 'adaptive', display: 'summarized', ...(extras.betas ? { block_binding: { prefix_mismatch_behavior: 'drop_block' as const } } : {}) },
     });
     for await (const event of s) {
       if (event.type === 'content_block_start' && (event.content_block.type === 'tool_use' || event.content_block.type === 'server_tool_use')) {

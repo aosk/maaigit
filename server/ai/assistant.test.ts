@@ -306,3 +306,31 @@ describe('searching', () => {
     expect(sentMail).not.toHaveBeenCalled();
   });
 });
+
+describe('reasoning that no longer matches the request', () => {
+  it('asks again once without it, instead of telling the user it could not answer', async () => {
+    const bad = Object.assign(new Error('400 messages.3.content.0: Invalid `signature` in `thinking` block. The tools list differs from the one this block was created with.'), { status: 400 });
+    const withThinking = [{ type: 'thinking', thinking: 'hm', signature: 'sig' }, tool('read_email', { id: 'x' }, 't1')];
+    let calls = 0;
+    scripted.mockImplementation((async (req: { messages: { role: string; content: unknown }[] }) => {
+      seen.push(structuredClone(req.messages));
+      calls++;
+      if (calls === 1) return reply(withThinking, 'tool_use');
+      if (calls === 2) throw bad;
+      return reply([say('Here you go.')], 'end_turn');
+    }));
+    const result = await chat(conversation(), 'what did Sara write?', 'en');
+    expect(result.text).toBe('Here you go.');
+    expect(calls).toBe(3);
+    // the retry carried no thinking blocks
+    const retried = JSON.stringify(seen[2]);
+    expect(retried).not.toContain('"thinking"');
+  });
+
+  it('does not hide other 400s', async () => {
+    scripted.mockImplementation((async () => {
+      throw Object.assign(new Error('400 credit balance is too low'), { status: 400 });
+    }));
+    await expect(chat(conversation(), 'hi', 'en')).rejects.toThrow(/credit balance/);
+  });
+});
