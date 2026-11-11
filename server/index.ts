@@ -19,7 +19,7 @@ import { localHostOnly, sameOriginOnly } from './security.js';
 import { writePrivate } from './secure-fs.js';
 import { flushSave } from './store.js';
 import { dataIsPersistent } from './storage.js';
-import { devDeny } from './devserver.js';
+import { devDeny, devOrigins } from './devserver.js';
 import { startTrading } from './trading/engine.js';
 import { startRenderWatch } from './render-usage.js';
 import { startKeyWatch } from './keys.js';
@@ -61,7 +61,7 @@ if (config.production) {
   const { createServer } = await import('vite');
   // No cross-origin answers, and never the data folder (store, push key, feed token) or dotfiles: Vite serves the
   // whole project root, and any page on another localhost port could otherwise read them.
-  const vite = await createServer({ server: { middlewareMode: true, hmr: !phoneMode, cors: false, fs: { deny: devDeny(config.dataDir) } }, appType: 'spa' });
+  const vite = await createServer({ server: { middlewareMode: true, hmr: !phoneMode, cors: { origin: devOrigins(config.port) }, fs: { deny: devDeny(config.dataDir) } }, appType: 'spa' });
   app.use(vite.middlewares);
 }
 

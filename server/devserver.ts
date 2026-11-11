@@ -13,3 +13,11 @@ export function devDeny(dataDir: string): string[] {
     '**/data*/**', // the default folder and the test copies next to it
   ];
 }
+
+/**
+ * The only pages that may talk to the local Vite server across origins: this very app, on its own port (its hot-reload
+ * socket checks the page's origin). Any other localhost port is refused.
+ */
+export function devOrigins(port: number): RegExp {
+  return new RegExp(`^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\]):${port}$`);
+}

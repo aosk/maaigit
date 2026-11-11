@@ -126,8 +126,9 @@ describe('adding a Face ID device needs the password typed again (penetration-te
     expect((await post('/api/passkeys/options', { password: 'wrong' }, owner())).status).toBe(403);
     const options = (await post('/api/passkeys/options', { password: PASSWORD }, owner())).json() as { challenge: string };
     // The registration itself asks again: a challenge got with the password cannot be used without it.
+    const before = state.passkeys.length;
     expect((await post('/api/passkeys', { response: phone().register(options) }, owner())).status).toBe(403);
-    expect(state.passkeys.length).toBe(0);
+    expect(state.passkeys.length).toBe(before);
   });
 });
 
@@ -237,9 +238,15 @@ describe('signing in with Face ID', () => {
 // Last: signing out everywhere ends the owner's own session for the rest of this file.
 describe('signing out everywhere (penetration-test finding)', () => {
   it('is forgotten when the owner signs out everywhere, so a planted device cannot outlive it', async () => {
-    await setUp();
-    expect(state.passkeys.length).toBe(1);
-    expect((await post('/api/logout', { everywhere: true }, owner())).status).toBe(204);
-    expect(state.passkeys.length).toBe(0);
+    // The sign-out counter is shared by every test in this file: put it back afterwards, so the owner's session works again.
+    const epoch = state.sessionEpoch;
+    try {
+      await setUp();
+      expect(state.passkeys.length).toBeGreaterThan(0);
+      expect((await post('/api/logout', { everywhere: true }, owner())).status).toBe(204);
+      expect(state.passkeys.length).toBe(0);
+    } finally {
+      state.sessionEpoch = epoch;
+    }
   });
 });
