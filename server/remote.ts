@@ -5,7 +5,6 @@ import { approveCard, cancelCard } from './approve.js';
 import { BotInputError, queueCommand, type Order } from './bot.js';
 import { alertOrderCards, alertWhatsAppApproval } from './notify.js';
 import { config } from './config.js';
-import { sttConfigured, transcribe } from './stt.js';
 import { audit, save, state } from './store.js';
 import { cleanText, stripInvisible } from './ai/untrusted.js';
 
@@ -260,8 +259,14 @@ export function takeOrder(order: Order, now = Date.now()): void {
 async function carryOut(order: Order, now: number): Promise<void> {
   const phone = state.bot.orderPhone;
   if (!phone) return;
-  let lang: Lang = arabic(order.text) ? 'ar' : 'en';
+  const lang: Lang = arabic(order.text) ? 'ar' : 'en';
   const reply = (text: string) => queueCommand({ kind: 'reply', phone, toName: 'MAAI', text: `🤖 MAAI\n${text}`.slice(0, 4000), automatic: true });
+
+  // Voice notes are not read (no outside transcription service is used): say so, and the order is typed instead.
+  if (order.audio) {
+    reply('ما أقرأ الرسائل الصوتية. اكتب الأمر نصاً.\nI do not read voice notes. Type the order.');
+    return;
+  }
 
   const hourAgo = new Date(now - 3_600_000).toISOString();
   const recent = (state.bot.orderTimes ?? []).filter((t) => t > hourAgo);
@@ -274,43 +279,9 @@ async function carryOut(order: Order, now: number): Promise<void> {
   }
   state.bot.orderTimes = [...recent, new Date(now).toISOString()];
 
-  const ar0 = lang === 'ar';
-  // A voice note cannot unlock (a PIN is never spoken): while locked it is held, not even written out.
-  if (order.audio && !unlocked(now)) {
-    held = { order, at: now };
-    reply(ar0 || !order.text ? '🔒 رقم الأوامر مقفل. أرسل: فتح ثم رمزك (مثال: فتح 123456)، وأنفّذ رسالتك الصوتية بعدها.\n🔒 Locked. Send: unlock <your PIN>, and your voice note runs then.' : '🔒 Locked. Send: unlock <your PIN>, and your voice note runs then.');
-    return;
-  }
-
-  let text = order.text.trim();
-  // A voice note is written out first (Arabic and English in one sentence), and the user sees what was heard.
-  if (order.audio) {
-    if (!sttConfigured) {
-      reply('للأوامر الصوتية أحتاج خدمة تحويل الصوت لنص: أضف STT_API_KEY في Render. أو اكتب الأمر نصاً.\nVoice orders need STT_API_KEY on Render. Or type the order.');
-      return;
-    }
-    try {
-      text = (await transcribe(order.audio)).trim();
-    } catch (error) {
-      reply(`ما قدرت أسمع الرسالة الصوتية (${(error as Error).message}). أرسلها مرة ثانية أو اكتبها.`);
-      return;
-    }
-    lang = arabic(text) ? 'ar' : 'en';
-    if (!text) {
-      reply(lang === 'ar' ? 'ما سمعت كلاماً في الرسالة الصوتية.' : 'I heard no words in that voice note.');
-      return;
-    }
-    // Approving needs the PIN, and a PIN is never spoken: approvals and cancels are typed.
-    const plainVoice = plainDigits(text);
-    if (APPROVE.test(plainVoice) || CANCEL.test(plainVoice) || LOOKS_LIKE_APPROVAL.test(plainVoice) || holdsPin(plainVoice)) {
-      reply(lang === 'ar' ? 'الموافقة والإلغاء بالكتابة فقط، لا تقل رمزك بصوت. اكتب: موافق <الرقم> <رمزك>' : 'Approve or cancel by typing only, never say your PIN aloud. Type: approve <number> <your PIN>');
-      return;
-    }
-    audit('Voice order from your WhatsApp number', 'You (WhatsApp)', 'done');
-    reply(`🎙️ ${lang === 'ar' ? 'سمعت' : 'Heard'}: «${text.slice(0, 500)}»`);
-  }
+  const text = order.text.trim();
   if (!text) {
-    reply(lang === 'ar' ? 'أقرأ الرسائل النصية والصوتية فقط. اكتب الأمر أو سجّله.' : 'I read text and voice notes only. Type or record the order.');
+    reply(lang === 'ar' ? 'أقرأ الرسائل النصية فقط. اكتب الأمر.' : 'I read text messages only. Type the order.');
     return;
   }
 
@@ -318,13 +289,13 @@ async function carryOut(order: Order, now: number): Promise<void> {
   const ar = lang === 'ar';
 
   // "فتح 123456" unlocks for an hour (and runs an order held while locked); "قفل" locks again.
-  if (!order.audio && LOCK.test(plain)) {
+  if (LOCK.test(plain)) {
     lockOrders();
     audit('Order number locked from WhatsApp', 'You (WhatsApp)', 'done');
     reply(ar ? '🔒 قفلت رقم الأوامر.' : '🔒 Locked.');
     return;
   }
-  const unlock = order.audio ? null : UNLOCK.exec(plain);
+  const unlock = UNLOCK.exec(plain);
   if (unlock) {
     const problem = checkPin(unlock[1], ar, now, 'unlock');
     save();
@@ -359,7 +330,7 @@ async function carryOut(order: Order, now: number): Promise<void> {
   }
 
   // Questions and orders need the number unlocked: a phone in someone else's hand learns nothing.
-  if (!order.audio && !unlocked(now)) {
+  if (!unlocked(now)) {
     // Kept to run after unlocking, unless it holds the PIN (which never reaches the assistant). The reply is the same.
     if (!withPin) held = { order, at: now };
     reply(ar ? '🔒 رقم الأوامر مقفل. أرسل: فتح ثم رمزك (مثال: فتح 123456)، وأنفّذ طلبك بعدها.' : '🔒 Locked. Send: unlock <your PIN> (e.g. unlock 123456), and your order runs then.');

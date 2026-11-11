@@ -14,7 +14,7 @@ vi.hoisted(() => {
 const create = vi.hoisted(() => vi.fn());
 vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof import('../ai/claude')>()), client: {}, create }));
 
-import { decisionRound, newsRound } from './agents';
+import { decisionRound, newsRound, resetAgentMemory } from './agents';
 import { inDesk } from './desk';
 import { gate, round, tradingView } from './engine';
 import { processOrders } from './executor';
@@ -28,6 +28,7 @@ const SAT_NIGHT = new Date('2026-11-07T21:00:00Z');
 
 beforeEach(async () => {
   create.mockReset();
+  resetAgentMemory();
   await crypto(async () => {
     resetTrading();
     resetQuotes();
@@ -99,7 +100,7 @@ describe('the crypto desk', () => {
   });
 
   it('reads the news every six hours, about coins', async () => {
-    create.mockResolvedValue({ content: [{ type: 'text', text: JSON.stringify({ items: [], market: [] }) }] });
+    create.mockResolvedValue({ content: [{ type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } }, { type: 'text', text: JSON.stringify({ items: [], market: [] }) }] });
     await crypto(async () => {
       await newsRound(SAT_NIGHT);
       await newsRound(new Date(SAT_NIGHT.getTime() + 5 * 3_600_000));

@@ -11,7 +11,6 @@ import { newsStatus } from './news/index.js';
 import { config } from './config.js';
 import { state } from './store.js';
 import { dataIsPersistent } from './storage.js';
-import { sttWorking } from './stt.js';
 import { tradingSummary } from './trading/health.js';
 
 /** What is connected, for Settings → Connections and the admin portal. */
@@ -26,7 +25,6 @@ export function status(): StatusInfo {
     news: newsStatus(),
     // Only online: on a computer at home the data folder is the computer's own disk.
     storage: config.production ? { persistent: dataIsPersistent(config.dataDir), dir: config.dataDir } : undefined,
-    voice: { smart: sttWorking() },
     trading: tradingSummary(),
     lockMinutes: state.lockMinutes ?? config.lockMinutes,
     model: MODEL,

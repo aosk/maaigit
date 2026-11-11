@@ -16,7 +16,9 @@ import { inDesk } from './desk';
 import { applyFundamentals, fundamentalsForDecision, fundamentalsRound, fundamentalsView } from './fundamentals';
 import { resetTrading } from './store';
 
-const reply = (value: unknown) => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
+/** What the API returns when an agent really searched (an agent that answers with no search is sent back once). */
+const searched = { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } };
+const reply = (value: unknown) => ({ content: [searched, { type: 'text', text: JSON.stringify(value) }] });
 const SUN = new Date('2026-11-01T08:00:00Z');
 const row = (symbol: string, over: Record<string, unknown> = {}) => ({ symbol, pe: 16.2, epsGrowthPct: 8, revenueGrowthPct: 5, dividendYieldPct: 4.1, period: 'Q3 2026', note: 'نمو في الأرباح', source: 'Argaam', ...over });
 

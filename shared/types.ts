@@ -345,8 +345,6 @@ export interface StatusInfo {
   auth?: 'none' | 'pin' | 'password';
   /** Online only: whether saved data is on a disk that survives updates (if not, every update erases it). */
   storage?: { persistent: boolean; dir: string };
-  /** Smart voice: a transcription service that understands Arabic and English in one sentence. */
-  voice?: { smart: boolean };
   /** StockSmart: the trading desk and the SNB desktop bot. */
   trading?: import('./trading.js').TradingSummary;
   /** Minutes a Face ID device stays open without being used. */

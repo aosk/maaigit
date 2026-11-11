@@ -3,7 +3,6 @@ import type { ChatTurn, Lang, Proposal, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
 import { canListen, listen, speak, speechStream, stopSpeaking, unlockSpeech, type ListenProblem } from '../speech';
-import { canRecord, record } from '../recorder';
 import { FileText, Mic, Paperclip, Person, Plus, Send } from '../components/Icons';
 import { canPickContacts, pickContacts } from '../contacts';
 import { AttachError, prepare, type AttachKind } from '../attach';
@@ -31,10 +30,9 @@ export function Assistant() {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState<StatusInfo | null>(null);
-  // Known once the status has loaded (or failed to): only then is it known whether the smart voice service is there.
+  // Known once the status has loaded (or failed to).
   const [statusKnown, setStatusKnown] = useState(false);
   // Opened from the "talk" shortcut: start listening once the status and the chat are loaded, with that render's toggleMic.
   const listenWanted = useRef(false);
@@ -42,8 +40,6 @@ export function Assistant() {
   const stopRef = useRef<() => void>();
   const inputRef = useRef<HTMLInputElement>(null);
   const [voiceNote, setVoiceNote] = useState('');
-  // The voice service failed (no credit, down): the phone's own voice typing listens instead until the app is reopened.
-  const [smartFailed, setSmartFailed] = useState(false);
   const [progress, setProgress] = useState<Progress>(emptyProgress);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -137,9 +133,8 @@ export function Assistant() {
     setPending((ps) => ps.filter((p) => p.key !== key));
   }
 
-  // The microphone listens for the app's language (the ع / EN button at the top changes it); the voice service, when on, understands both at once.
+  // The microphone is the phone's own dictation: it listens for the app's language (the ع / EN button at the top changes it).
   const dictLang: Lang = lang;
-  const smart = Boolean(status?.voice?.smart) && canRecord && !smartFailed;
 
   async function send(text: string, voice?: Lang, spoken = false) {
     if (busyRef.current || !alive.current) return;
@@ -208,7 +203,7 @@ export function Assistant() {
     if (settings.toggles.reviewVoice) {
       setInput(words);
       inputRef.current?.focus();
-    } else void send(words, smart ? undefined : dictLang, true);
+    } else void send(words, dictLang, true);
   }
 
   function toggleMic() {
@@ -219,7 +214,6 @@ export function Assistant() {
     stopSpeaking();
     unlockSpeech();
     setVoiceNote('');
-    if (smart) return listenSmart();
     if (!canListen) return typeInstead('unsupported');
     setLive(true);
     let heard = '';
@@ -237,29 +231,6 @@ export function Assistant() {
       },
       { silenceMs: settings.toggles.longListen ? 5000 : 2500 },
     );
-  }
-
-  /** Records, then has the voice service write it down: Arabic and English can be mixed in one sentence. */
-  function listenSmart() {
-    setLive(true);
-    stopRef.current = record({
-      silenceMs: settings.toggles.longListen ? 4500 : 2200,
-      onDone: (audio, problem) => {
-        if (!alive.current) return;
-        setLive(false);
-        if (!audio) return typeInstead(problem === 'denied' ? 'denied' : problem === 'unsupported' ? 'unsupported' : 'no-speech');
-        setTranscribing(true);
-        api
-          .transcribe(audio)
-          .then((words) => alive.current && heardWords(words))
-          .catch((e: Error) => {
-            if (!alive.current) return;
-            if (canListen) setSmartFailed(true);
-            setVoiceNote(canListen ? t.voicePhoneInstead : t.voiceFailed(e.message));
-          })
-          .finally(() => alive.current && setTranscribing(false));
-      },
-    });
   }
 
   /** When the browser can't listen, open the keyboard: its own microphone key works everywhere. */
@@ -333,7 +304,7 @@ export function Assistant() {
 
       <form className="composer" onSubmit={onSubmit}>
         <div className="composer-hint" aria-live="polite">
-          {transcribing ? t.transcribing : live ? t.listening : voiceNote || t.tapToSpeak}
+          {live ? t.listening : voiceNote || t.tapToSpeak}
         </div>
         {pending.length > 0 && (
           <ul className="attachments" aria-label={t.attach}>
@@ -384,7 +355,7 @@ export function Assistant() {
               aria-label={live ? t.stopListening : t.startListening}
               aria-pressed={live}
               onClick={toggleMic}
-              disabled={busy || transcribing}
+              disabled={busy}
             >
               <Mic size={26} />
             </button>

@@ -13,12 +13,10 @@ vi.hoisted(() => {
 
 // The assistant itself is tested elsewhere: here it is a stand-in that records what it was asked.
 vi.mock('./ai/chat.js', async (original) => ({ ...(await original<typeof import('./ai/chat')>()), chat: vi.fn() }));
-vi.mock('./stt.js', async (original) => ({ ...(await original<typeof import('./stt')>()), sttConfigured: true, transcribe: vi.fn() }));
 vi.mock('./ai/claude.js', async (original) => ({ ...(await original<typeof import('./ai/claude')>()), client: {}, create: vi.fn() }));
 
 import type { Proposal } from '../shared/types';
 import { chat } from './ai/chat';
-import { transcribe } from './stt';
 import { createKey, receiveFromBot, takeCommands } from './bot';
 import { createInnerApp, createOnlineSite } from './site';
 import { listen, raw } from './security/helpers';
@@ -56,7 +54,6 @@ beforeEach(async () => {
   state.audit = [];
   state.alerts = [];
   answered.mockReset();
-  vi.mocked(transcribe).mockReset();
   answered.mockResolvedValue({ text: 'Tomorrow: stand-up at 9.', proposals: [] });
   key = createKey();
   resetBotLimits();
@@ -246,7 +243,6 @@ describe('orders from the user\'s own WhatsApp number', () => {
   });
 
   describe('voice notes from the order number', () => {
-    const heard = vi.mocked(transcribe);
     const voice = (phone = ORDERS, id = `v${Math.random().toString(16).slice(2)}`) =>
       fetch(`http://127.0.0.1:${site.port}/bot/v1/voice?${new URLSearchParams({ id, at: new Date().toISOString(), phone })}`, {
         method: 'POST',
@@ -254,14 +250,12 @@ describe('orders from the user\'s own WhatsApp number', () => {
         body: Buffer.from('OggS fake voice note'),
       });
 
-    it('are written out, shown back, and carried out like a typed order', async () => {
-      heard.mockResolvedValueOnce('وش عندي بكرة؟');
+    it('are not read (nothing is sent to a voice service): the user is told to type the order', async () => {
       expect((await voice()).status).toBe(200);
-      await vi.waitFor(() => expect(state.bot.commands.filter((c) => c.status === 'queued')).toHaveLength(2));
-      const [echo, reply] = takeCommands();
-      expect(echo.text).toBe('🤖 MAAI\n🎙️ سمعت: «وش عندي بكرة؟»');
-      expect(answered).toHaveBeenCalledWith(expect.anything(), '(from my WhatsApp) وش عندي بكرة؟', 'ar');
-      expect(reply.text).toContain('Tomorrow: stand-up at 9.');
+      const [reply] = await repliesSoon();
+      expect(reply).toMatchObject({ kind: 'reply', phone: ORDERS });
+      expect(reply.text).toContain('اكتب الأمر');
+      expect(answered).not.toHaveBeenCalled();
     });
 
     it('tells the user on WhatsApp when the bot could not get the recording', async () => {
@@ -272,18 +266,11 @@ describe('orders from the user\'s own WhatsApp number', () => {
       const [reply] = takeCommands();
       expect(reply).toMatchObject({ kind: 'reply', phone: ORDERS });
       expect(reply.text).toContain('أرسلها مرة ثانية');
-      expect(heard).not.toHaveBeenCalled();
     });
 
-    it('come only from the order number, and never approve: a spoken PIN is refused', async () => {
+    it('come only from the order number', async () => {
       expect((await voice('966500000002')).status).toBe(403);
       expect((await fetch(`http://127.0.0.1:${site.port}/bot/v1/voice?id=x&phone=${ORDERS}`, { method: 'POST', headers: { 'content-type': 'audio/ogg' }, body: 'x' })).status).toBe(401);
-      await asUser('PUT', '/admin/bot/order-pin', { pin: '482913' });
-      heard.mockResolvedValueOnce('موافق ٣ ٤٨٢٩١٣');
-      await voice();
-      const [reply] = await repliesSoon();
-      expect(reply.text).toContain('بالكتابة فقط');
-      expect(answered).not.toHaveBeenCalled();
     });
   });
 
@@ -327,12 +314,14 @@ describe('orders from the user\'s own WhatsApp number', () => {
       await repliesSoon().catch(() => []); // the held "hello" runs
       expect((await asUser('POST', '/admin/bot/order-lock', {})).status).toBe(200);
       expect(state.bot.orderUnlockedUntil).toBeUndefined();
+      answered.mockClear();
       const voice = await fetch(`http://127.0.0.1:${site.port}/bot/v1/voice?${new URLSearchParams({ id: 'vlock', at: new Date().toISOString(), phone: ORDERS })}`, {
         method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'audio/ogg' }, body: Buffer.from('OggS x'),
       });
       expect(voice.status).toBe(200);
-      expect((await repliesSoon())[0].text).toContain('🔒');
-      expect(vi.mocked(transcribe)).not.toHaveBeenCalled(); // not even written out while locked
+      // a voice note is answered with "type it", never run and never held for the unlock
+      expect((await repliesSoon())[0].text).toContain('اكتب الأمر');
+      expect(answered).not.toHaveBeenCalled();
     });
 
     it('stays locked after an hour', async () => {

@@ -171,10 +171,6 @@ export function SettingsScreen() {
       </Group>
 
       <Group id="voice" title={t.dictationTitle}>
-        <section className="card">
-          <p className="sub"><strong>{t.smartVoiceName}:</strong> {status?.voice?.smart ? t.smartVoiceOn : t.smartVoiceOff}</p>
-        </section>
-
         <VoiceSettings />
       </Group>
 

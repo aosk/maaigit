@@ -355,7 +355,8 @@ describe('the assistant and WhatsApp', () => {
     state.proposals.push(created[0]);
     expect((await approve(created[0].id, { body: 'Edited by the user' })).status).toBe(200);
     expect(new URLSearchParams(String((spy.mock.calls[0][1] as RequestInit).body)).get('Body')).toBe('Edited by the user');
-    expect(state.inbox.every((m) => m.replied)).toBe(true);
+    // (Only the WhatsApp conversation: another test's leftovers in the shared inbox are not this one's business.)
+    expect(state.inbox.filter((m) => m.channel === 'whatsapp').every((m) => m.replied)).toBe(true);
     expect((await approve(created[0].id, { body: 'again' })).status).toBe(409);
     expect(spy).toHaveBeenCalledTimes(1);
   });
