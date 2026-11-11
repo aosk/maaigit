@@ -40,6 +40,8 @@ interface GuardOptions {
   epoch?: { get: () => number; bump: () => void };
   /** Sessions signed out one by one (on one device), until they would have expired anyway. */
   revoked?: { has: (id: string) => boolean; add: (id: string, expires: number) => void };
+  /** Called when someone signs out everywhere: whatever else could sign in again (Face ID devices) is forgotten with the sessions. */
+  onSignOutEverywhere?: () => void;
 }
 
 export function createGuard(kind: AuthKind, passcode: string, secret: string, now: () => number = Date.now, options: GuardOptions = {}) {
@@ -57,9 +59,11 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
   // A random part makes every session its own, so one can be signed out alone. Sessions from before it had none.
   const sign = (expires: number, nonce = '') => createHmac('sha256', secret).update(`${kind}|${expires}|${passcodeHash}${mark()}${nonce ? `|${nonce}` : ''}`).digest('hex');
   const seconds = () => Math.floor(now() / 1000);
-  const issue = () => {
+  // A session that came from Face ID is marked in its own signed part (an "F" after the random part), so the extra
+  // lock cannot be shed by leaving a cookie out: a copy of such a session is asked for the recent unlock too.
+  const issue = (face = false) => {
     const expires = seconds() + SESSION_DAYS * DAY;
-    const nonce = randomBytes(8).toString('hex');
+    const nonce = randomBytes(8).toString('hex') + (face ? 'F' : '');
     return `${COOKIE}=${expires}.${nonce}.${sign(expires, nonce)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_DAYS * DAY}`;
   };
   /** The expiry (in seconds) of a good cookie value, or 0. */
@@ -71,7 +75,7 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
     const parts = value.split('.');
     const [expiresText = '', nonce, signature = ''] = parts.length === 3 ? parts : [parts[0], '', parts[1]];
     const expires = /^\d{1,12}$/.test(expiresText) ? Number(expiresText) : 0;
-    if (nonce && !/^[0-9a-f]{16}$/.test(nonce)) return 0;
+    if (nonce && !/^[0-9a-f]{16}F?$/.test(nonce)) return 0;
     return expires > seconds() && expires <= seconds() + SESSION_DAYS * DAY && sameText(signature, sign(expires, nonce)) && !revoked.has(sessionId(value)) ? expires : 0;
   };
 
@@ -91,7 +95,9 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
   // or phone without Face ID would otherwise ask for the full password every few minutes.
   const faceDevice = `${FACE_DEVICE}=1; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${400 * DAY}`;
   const usesFace = (req: Request) => new RegExp(`(?:^|;\\s*)${FACE_DEVICE}=1(?:;|$)`).test(req.headers.cookie ?? '');
-  const cookieValue = (req: Request, name: string) => (req.headers.cookie ?? '').match(new RegExp(`(?:^|;\\s*)${name}=([0-9a-f.]+)`))?.[1] ?? '';
+  const cookieValue = (req: Request, name: string) => (req.headers.cookie ?? '').match(new RegExp(`(?:^|;\\s*)${name}=([0-9a-fF.]+)`))?.[1] ?? '';
+  /** Whether a (good) session cookie came from Face ID. */
+  const isFaceSession = (value: string) => value.split('.').length === 3 && value.split('.')[1].endsWith('F');
 
   // Five wrong tries lock sign-in, and each further round of five locks it twice as long
   // (1 minute, 2, 4 … up to an hour), so a passcode can't be guessed by trying them all.
@@ -133,7 +139,10 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
       // only a real session can do that, a stranger's request just clears their own cookies.
       const session = cookieValue(req, COOKIE);
       const expires = check(session);
-      if (expires && req.body?.everywhere === true) epoch.bump();
+      if (expires && req.body?.everywhere === true) {
+        epoch.bump();
+        options.onSignOutEverywhere?.();
+      }
       // This device's session stops working for good, even a copy of its cookie; other devices stay signed in.
       else if (expires) revoked.add(sessionId(session), expires);
       res.setHeader('Set-Cookie', [gone(COOKIE), gone(FACE_COOKIE)]);
@@ -145,7 +154,10 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
 
     // Once Face ID is set up, being signed in is not enough: MAAI must also have been unlocked a few
     // minutes ago. Using the app keeps that going; leaving it for longer asks for Face ID again.
-    if (options.lockActive?.() && usesFace(req)) {
+    const sessionCookie = cookieValue(req, COOKIE);
+    const faceSession = isFaceSession(sessionCookie);
+    const faceDeviceMark = usesFace(req);
+    if (options.lockActive?.() && (faceSession || faceDeviceMark)) {
       const face = checkFace(cookieValue(req, FACE_COOKIE));
       if (!face) return res.status(401).json({ error: 'locked', kind, face: true });
       // Only real use keeps it open: the app's own automatic refreshes (marked as background) do not,
@@ -155,12 +167,15 @@ export function createGuard(kind: AuthKind, passcode: string, secret: string, no
     }
     // Using the app keeps you signed in: renew once half the time is gone.
     // A session from before sessions had their own id is swapped for one that has it.
-    if (expires - seconds() < (SESSION_DAYS / 2) * DAY || cookieValue(req, COOKIE).split('.').length === 2) res.append('Set-Cookie', issue());
+    // A device that proved itself with Face ID gets its session marked as such from now on.
+    if (expires - seconds() < (SESSION_DAYS / 2) * DAY || sessionCookie.split('.').length === 2 || (faceDeviceMark && !faceSession)) res.append('Set-Cookie', issue(faceSession || faceDeviceMark));
     res.locals.auth = kind;
-    res.locals.startFace = () => res.append('Set-Cookie', [issueFace(), faceDevice]);
+    // Setting up Face ID needs the password (or PIN) typed again: a copied session cookie alone must not be able to add a way in.
+    res.locals.verifyPasscode = (given: string) => sameText(hash(given.trim()), passcodeHash);
+    res.locals.startFace = () => res.append('Set-Cookie', [issue(true), issueFace(), faceDevice]);
     next();
   }
 
   // Another way in (Face ID) gives out the very same session, and the "just unlocked" mark.
-  return Object.assign(guard, { startSession: (res: Response) => void res.setHeader('Set-Cookie', [issue(), issueFace(), faceDevice]) });
+  return Object.assign(guard, { startSession: (res: Response) => void res.setHeader('Set-Cookie', [issue(true), issueFace(), faceDevice]) });
 }

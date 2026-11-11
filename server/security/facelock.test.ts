@@ -56,6 +56,21 @@ describe('the app locks itself once Face ID is set up', () => {
     expect(String(login.headers['set-cookie'])).toContain('maai_face_device=1');
   });
 
+  it('still locks a copy of a Face ID session that leaves the device cookie out (penetration-test finding)', async () => {
+    faceSetUp = true;
+    const login = await raw(site.port, 'POST', '/api/face-login');
+    const session = cookies(login).find((c) => c.startsWith('maai_session='))!;
+    const recent = cookies(login).find((c) => c.startsWith('maai_face='))!;
+    // The device itself, just unlocked: in.
+    expect((await ping([session, recent], site, false, false)).status).toBe(200);
+    // Later, someone with only the copied session (no device cookie, no recent unlock): out.
+    clock += 60 * MINUTE;
+    expect((await ping([session], site, false, false)).status).toBe(401);
+    // A session made by the password is not a Face ID session: it never asks, as before.
+    const pw = cookies(await unlock()).find((c) => c.startsWith('maai_session='))!;
+    expect((await ping([pw], site, false, false)).status).toBe(200);
+  });
+
   it('asks for nothing extra until Face ID is set up', async () => {
     const res = await unlock();
     expect(cookies(res)).toHaveLength(2);

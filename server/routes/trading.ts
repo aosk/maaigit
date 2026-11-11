@@ -24,7 +24,14 @@ tradingRoutes.use('/trading', (req, _res, next) => inDesk(req.query.market === '
 tradingRoutes.get('/trading', (_req, res) => res.json(tradingView()));
 
 /** The log as it happens (Server-Sent Events). Resumes from the last event the browser saw, so a dropped line loses nothing. */
+const streams = new Map<string, number>();
+/** Most live streams one address may hold open (a phone and a computer, with a few reconnecting). */
+const MAX_STREAMS = 12;
+
 tradingRoutes.get('/trading/stream', (req, res) => {
+  const who = req.ip ?? '';
+  if ((streams.get(who) ?? 0) >= MAX_STREAMS) return void res.status(429).json({ error: 'Too many live streams open from this address.' });
+  streams.set(who, (streams.get(who) ?? 0) + 1);
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.flushHeaders();
   const since = Number(req.get('last-event-id') ?? req.query.since ?? 0);
@@ -36,6 +43,9 @@ tradingRoutes.get('/trading/stream', (req, res) => {
   req.on('close', () => {
     off();
     clearInterval(keepAlive);
+    const left = (streams.get(who) ?? 1) - 1;
+    if (left > 0) streams.set(who, left);
+    else streams.delete(who);
   });
 });
 

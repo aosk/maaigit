@@ -385,6 +385,11 @@ export function reconcile(report: { cash: number; positions: Position[] }, now =
   const moving = new Set(openOrders('live').filter((o) => o.ackedAt).map((o) => o.symbol));
   const diffs = [...new Set([...reported.keys(), ...expected.keys()])].filter((s) => !moving.has(s) && (reported.get(s) ?? 0) !== (expected.get(s) ?? 0));
   const firstReport = live.positions.length === 0 && live.cash === 0;
+  // The cash the broker reports is checked like the positions: a sum far from the book's (with nothing in flight to explain
+  // it) halts trading, so a wrong or tampered report cannot quietly raise the capital the risk limits work from. A deposit
+  // or withdrawal also stops it once, until the user resumes.
+  const cashLimit = Math.max(500, trading.limits.capital * 0.05);
+  const cashJump = !firstReport && moving.size === 0 && Math.abs(round2(report.cash) - live.cash) > cashLimit ? { was: live.cash, now: round2(report.cash) } : null;
   live.cash = round2(report.cash);
   live.positions = report.positions.filter((p) => p.qty > 0).map((p) => ({ symbol: p.symbol, qty: p.qty, avgCost: p.avgCost > 0 ? p.avgCost : live.positions.find((x) => x.symbol === p.symbol)?.avgCost ?? 0 }));
   // The broker's first report is where the live day starts: before it the book was empty, not worth zero.
@@ -393,8 +398,9 @@ export function reconcile(report: { cash: number; positions: Position[] }, now =
     live.curve = [];
   }
   saveTrading();
-  if (diffs.length && !firstReport) {
-    emit('position.drift', 'system', `حساب Broker يختلف عن المتوقع في: ${diffs.map((s) => `${s} (متوقع ${expected.get(s) ?? 0}، فعلي ${reported.get(s) ?? 0})`).join('، ')}`, { data: { diffs } }, now);
+  if ((diffs.length || cashJump) && !firstReport) {
+    const parts = [...(diffs.length ? [`في: ${diffs.map((s) => `${s} (متوقع ${expected.get(s) ?? 0}، فعلي ${reported.get(s) ?? 0})`).join('، ')}`] : []), ...(cashJump ? [`في النقد (متوقع ${cashJump.was}، فعلي ${cashJump.now})`] : [])];
+    emit('position.drift', 'system', `حساب Broker يختلف عن المتوقع ${parts.join(' و')}`, { data: { diffs, ...(cashJump ? { cash: cashJump } : {}) } }, now);
     halt('اختلاف بين حساب Broker وسجل أسهمي', 'system', now);
     return { drift: true };
   }

@@ -72,8 +72,8 @@ beforeEach(() => {
 const post = (path: string, body: unknown, headers: Record<string, string> = {}) => raw(site.port, 'POST', path, { body: JSON.stringify(body), headers });
 const owner = () => ({ cookie });
 const setUp = async (device = phone()) => {
-  const options = (await post('/api/passkeys/options', {}, owner())).json() as { challenge: string };
-  const res = await post('/api/passkeys', { response: device.register(options), name: 'iPhone' }, owner());
+  const options = (await post('/api/passkeys/options', { password: PASSWORD }, owner())).json() as { challenge: string };
+  const res = await post('/api/passkeys', { response: device.register(options), name: 'iPhone', password: PASSWORD }, owner());
   expect(res.status).toBe(201);
   return device;
 };
@@ -99,24 +99,35 @@ describe('setting up Face ID', () => {
   });
 
   it('refuses a setup that was not made for this site, without a challenge it issued, or without Face ID itself', async () => {
-    const options = async () => (await post('/api/passkeys/options', {}, owner())).json() as { challenge: string };
-    expect((await post('/api/passkeys', { response: phone().register(await options(), { origin: 'https://evil.example' }) }, owner())).status).toBe(400);
-    expect((await post('/api/passkeys', { response: phone().register(await options(), { rp: 'evil.example' }) }, owner())).status).toBe(400);
-    expect((await post('/api/passkeys', { response: phone().register({ challenge: b64u(randomBytes(32)) }) }, owner())).status).toBe(400);
-    expect((await post('/api/passkeys', { response: phone().register(await options(), { flags: 0x41 }) }, owner())).status).toBe(400); // no Face ID check
+    const options = async () => (await post('/api/passkeys/options', { password: PASSWORD }, owner())).json() as { challenge: string };
+    expect((await post('/api/passkeys', { response: phone().register(await options(), { origin: 'https://evil.example' }), password: PASSWORD }, owner())).status).toBe(400);
+    expect((await post('/api/passkeys', { response: phone().register(await options(), { rp: 'evil.example' }), password: PASSWORD }, owner())).status).toBe(400);
+    expect((await post('/api/passkeys', { response: phone().register({ challenge: b64u(randomBytes(32)) }), password: PASSWORD }, owner())).status).toBe(400);
+    expect((await post('/api/passkeys', { response: phone().register(await options(), { flags: 0x41 }), password: PASSWORD }, owner())).status).toBe(400); // no Face ID check
     const reused = await options();
-    await post('/api/passkeys', { response: phone().register(reused) }, owner());
-    expect((await post('/api/passkeys', { response: phone().register(reused) }, owner())).status).toBe(400); // a challenge works once
+    await post('/api/passkeys', { response: phone().register(reused), password: PASSWORD }, owner());
+    expect((await post('/api/passkeys', { response: phone().register(reused), password: PASSWORD }, owner())).status).toBe(400); // a challenge works once
     expect(state.passkeys).toHaveLength(1);
   });
 
   it('keeps at most five devices, and lets one be removed', async () => {
     for (let i = 0; i < 5; i++) await setUp();
-    expect((await post('/api/passkeys/options', {}, owner())).status).toBe(409);
+    expect((await post('/api/passkeys/options', { password: PASSWORD }, owner())).status).toBe(409);
     const gone = state.passkeys[0].id;
     expect((await raw(site.port, 'DELETE', `/api/passkeys/${gone}`, { headers: owner() })).status).toBe(204);
     expect(state.passkeys).toHaveLength(4);
     expect((await raw(site.port, 'DELETE', `/api/passkeys/${gone}`, { headers: owner() })).status).toBe(404);
+  });
+});
+
+describe('adding a Face ID device needs the password typed again (penetration-test finding)', () => {
+  it('refuses a stolen session that does not know it, and counts the wrong tries', async () => {
+    expect((await post('/api/passkeys/options', {}, owner())).status).toBe(403);
+    expect((await post('/api/passkeys/options', { password: 'wrong' }, owner())).status).toBe(403);
+    const options = (await post('/api/passkeys/options', { password: PASSWORD }, owner())).json() as { challenge: string };
+    // The registration itself asks again: a challenge got with the password cannot be used without it.
+    expect((await post('/api/passkeys', { response: phone().register(options) }, owner())).status).toBe(403);
+    expect(state.passkeys.length).toBe(0);
   });
 });
 
@@ -177,7 +188,7 @@ describe('signing in with Face ID', () => {
     vi.setSystemTime(Date.now() + 6 * 60_000);
     expect((await post('/api/passkey/login', { response: device.login(old) })).status).toBe(401);
     vi.useRealTimers();
-    const registering = (await post('/api/passkeys/options', {}, owner())).json() as { challenge: string };
+    const registering = (await post('/api/passkeys/options', { password: PASSWORD }, owner())).json() as { challenge: string };
     expect((await post('/api/passkey/login', { response: device.login(registering) })).status).toBe(401);
   });
 
@@ -220,5 +231,15 @@ describe('signing in with Face ID', () => {
     }
     expect((await raw(site.port, 'POST', '/api/passkey/login', { body: '{"response":', headers: {} })).status).toBeLessThan(500);
     expect((await raw(site.port, 'POST', '/api/passkey/login', { body: 'x'.repeat(100_000) })).status).toBeLessThan(500);
+  });
+});
+
+// Last: signing out everywhere ends the owner's own session for the rest of this file.
+describe('signing out everywhere (penetration-test finding)', () => {
+  it('is forgotten when the owner signs out everywhere, so a planted device cannot outlive it', async () => {
+    await setUp();
+    expect(state.passkeys.length).toBe(1);
+    expect((await post('/api/logout', { everywhere: true }, owner())).status).toBe(204);
+    expect(state.passkeys.length).toBe(0);
   });
 });

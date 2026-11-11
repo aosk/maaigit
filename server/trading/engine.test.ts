@@ -128,6 +128,7 @@ describe('the SNB desktop bot', () => {
   });
 
   it('takes the broker’s account as the truth, and halts when it differs from what was expected', () => {
+    reconcile({ cash: 5274, positions: [] }, OPEN); // the broker's first report, before the order
     const order = liveOrder();
     commandResult({ commandId: order.id, status: 'filled', filledQty: 10, avgPrice: 27.4 }, OPEN);
     expect(reconcile({ cash: 5000, positions: [{ symbol: '2222', qty: 10, avgCost: 27.4 }] }, OPEN).drift).toBe(false);
@@ -135,6 +136,15 @@ describe('the SNB desktop bot', () => {
     expect(reconcile({ cash: 4726, positions: [{ symbol: '2222', qty: 20, avgCost: 27.4 }] }, OPEN).drift).toBe(true);
     expect(trading.halted).toBe(true);
     expect(trading.books.live.positions[0].qty).toBe(20);
+  });
+
+  it('halts when the broker reports a sum of cash far from the book’s, with nothing in flight (penetration-test finding)', () => {
+    reconcile({ cash: 20_000, positions: [] }, OPEN);
+    expect(reconcile({ cash: 20_200, positions: [] }, OPEN).drift).toBe(false); // fees and rounding
+    expect(trading.halted).toBe(false);
+    expect(reconcile({ cash: 999_999_999, positions: [] }, OPEN).drift).toBe(true);
+    expect(trading.halted).toBe(true);
+    expect(trading.events.some((e) => e.type === 'position.drift' && /النقد/.test(e.text))).toBe(true);
   });
 
   it('starts the live day from the broker’s first report, not from an empty book', () => {

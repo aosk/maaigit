@@ -160,8 +160,8 @@ export const api = {
   passkeyLoginOptions: () => call<PublicKeyCredentialRequestOptionsJSON>('POST', '/passkey/login/options', {}),
   passkeyLogin: (response: AuthenticationResponseJSON) => call<void>('POST', '/passkey/login', { response }),
   passkeys: () => call<Passkey[]>('GET', '/passkeys'),
-  passkeyRegisterOptions: () => call<PublicKeyCredentialCreationOptionsJSON>('POST', '/passkeys/options', {}),
-  passkeyRegister: (response: RegistrationResponseJSON, name: string) => call<{ id: string }>('POST', '/passkeys', { response, name }),
+  passkeyRegisterOptions: (password: string) => call<PublicKeyCredentialCreationOptionsJSON>('POST', '/passkeys/options', { password }),
+  passkeyRegister: (response: RegistrationResponseJSON, name: string, password: string) => call<{ id: string }>('POST', '/passkeys', { response, name, password }),
   deletePasskey: (id: string) => call<void>('DELETE', `/passkeys/${encodeURIComponent(id)}`),
   today: (background = false) => call<TodayData>('GET', '/today', undefined, background),
   /** Tells the server someone is using MAAI, so the Face ID lock does not close it. */

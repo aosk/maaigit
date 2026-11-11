@@ -25,7 +25,8 @@ const base64url = (data: Uint8Array) => Buffer.from(data).toString('base64url');
 
 /** Where the page is served from. The phone refuses to sign for any other address, so this cannot be talked into a mismatch. */
 function origin(req: Request): string {
-  const configured = process.env.MAAI_PUBLIC_URL?.trim();
+  // The configured address first (Render sets RENDER_EXTERNAL_URL), never a Host header a visitor can write.
+  const configured = (process.env.MAAI_PUBLIC_URL ?? process.env.RENDER_EXTERNAL_URL)?.trim();
   if (configured) return new URL(configured).origin;
   return `${req.protocol}://${req.get('host') ?? 'localhost'}`;
 }
@@ -86,7 +87,21 @@ passkeyManagement.get('/passkeys', (_req, res) =>
   res.json(state.passkeys.map(({ id, name, createdAt, lastUsedAt }) => ({ id, name, createdAt, lastUsedAt }))),
 );
 
+/** Adding a Face ID device needs the password (or PIN) typed again, not only a signed-in session. */
+function requirePasscode(req: Request, res: Response): void {
+  const ip = req.ip ?? '';
+  if (tooManyFailures(ip)) throw new HttpError(429, 'Too many wrong tries. Try again in a few minutes.');
+  const verify = res.locals.verifyPasscode as ((given: string) => boolean) | undefined;
+  // Without a sign-in gate (MAAI on the home computer itself) there is nothing to type.
+  if (!verify) return;
+  if (!verify(typeof req.body?.password === 'string' ? req.body.password : '')) {
+    addFailure(ip);
+    throw new HttpError(403, 'Type your password (or PIN) to add Face ID.');
+  }
+}
+
 passkeyManagement.post('/passkeys/options', wrap(async (req, res) => {
+  requirePasscode(req, res);
   if (state.passkeys.length >= MAX_PASSKEYS) throw new HttpError(409, `You can keep up to ${MAX_PASSKEYS} Face ID devices. Remove one first.`);
   const options = await generateRegistrationOptions({
     rpName: 'MAAI',
@@ -103,6 +118,7 @@ passkeyManagement.post('/passkeys/options', wrap(async (req, res) => {
 }));
 
 passkeyManagement.post('/passkeys', wrap(async (req, res) => {
+  requirePasscode(req, res);
   if (state.passkeys.length >= MAX_PASSKEYS) throw new HttpError(409, `You can keep up to ${MAX_PASSKEYS} Face ID devices. Remove one first.`);
   const response = req.body?.response as RegistrationResponseJSON | undefined;
   if (!response || typeof response !== 'object') throw new HttpError(400, 'Face ID setup was not understood.');

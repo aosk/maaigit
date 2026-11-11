@@ -11,6 +11,8 @@ export function FaceId() {
   const [keys, setKeys] = useState<Passkey[]>([]);
   const [available, setAvailable] = useState<boolean | null>(null);
   const { busy, error, run } = useAction();
+  // Adding a device needs the password (or PIN) typed again.
+  const [passcode, setPasscode] = useState('');
 
   const load = useCallback(() => {
     api.passkeys().then(setKeys).catch(() => {});
@@ -25,9 +27,10 @@ export function FaceId() {
   const setUp = () =>
     run(async () => {
       try {
-        const options = await api.passkeyRegisterOptions();
+        const options = await api.passkeyRegisterOptions(passcode);
         const response = await startRegistration({ optionsJSON: options });
-        await api.passkeyRegister(response, /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : t.thisDevice);
+        await api.passkeyRegister(response, /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : t.thisDevice, passcode);
+        setPasscode('');
         load();
       } catch (err) {
         if ((err as Error).name === 'NotAllowedError') throw new Error(t.faceIdCancelled, { cause: err });
@@ -56,7 +59,11 @@ export function FaceId() {
             <button className="btn danger" onClick={() => remove(k.id)} disabled={busy} aria-label={`${t.remove}: ${k.name}`}>{t.remove}</button>
           </div>
         ))}
-        <button className="btn primary big" onClick={setUp} disabled={busy || available === false}>{busy ? t.sending : keys.length ? t.faceIdAddAnother : t.faceIdSetUp}</button>
+        <div className="field">
+          <label htmlFor="face-passcode">{t.facePasscode}</label>
+          <input id="face-passcode" type="password" autoComplete="current-password" value={passcode} onChange={(e) => setPasscode(e.target.value)} dir="ltr" />
+        </div>
+        <button className="btn primary big" onClick={setUp} disabled={busy || available === false || !passcode.trim()}>{busy ? t.sending : keys.length ? t.faceIdAddAnother : t.faceIdSetUp}</button>
         {keys.length > 0 && <LockAfter />}
         {error && <div className="error" role="alert">{error}</div>}
       </section>
