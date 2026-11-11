@@ -59,8 +59,11 @@ const ROUTE = `M${CX} 56L${P('news')}L${CX} ${CY}L${P('decision')}A${RI} ${RI} 0
 const ROUTE_2 = `M${CX} 56L${P('technical')}L${CX} ${CY}`;
 /** Where an order's light leaves the ring: from the risk gate down to the executor and on to the broker. */
 const EXIT = `M${P('risk')}L${P('executor')}L${CX} 474`;
-/** The agents' places on the inner ring, in degrees (clockwise); the market's light waits at the top. */
-const RING_AT: Partial<Record<Stop, number>> = { start: -90, technical: -135, news: -45, decision: 45, risk: 135 };
+/** Where the order's light waits on the inner ring (degrees, clockwise): at the decision and the risk gate; elsewhere it circles. */
+const RING_AT: Partial<Record<Stop, number>> = { decision: 45, risk: 135 };
+/** The reading agents' lights: from the market through the agent and «معي» to the decision, where what they read meets. */
+const READ_PATH = { technical: `M${CX} 56L${P('technical')}L${CX} ${CY}L${P('decision')}`, news: `M${CX} 56L${P('news')}L${CX} ${CY}L${P('decision')}` } as const;
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** Where an event shows on the route. */
 function stopOf(e: TradeEvent): Stop | undefined {
@@ -96,6 +99,9 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
   const stopRef = useRef<Stop | null>(null);
   const goesRef = useRef(false);
   const burgundyUntil = useRef(0);
+  const dotsRef = useRef<SVGGElement>(null);
+  const spawnRef = useRef<((kind: 'technical' | 'news') => void) | null>(null);
+  const spawned = useRef({ technical: 0, news: 0 });
   const timer = useRef<number | undefined>(undefined);
 
   // Only what happens from now on is played: the log's past stays in the log.
@@ -117,10 +123,17 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
     const next = () => {
       const item = queue.current.shift();
       // At the decision it is known whether an order follows in this burst (the executor's events come with it).
-      if (item?.stop === 'start') goesRef.current = false;
+      if (item?.stop === 'start') {
+        goesRef.current = false;
+        spawned.current = { technical: 0, news: 0 };
+      }
+      // Each stock the technical agent flags and each piece of news sends its own light to the decision (a few at most per round).
+      if (item && (item.stop === 'technical' || item.stop === 'news') && spawned.current[item.stop]++ < (item.stop === 'technical' ? 3 : 4)) spawnRef.current?.(item.stop);
       if (item?.stop === 'decision') goesRef.current = Boolean(item.order) || queue.current.some((q) => q.order);
+      // What was read so far has met at the decision: the next round's reading starts its count again.
+      if (item?.stop === 'decision') spawned.current = { technical: 0, news: 0 };
       setHot(item ?? null);
-      timer.current = item ? window.setTimeout(next, reducedMotion() ? 2200 : 1500) : undefined;
+      timer.current = item ? window.setTimeout(next, reducedMotion() ? 2200 : item.stop === 'technical' || item.stop === 'news' ? 900 : 1500) : undefined;
     };
     if (timer.current === undefined) next();
   }, [st.events, s.obArrived]);
@@ -190,13 +203,44 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
     let last = performance.now();
     let raf = 0;
     const place = (x: number, y: number) => g.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+    // The reading lights: made on the fly, each on its own path, all moving at once; they vanish with a ripple at the decision.
+    const layer = dotsRef.current;
+    const paths = { technical: layer?.querySelector<SVGPathElement>('.rp-technical') ?? null, news: layer?.querySelector<SVGPathElement>('.rp-news') ?? null };
+    const dots: { el: SVGGElement; path: SVGPathElement; len: number; at: number }[] = [];
+    spawnRef.current = (kind) => {
+      const path = paths[kind];
+      if (!layer || !path) return;
+      if (dots.length >= 10) dots.shift()?.el.remove();
+      const el = document.createElementNS(SVG_NS, 'g');
+      const glow = document.createElementNS(SVG_NS, 'circle');
+      glow.setAttribute('r', '8');
+      glow.setAttribute('filter', 'url(#ob-blur-s)');
+      glow.setAttribute('opacity', '.95');
+      glow.style.fill = ink('read');
+      const core = document.createElementNS(SVG_NS, 'circle');
+      core.setAttribute('r', '3.8');
+      core.setAttribute('fill', '#fff');
+      el.append(glow, core);
+      layer.append(el);
+      dots.push({ el, path, len: path.getTotalLength(), at: 0 });
+    };
+    const ripple = () => {
+      if (!layer) return;
+      const r = document.createElementNS(SVG_NS, 'circle');
+      r.setAttribute('class', 'ob-ripple');
+      r.setAttribute('cx', String(MAIN[2].x));
+      r.setAttribute('cy', String(MAIN[2].y));
+      r.setAttribute('r', '16');
+      layer.append(r);
+      window.setTimeout(() => r.remove(), 800);
+    };
     const tick = (nowT: number) => {
       const dt = Math.min(0.05, (nowT - last) / 1000);
       last = nowT;
       const stop = stopRef.current;
       if (stop === 'executor' || stop === 'end') {
         // An order: the light leaves the ring at the risk gate for the executor, then the broker.
-        if (!onExit) { onExit = true; prog = 0; }
+        if (!onExit) { onExit = true; prog = stop === 'end' ? toExecutor : 0; }
         const goal = stop === 'end' ? 1 : toExecutor;
         prog += Math.max(-0.9 * dt, Math.min(0.9 * dt, goal - prog));
         const pt = exit.getPointAtLength(prog * total);
@@ -212,11 +256,27 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
         }
         place(CX + RI * Math.cos((ang * Math.PI) / 180), CY + RI * Math.sin((ang * Math.PI) / 180));
       }
+      for (let i = dots.length - 1; i >= 0; i--) {
+        const d = dots[i];
+        d.at += (150 * dt) / d.len;
+        if (d.at >= 1) {
+          d.el.remove();
+          dots.splice(i, 1);
+          ripple();
+        } else {
+          const pt = d.path.getPointAtLength(d.at * d.len);
+          d.el.setAttribute('transform', `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)})`);
+        }
+      }
       g.classList.toggle('burgundy', Date.now() < burgundyUntil.current);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      spawnRef.current = null;
+      dots.forEach((d) => d.el.remove());
+    };
   }, [flowing]);
 
   // The line under the picture: what is playing now, else the last thing that happened.
@@ -313,6 +373,10 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
         {flowing && (
           <>
             <path ref={exitRef} d={EXIT} fill="none" stroke="none" />
+            <g ref={dotsRef} aria-hidden="true">
+              <path className="rp-technical" d={READ_PATH.technical} fill="none" stroke="none" />
+              <path className="rp-news" d={READ_PATH.news} fill="none" stroke="none" />
+            </g>
             <g ref={tokenRef} className="ob-token" transform={`translate(${CX} ${CY - RI})`} aria-hidden="true">
               <circle r="10" className="ob-token-glow" filter="url(#ob-blur-s)" />
               <circle r="5" className="ob-token-core" />
