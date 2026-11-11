@@ -136,9 +136,26 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
   }, [st, s]);
 
   const asleep = !st.clock.open;
+  // The clock ticks on its own so «the next round in N min» and the opening time stay right between updates.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
   const stage = hot ? STAGE[hot.stop] : -1;
   const working = MAIN.filter((m) => enabled(m.id)).length + side.filter((a) => a.on).length;
-  const total = MAIN.length + side.length;
+  // When the market opens next, in the desk's own words (the day by Riyadh's calendar).
+  const opensAt = (() => {
+    const at = new Date(nowMs + st.clock.minutesToChange * 60_000);
+    const day = riyadhDay(at) === riyadhDay(new Date(nowMs)) ? s.obDayToday : new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-nu-latn' : 'en', { weekday: 'long', timeZone: 'Asia/Riyadh' }).format(at);
+    return `${day} ${new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-nu-latn' : 'en', { hour: 'numeric', minute: '2-digit', hour12: lang !== 'ar' ? true : false, timeZone: 'Asia/Riyadh' }).format(at)}`;
+  })();
+  // Minutes until the desk's next round (0 when it is due), from the last round and the cycle length.
+  const lastRound = st.agents.filter((a) => a.id === 'technical').map((a) => a.lastRunAt).filter((x): x is string => Boolean(x)).sort().pop();
+  const nextRound = lastRound ? Math.max(0, Math.ceil((Date.parse(lastRound) + st.limits.cycleMinutes * 60_000 - nowMs) / 60_000)) : null;
+  const doing = hot && hot.stop !== 'start' && hot.stop !== 'end' ? hot.stop : null;
+  const pill = st.halted ? s.obPillStopped : asleep && !doing ? s.obPillSleep(opensAt) : doing ? s.obPillHot(s.agentNames[doing]) : s.obPillReady(working, nextRound);
+  const pillTone = st.halted || (asleep && !doing) ? 'off' : doing ? 'hot' : 'ready';
   const moving = Boolean(hot) && !reducedMotion();
 
   // The line under the picture: what is playing now, else the last thing that happened.
@@ -176,7 +193,7 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
   };
 
   // A name sits under its agent, or above it for the ones high on the outer ring (clear of the agents below them).
-  const node = (id: string, group: Group, x: number, y: number, r: number, name: string, state: 'on' | 'idle' | 'hot', above = false) => (
+  const node = (id: string, group: Group, x: number, y: number, r: number, name: string, state: 'on' | 'idle' | 'hot' | 'sleep', above = false) => (
     <g key={id} className={`ob-n ${state}${picked === id ? ' picked' : ''}`} role="button" tabIndex={0} aria-label={name} aria-pressed={picked === id} onClick={() => pick(id)} onKeyDown={keys(id)}>
       <circle className="ob-halo" cx={x} cy={y} r={r + 9} style={{ fill: ink(group) }} filter="url(#ob-blur)" />
       <circle className="ob-ring" cx={x} cy={y} r={r} style={{ fill: soft(group), stroke: ink(group) }} />
@@ -202,9 +219,9 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
       <div className="between" style={{ gap: 8 }}>
         <div>
           <h2 className="h2" style={{ margin: 0 }}>{s.obTitle}</h2>
-          <span className="sub">{st.halted ? s.officeStopped : asleep ? s.officeAsleep : s.obSub}</span>
+          <span className="sub">{st.halted ? s.officeStopped : asleep ? s.officeAsleep : doing ? s.obRoundRunning : s.obBetween}</span>
         </div>
-        <span className="ob-pill"><i aria-hidden="true" />{s.obWorking(working, total)}</span>
+        <span className={`ob-pill ${pillTone}`}><i aria-hidden="true" />{pill}</span>
       </div>
       <svg viewBox="0 0 356 528" className="ob-svg" role="group" aria-label={s.obSub}>
         <defs>
@@ -228,14 +245,14 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
           </g>
         ))}
         <g className="ob-core"><circle cx={CX} cy={CY} r="52" fill="url(#ob-core)" /></g>
-        <circle cx={CX} cy={CY} r="26" style={{ fill: 'var(--tint)' }} />
+        <circle cx={CX} cy={CY} r="26" className="ob-me-dot" style={{ fill: 'var(--tint)' }} />
         <text x={CX} y={CY + 5} textAnchor="middle" className="ob-me">{s.obMe}</text>
         <g className="ob-sway">
           {side.map((a) => (
-            <g key={a.id} className="ob-unsway">{node(a.id, a.group, a.x, a.y, 15, s.obNames[a.id as keyof typeof s.obNames], a.on ? 'on' : 'idle', a.y < CY - 50)}</g>
+            <g key={a.id} className="ob-unsway">{node(a.id, a.group, a.x, a.y, 15, s.obNames[a.id as keyof typeof s.obNames], hot?.stop === a.id ? 'hot' : asleep ? 'sleep' : a.on ? 'on' : 'idle', a.y < CY - 50)}</g>
           ))}
         </g>
-        {MAIN.map((m) => node(m.id, m.group, m.x, m.y, m.id === 'executor' ? 19 : 20, s.agentNames[m.id], hot?.stop === m.id ? 'hot' : enabled(m.id) ? 'on' : 'idle'))}
+        {MAIN.map((m) => node(m.id, m.group, m.x, m.y, m.id === 'executor' ? 19 : 20, s.agentNames[m.id], hot?.stop === m.id ? 'hot' : !enabled(m.id) ? 'idle' : asleep ? 'sleep' : 'on'))}
         {capsule('start', 10, 'read', 'market', s.obStart, s.obStartSub(st.clock.open), s.obStartTag)}
         {capsule('end', 474, 'exec', 'broker', s.obEnd, st.mode === 'live' ? status : s.obEndPaper, s.obEndTag)}
       </svg>

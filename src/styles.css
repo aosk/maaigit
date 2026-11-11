@@ -1039,6 +1039,10 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .ob-svg text { font-family: var(--font); }
 .ob-pill { border-radius: 999px; padding: 4px 12px; font-size: 0.76em; font-weight: 600; background: var(--tint-soft); color: var(--tint-text); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .ob-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--tint); box-shadow: 0 0 8px var(--tint); }
+.ob-pill.off { background: var(--raised); color: var(--muted); }
+.ob-pill.off i { background: var(--muted); box-shadow: none; }
+.ob-pill.hot i { animation: ob-blink 1s ease-in-out infinite; }
+@keyframes ob-blink { 50% { opacity: 0.25; } }
 .ob.asleep .ob-pill i, .ob.halted .ob-pill i { background: var(--muted); box-shadow: none; }
 .ob-orbit { fill: none; stroke: var(--sep); stroke-width: 1.2; }
 .ob-orbit.outer { stroke-dasharray: 2 6; }
@@ -1047,7 +1051,9 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 @keyframes ob-dash { to { stroke-dashoffset: -22; } }
 .ob-core { transform-origin: 178px 270px; animation: ob-breathe 2.6s ease-in-out infinite; }
 @keyframes ob-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
-.ob.asleep .ob-core, .ob.halted .ob-core { animation: none; opacity: 0.5; }
+.ob.asleep .ob-core, .ob.halted .ob-core { animation: none; opacity: 0.3; filter: grayscale(1); }
+.ob.asleep .ob-me-dot { fill: var(--muted) !important; }
+.ob.asleep .ob-route { stroke: var(--muted); stroke-opacity: 0.35; }
 .ob-me { font-size: 14px; font-weight: 700; fill: var(--on-tint); }
 .ob-sway { transform-origin: 178px 270px; animation: ob-sway 8s ease-in-out infinite alternate; }
 @keyframes ob-sway { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
@@ -1067,6 +1073,12 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .ob-n.hot .ob-spinner { opacity: 1; animation: ob-spin 5s linear infinite; }
 @keyframes ob-spin { to { transform: rotate(360deg); } }
 .ob-n.idle { opacity: 0.5; }
+/* The market is closed: the lights are off. Grey and still; an agent that is truly working still lights (.hot). */
+.ob-n.sleep { opacity: 0.6; filter: grayscale(1); }
+.ob-n.sleep .ob-ring { fill: var(--raised) !important; stroke: var(--muted) !important; stroke-width: 1.2; }
+.ob-n.sleep .ob-label { fill: var(--muted); }
+.ob.asleep .ob-cap:not(.hot) { filter: grayscale(1); opacity: 0.75; }
+.ob.asleep .ob-cap:not(.hot) .ob-body { fill: var(--raised) !important; stroke: var(--muted) !important; }
 .ob-label { font-size: 11px; font-weight: 600; fill: var(--text); }
 .ob-cap .ob-body { stroke-width: 1.3; transition: stroke-width 0.3s; }
 .ob-cap .ob-halo { opacity: 0; transition: opacity 0.35s; }
