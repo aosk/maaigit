@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Proposal } from '../../shared/types';
 import { api } from '../api';
 import { dayTime } from '../format';
+import { stripBidi } from '../links';
 import { useSettings } from '../settings';
 import { useAction } from '../useAction';
 import { Bell, Calendar } from './Icons';
@@ -42,7 +43,7 @@ function PlanCard({ proposal, onChange }: { proposal: Exclude<Proposal, { kind: 
         {proposal.kind === 'meeting' ? t.needsApproval : t.newReminder}
       </div>
       <div style={{ fontWeight: 600 }}>
-        {proposal.title}
+        <bdi className="wrap-anywhere">{stripBidi(proposal.title)}</bdi>
         {proposal.kind === 'meeting' && ` · ${t.minutesShort(proposal.minutes)}`}
       </div>
 
@@ -63,7 +64,7 @@ function PlanCard({ proposal, onChange }: { proposal: Exclude<Proposal, { kind: 
               </button>
             ))}
           </div>
-          <div className="sub">{t.inviteNote(proposal.attendeeEmail)}</div>
+          <div className="sub wrap-anywhere">{t.inviteNote(proposal.attendeeEmail && stripBidi(proposal.attendeeEmail))}</div>
         </>
       ) : (
         <div>

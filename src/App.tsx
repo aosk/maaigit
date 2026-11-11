@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSettings } from './settings';
 import { Calendar, ChartUp, Chat, Gear, Inbox as InboxIcon } from './components/Icons';
 import { Today } from './screens/Today';
@@ -12,7 +12,7 @@ import { ProfileScreen } from './screens/Profile';
 import { Unlock } from './screens/Unlock';
 import { LOCKED_EVENT, api } from './api';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { forgetFeeds } from './inboxCache';
+import { forgetFeeds, idleTooLong } from './inboxCache';
 import { AlertBanner } from './components/AlertBanner';
 import { Wordmark } from './components/Logo';
 import { worker } from './push';
@@ -45,6 +45,37 @@ export function App() {
     const events = ['pointerdown', 'keydown', 'touchstart', 'scroll'] as const;
     for (const name of events) window.addEventListener(name, touched, { passive: true });
     return () => events.forEach((name) => window.removeEventListener(name, touched));
+  }, []);
+
+  // On open, ask the server once whether the session is good. An answer lets the saved Inbox show; a 401 locks the
+  // app; any other failure (offline, restarting) cannot tell a locked app from an open one, so nothing saved is shown.
+  // Kept apart from the idle wipe below: the lock time comes from the same answer.
+  const lockMinutes = useRef(30);
+  useEffect(() => {
+    api.status().then((s) => { lockMinutes.current = s.lockMinutes ?? 30; }).catch(() => forgetFeeds());
+  }, []);
+
+  // The server locks a Face ID app after `lockMinutes` without use, but only answers when asked. Offline, nothing
+  // would ever ask, so the saved Inbox is also wiped here after the same time without a touch (or hidden that long).
+  useEffect(() => {
+    let last = Date.now();
+    const touched = () => { if (!document.hidden) last = Date.now(); };
+    const check = () => {
+      if (!idleTooLong(last, Date.now(), lockMinutes.current)) return;
+      last = Date.now();
+      forgetFeeds();
+      // Ask again: a locked app shows the lock screen; an open one fills the Inbox again.
+      void api.status().catch(() => {});
+    };
+    const events = ['pointerdown', 'keydown', 'touchstart', 'scroll'] as const;
+    for (const name of events) window.addEventListener(name, touched, { passive: true });
+    document.addEventListener('visibilitychange', check);
+    const timer = setInterval(check, 30_000);
+    return () => {
+      for (const name of events) window.removeEventListener(name, touched);
+      document.removeEventListener('visibilitychange', check);
+      clearInterval(timer);
+    };
   }, []);
 
   // A push arriving while MAAI is open also plays MAAI's own chime.

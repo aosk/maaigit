@@ -19,6 +19,7 @@ import { localHostOnly, sameOriginOnly } from './security.js';
 import { writePrivate } from './secure-fs.js';
 import { flushSave } from './store.js';
 import { dataIsPersistent } from './storage.js';
+import { devDeny } from './devserver.js';
 import { startTrading } from './trading/engine.js';
 import { startRenderWatch } from './render-usage.js';
 import { startKeyWatch } from './keys.js';
@@ -58,7 +59,9 @@ if (config.production) {
   // One process, one port: Vite serves the app with hot reload, Express serves /api.
   // Live reload is off in phone mode: the phone can't reach Vite's reload socket over HTTPS.
   const { createServer } = await import('vite');
-  const vite = await createServer({ server: { middlewareMode: true, hmr: !phoneMode }, appType: 'spa' });
+  // No cross-origin answers, and never the data folder (store, push key, feed token) or dotfiles: Vite serves the
+  // whole project root, and any page on another localhost port could otherwise read them.
+  const vite = await createServer({ server: { middlewareMode: true, hmr: !phoneMode, cors: false, fs: { deny: devDeny(config.dataDir) } }, appType: 'spa' });
   app.use(vite.middlewares);
 }
 

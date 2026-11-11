@@ -61,7 +61,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-11-11a';
+const VERSION = '2026-11-11b';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -78,6 +78,22 @@ function fail(message) {
   process.exit(1);
 }
 const log = (...args) => console.log(new Date().toLocaleTimeString(), ...args);
+
+// The bot's own files (queued messages, who wrote, own number, backup) are for this user only: the folder may be
+// shared or synced. `mode` applies only when a file is created, so older files are tightened at start.
+const PRIVATE_FILE = 0o600;
+const PRIVATE_DIR = 0o700;
+function tighten(file, mode = PRIVATE_FILE) {
+  try {
+    fs.chmodSync(file, mode);
+  } catch {
+    // Missing, or Windows (no such modes): nothing to tighten.
+  }
+}
+const writePrivate = (file, data) => {
+  fs.writeFileSync(file, data, { mode: PRIVATE_FILE });
+  tighten(file);
+};
 
 // An error nothing caught (WhatsApp Web reloading mid-call, a dropped connection) would end Node with code 1,
 // which the watcher reads as a setup problem and stops for good. Restart instead (code 2: again in 30 s).
@@ -110,7 +126,7 @@ try {
 } catch {}
 const holdLock = () => {
   try {
-    fs.writeFileSync(LOCK, String(process.pid));
+    writePrivate(LOCK, String(process.pid));
   } catch {}
 };
 holdLock();
@@ -240,7 +256,7 @@ try {
 } catch {
   queue = [];
 }
-const keepQueue = () => fs.writeFileSync(QUEUE_FILE, JSON.stringify(queue.slice(-2000)));
+const keepQueue = () => writePrivate(QUEUE_FILE, JSON.stringify(queue.slice(-2000)));
 
 const digits = (id) => String(id ?? '').split('@')[0].replace(/\D/g, '');
 
@@ -252,7 +268,33 @@ try {
 } catch {
   chatOf = {};
 }
-const keepChats = () => fs.writeFileSync(CHATS_FILE, JSON.stringify(chatOf));
+const keepChats = () => writePrivate(CHATS_FILE, JSON.stringify(chatOf));
+
+// Files made by older versions (or by hand) were open to other users of this computer: close them now.
+for (const f of [QUEUE_FILE, CHATS_FILE, ME_FILE, LOCK, path.join(HERE, 'bot.mjs.bak'), path.join(HERE, 'bot.next.mjs')]) tighten(f);
+for (const f of fs.readdirSync(HERE).filter((n) => n.startsWith('.env'))) {
+  const file = path.join(HERE, f);
+  try {
+    if (process.platform !== 'win32' && fs.statSync(file).mode & 0o077) {
+      tighten(file);
+      log(`✓ ${f} held keys and was readable by other users of this computer: now for you only.`);
+    }
+  } catch {
+    // Unreadable: leave it.
+  }
+}
+
+/**
+ * A WhatsApp Web call that never answers must not stop the bot's loops: after `ms` it fails with a clear error
+ * (the call itself may still finish later; its result is then ignored).
+ */
+function withTimeout(promise, ms, what) {
+  let timer;
+  const late = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`WhatsApp did not answer (${what}) within ${Math.round(ms / 1000)} s`)), ms);
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
 
 /** Never lets a slow or failing WhatsApp lookup lose the message itself. */
 const tryGet = (fn) => Promise.race([Promise.resolve().then(fn), new Promise((r) => setTimeout(r, 5000))]).catch(() => undefined);
@@ -479,7 +521,7 @@ async function sendVoice(msg, item) {
   // MAAI cannot be reached: say so on WhatsApp straight from here.
   const notice = '🤖 MAAI\nما قدرت أوصل رسالتك الصوتية لـ MAAI. أرسلها مرة ثانية بعد قليل أو اكتبها.\nCould not pass your voice note to MAAI. Send it again in a moment, or type it.';
   rememberSent(msg.from, notice);
-  await wa.sendMessage(msg.from, notice).catch(() => {});
+  await withTimeout(wa.sendMessage(msg.from, notice), 45_000, 'sending a notice').catch(() => {});
 }
 
 async function onMessage(msg) {
@@ -506,7 +548,7 @@ async function onMessage(msg) {
 
 /** The phone's saved contacts (names and numbers only), so the assistant can find people by name. Once a day. */
 async function shareContacts() {
-  const all = await wa.getContacts();
+  const all = await withTimeout(wa.getContacts(), 60_000, 'reading contacts');
   const contacts = all
     .filter((c) => c.isMyContact && !c.isGroup && !c.isMe && (c.number || c.id?.user))
     .map((c) => ({ name: c.name || c.pushname || '', phone: digits(c.number || c.id.user) }))
@@ -665,12 +707,65 @@ const ALLOWED = [
       .map((f) => fs.realpathSync(path.resolve(f))),
   ),
 ];
-/** Files the bot opens: documents, pictures, sound and video only (anything else could run something). */
-const OPENABLE = /\.(pdf|docx?|xlsx?|pptx?|odt|ods|odp|rtf|txt|csv|md|png|jpe?g|gif|webp|heic|bmp|tiff?|mp3|m4a|wav|ogg|mp4|mov|avi|mkv|zip)$/i;
+// GUARDS-START (pure checks: device-bot/guards.test.ts runs this block on its own; keep it free of other names)
+/** Files the bot opens: documents, pictures, sound and video only (anything else could run something). Old Office formats (.doc .xls .ppt) can carry macros, so only the new ones are here. */
+const OPENABLE = /\.(pdf|docx|xlsx|pptx|odt|ods|odp|rtf|txt|csv|md|png|jpe?g|gif|webp|heic|bmp|tiff?|mp3|m4a|wav|ogg|mp4|mov|avi|mkv|zip)$/i;
 /** Network shares and device paths: never touched (even checking them can send the Windows sign-in to another machine). */
 const FAR_AWAY = /^(\\\\|\/\/|\\\\\?\\|\\\\\.\\)/;
-/** Files that would run something when opened: never opened, and named in the refusal. */
-const RUNNABLE = /\.(exe|com|bat|cmd|ps1|psm1|psd1|vbs|vbe|js|jse|mjs|cjs|wsf|wsh|msi|msp|msix|appx|scr|pif|lnk|url|reg|hta|cpl|jar|appref-ms|application|gadget|msc|inf|scf|sh|app|command|workflow|py|pyw|iso|img|vhd|vhdx)$/i;
+/** Files that would run something when opened (programs, scripts, installers, macro-capable Office files): never opened, and named in the refusal. */
+const RUNNABLE = /\.(exe|com|bat|cmd|ps1|ps1xml|psc1|psm1|psd1|vbs|vbe|vb|js|jse|mjs|cjs|wsf|wsh|ws|wsc|sct|msi|msp|msix|msixbundle|appx|appxbundle|scr|pif|lnk|url|reg|hta|cpl|jar|appref-ms|application|gadget|msc|inf|scf|sh|bash|zsh|csh|ksh|fish|app|command|workflow|py|pyw|rb|pl|php|lua|iso|img|vhd|vhdx|dmg|pkg|mpkg|deb|rpm|apk|dll|sys|ocx|chm|diagcab|settingcontent-ms|library-ms|search-ms|doc|dot|dotm|docm|xls|xlt|xlsm|xlsb|xlam|ppt|pot|pptm|potm|ppam|ppsm|sldm|slk|one)$/i;
+/** Folders that are really programs (macOS bundles and the like): "open" would start them. */
+const PROGRAM_FOLDER = /\.(app|bundle|pkg|mpkg|framework|plugin|kext|xpc|prefpane|saver|action|workflow|wdgt|component|appex|appimage)$/i;
+
+/** True when the name or any folder on the way to it is a program or a program folder. */
+function isProgramPath(file) {
+  const parts = String(file).split(/[\\/]+/).filter(Boolean);
+  return parts.some((part) => PROGRAM_FOLDER.test(part)) || RUNNABLE.test(parts[parts.length - 1] ?? '');
+}
+
+/** Addresses that only mean something on this computer or its own network (router pages, local services). */
+function isPrivateHost(hostname) {
+  const host = String(hostname).toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if (!host) return true;
+  if (host === 'localhost' || /\.(localhost|local|internal|lan|home|home\.arpa|corp|intranet)$/.test(host)) return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || (a === 192 && b === 0 && Number(v4[3]) === 0);
+  }
+  if (host.includes(':')) {
+    // IPv6. An IPv4 address inside one ("::ffff:7f00:1", which the URL parser writes in hex) is judged as that IPv4 address.
+    const mapped = /^(?:0{0,4}:){0,5}(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+    if (mapped && /^(?:0{0,4}:){0,5}ffff:/.test(host)) {
+      const hi = parseInt(mapped[1], 16);
+      const lo = parseInt(mapped[2], 16);
+      return isPrivateHost(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+    }
+    if (host === '::' || host === '::1') return true;
+    const first = parseInt(host.split(':')[0] || '0', 16);
+    return (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80 || (first & 0xff00) === 0xff00;
+  }
+  // A name with no dot ("router", "nas") only exists on a local network.
+  return !host.includes('.');
+}
+
+/** The address to open, or an error saying why not: only public http(s) sites, never one that hides its real host in a login part. */
+function checkOpenUrl(target) {
+  let url;
+  try {
+    url = new URL(String(target).trim());
+  } catch {
+    throw new Error('That is not a web address.');
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('Only web links are opened.');
+  if (url.username || url.password) throw new Error('Links with a user name or password in them are not opened.');
+  if (isPrivateHost(url.hostname)) throw new Error('Addresses on this computer or its own network are not opened.');
+  return url.href;
+}
+
+/** A phone number as WhatsApp wants it: 7 to 15 digits, nothing else. */
+const isPhone = (phone) => typeof phone === 'string' && /^\d{7,15}$/.test(phone);
+// GUARDS-END
 const MAX_FILE_MB = 60;
 
 const within = (root, file) => {
@@ -741,16 +836,15 @@ function openWithDefault(target, isLink) {
 
 async function act(action, target) {
   if (action === 'open_url') {
-    const url = new URL(target);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('Only web links are opened.');
-    await openWithDefault(url.href, true);
-    log(`Opened ${url.host}`);
-    return { ok: true, output: `Opened ${url.href} in the browser.` };
+    const href = checkOpenUrl(target);
+    await openWithDefault(href, true);
+    log(`Opened ${new URL(href).host}`);
+    return { ok: true, output: `Opened ${href} in the browser.` };
   }
   const file = await findTarget(target);
   const stat = fs.statSync(file);
   if (action === 'open_path') {
-    if (stat.isFile() && RUNNABLE.test(file)) throw new Error(`"${path.basename(file)}" is a program or script; the bot never runs those.`);
+    if (isProgramPath(file)) throw new Error(`"${path.basename(file)}" is a program, script or macro-capable file; the bot never opens those.`);
     if (stat.isFile() && !OPENABLE.test(file)) throw new Error(`The bot opens documents, pictures, sound and video only, not "${path.extname(file) || 'this kind of'}" files. Open it yourself.`);
     await openWithDefault(file, false);
     log(`Opened ${shown(file)}`);
@@ -764,7 +858,7 @@ async function act(action, target) {
     const caption = `📎 ${path.basename(file)} (MAAI)`;
     rememberSent(me, caption);
     // Only ever to the user's own chat ("Message yourself"), never to anyone else.
-    await wa.sendMessage(me, MessageMedia.fromFilePath(file), { sendMediaAsDocument: true, caption });
+    await withTimeout(wa.sendMessage(me, MessageMedia.fromFilePath(file), { sendMediaAsDocument: true, caption }), 60_000, 'sending a file');
     log(`Sent ${shown(file)} to your own WhatsApp chat`);
     return { ok: true, output: `Sent ${shown(file)} to the user's own WhatsApp chat.` };
   }
@@ -796,7 +890,7 @@ async function handleAll(commands) {
         restart = true;
         result = { ok: true, output: 'Restarting.' };
       } else if (c.kind === 'reply') {
-        if (!c.phone) throw new Error('No number');
+        if (!isPhone(c.phone)) throw new Error('That is not a phone number (digits only, 7 to 15).');
         // MAAI's text is sent exactly as given; only one person, never a group.
         // A chat MAAI has seen is answered there; anyone else is looked up first: newer WhatsApp refuses
         // "number@c.us" for a person it knows by a hidden id ("No LID for user").
@@ -804,7 +898,7 @@ async function handleAll(commands) {
         if (!chatOf[c.phone] && found === null) throw new Error(`+${c.phone} is not on WhatsApp`);
         const target = chatOf[c.phone] || idText(found) || `${c.phone}@c.us`;
         rememberSent(target, c.text);
-        await wa.sendMessage(target, c.text);
+        await withTimeout(wa.sendMessage(target, c.text), 45_000, 'sending a reply');
         log(`Sent to ${c.toName ?? `+${c.phone}`}`);
         result = { ok: true };
       } else if (c.kind === 'task' && c.action) {
@@ -892,7 +986,7 @@ wa.on('ready', async () => {
   started = true;
   log('WhatsApp ready. Reading recent chats…');
   const me = idText(wa.info?.wid).split('@')[0].replace(/\D/g, '');
-  if (me && me !== myPhone) fs.writeFileSync(ME_FILE, me);
+  if (me && me !== myPhone) writePrivate(ME_FILE, me);
   void tellLink({ linked: true });
   await shareContacts().catch((error) => log('⚠ Could not share contacts:', why(error)));
   await checkGrok().catch((error) => log('⚠ Grok check failed:', why(error)));
@@ -956,7 +1050,7 @@ async function takeUpdate() {
   if (!version || version === VERSION || typeof code !== 'string' || !code.includes("const VERSION = '")) return;
   const self = path.join(HERE, 'bot.mjs');
   const next = path.join(HERE, 'bot.next.mjs');
-  fs.writeFileSync(next, code);
+  writePrivate(next, code);
   try {
     execFileSync(process.execPath, ['--check', next], { stdio: 'ignore' });
   } catch {
@@ -965,6 +1059,7 @@ async function takeUpdate() {
     return;
   }
   fs.copyFileSync(self, `${self}.bak`);
+  tighten(`${self}.bak`);
   // Swapped in one step (a rename), so a power cut never leaves half a file. Windows can refuse it for a moment
   // (an antivirus checking the new file): try a few times.
   for (let attempt = 1; ; attempt++) {

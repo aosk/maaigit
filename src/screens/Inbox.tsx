@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { FeedItem, InboxFeed, InboxMessage, Lang, StatusInfo, Tone } from '../../shared/types';
 import { api } from '../api';
-import { cachedFeed, keepFeed } from '../inboxCache';
+import { cachedFeed, keepFeed, whenConfirmed, whenForgotten } from '../inboxCache';
 import { isUnread, markSeen } from '../inboxSeen';
 import { ago, dayHeading, dayTime, sameDay, time } from '../format';
 import { askAssistant, useOnRetap } from '../nav';
@@ -11,10 +11,31 @@ import { useOnRefresh } from '../refresh';
 import { Back, Bell, Chat, Check, Chevron, Mail, Refresh, Search, Send, Trash } from '../components/Icons';
 import { CountBadge } from '../components/CountBadge';
 import { mailtoLink } from '../components/EmailCard';
+import { stripBidi } from '../links';
 
 const TONES: Tone[] = ['short', 'friendly', 'formal', 'arabic'];
 
-function Reply({ message, gmail, whatsapp, device, onBack, onChanged }: { message: InboxMessage; gmail: boolean; whatsapp: boolean; device: boolean; onBack: () => void; onChanged: () => void }) {
+/** The WhatsApp sender's number as +digits, left to right and isolated, or null (email, groups, pasted messages). */
+function senderPhone(item: { channel: string; message?: InboxMessage }): string | null {
+  const digits = (item.message?.phone ?? '').replace(/\D/g, '');
+  return item.channel === 'whatsapp' && !item.message?.group && digits ? `+${digits}` : null;
+}
+
+/** Names that arrived from more than one number: a stranger can copy a name, never a number. */
+function clashingNames(items: FeedItem[]): Set<string> {
+  const numbers = new Map<string, Set<string>>();
+  for (const i of items) {
+    const phone = senderPhone(i);
+    if (!phone) continue;
+    const name = stripBidi(i.from).trim().toLowerCase();
+    numbers.set(name, (numbers.get(name) ?? new Set()).add(phone));
+  }
+  return new Set([...numbers].filter(([, set]) => set.size > 1).map(([name]) => name));
+}
+
+const Phone = ({ phone, className }: { phone: string; className?: string }) => <bdi dir="ltr" className={className}>{phone}</bdi>;
+
+function Reply({ message, gmail, whatsapp, device, clash, onBack, onChanged }: { message: InboxMessage; clash?: boolean; gmail: boolean; whatsapp: boolean; device: boolean; onBack: () => void; onChanged: () => void }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   const [tone, setTone] = useState<Tone>(lang === 'ar' ? 'arabic' : 'friendly');
@@ -90,13 +111,16 @@ function Reply({ message, gmail, whatsapp, device, onBack, onChanged }: { messag
         <button className="btn ghost" onClick={onBack} style={{ paddingInline: 0 }}>
           <span style={{ display: 'inline-flex', transform: lang === 'ar' ? 'scaleX(-1)' : undefined }}><Back size={20} /></span>{t.inboxTitle}
         </button>
-        <h1 style={{ fontWeight: 600, fontSize: 'inherit', margin: 0 }}>{t.replyTo(message.from)}</h1>
+        <h1 className="wrap-anywhere" style={{ fontWeight: 600, fontSize: 'inherit', margin: 0 }}>{t.replyTo(stripBidi(message.from))}</h1>
         <div style={{ width: 60 }} />
       </div>
 
       <section className="card">
         <div className="eyebrow row"><Chat size={16} />{t.sharedFrom(message.channel === 'whatsapp' ? 'WhatsApp' : message.channel, time(message.receivedAt, lang))}</div>
-        <div className="quote">“{message.text}”</div>
+        {/* The number itself, always: a name alone is whatever the sender chose to call themselves. */}
+        {message.channel === 'whatsapp' && message.phone && <div className="sub" aria-label={t.senderNumber}><Phone phone={`+${message.phone.replace(/\D/g, '')}`} /></div>}
+        {clash && <div className="error" role="alert">{t.sameNameOtherNumber}</div>}
+        <div className="quote wrap-anywhere" dir="auto">“{message.text}”</div>
         {summary && <div className="sub" style={{ fontSize: '0.88em' }}>{summary}</div>}
       </section>
 
@@ -210,6 +234,12 @@ export function Inbox() {
   const [status, setStatus] = useState<StatusInfo | null>(null);
   // The last Inbox shows at once; the fresh one replaces it when it arrives.
   const [feed, setFeed] = useState<InboxFeed | null>(() => cachedFeed(lang));
+  // The saved copy appears only once the server has confirmed the session, and goes when it is wiped (lock, idle).
+  useEffect(() => {
+    const off = [whenConfirmed(() => setFeed((f) => f ?? cachedFeed(lang))), whenForgotten(() => setFeed(null))];
+    setFeed((f) => f ?? cachedFeed(lang));
+    return () => off.forEach((f) => f());
+  }, [lang]);
   const feedRef = useRef(feed);
   useEffect(() => {
     feedRef.current = feed;
@@ -289,7 +319,7 @@ export function Inbox() {
 
   const gmail = Boolean(status?.mail?.configured);
   const whatsapp = Boolean(status?.whatsapp?.configured);
-  if (replying) return <Reply message={replying} gmail={gmail} whatsapp={whatsapp} device={Boolean(feed?.bot.connected)} onBack={() => setReplying(null)} onChanged={() => load(false)} />;
+  if (replying) return <Reply message={replying} clash={clashingNames(feed?.items ?? []).has(stripBidi(replying.from).trim().toLowerCase())} gmail={gmail} whatsapp={whatsapp} device={Boolean(feed?.bot.connected)} onBack={() => setReplying(null)} onChanged={() => load(false)} />;
   if (adding) return <Messages onBack={() => { setAdding(false); load(false); }} gmail={gmail} whatsapp={whatsapp} device={Boolean(feed?.bot.connected)} />;
 
   const items = feed?.items ?? [];
@@ -306,6 +336,7 @@ export function Inbox() {
       (!q || [i.from, i.subject, i.text, i.body].some((x) => x?.toLowerCase().includes(q))),
   );
   const attention = items.filter((i) => i.needsReply !== 'no').sort(attentionOrder);
+  const clashes = clashingNames(items);
   const opened = items.find((i) => i.key === openKey) ?? null;
 
   function open(item: FeedItem) {
@@ -401,7 +432,7 @@ export function Inbox() {
                       <li key={i.key}>
                         <button type="button" onClick={() => open(i)}>
                           <span style={{ flex: 1, minWidth: 0 }}>
-                            <strong><bdi>{i.from}</bdi>:</strong> <bdi>{i.text}</bdi>
+                            <strong><bdi>{stripBidi(i.from)}</bdi>:</strong> <bdi>{i.text}</bdi>
                             <span className="attention-tags">
                               {i.needsReply === 'maybe' && <span className="tag maybe">{t.maybeReplyTag}</span>}
                               {i.urgentSaid && <span className="tag urgent">{t.saidUrgent}</span>}
@@ -425,7 +456,7 @@ export function Inbox() {
                     {attention.length > ATTENTION_MAX && (
                       <ul className="attention-list">
                         {attention.slice(ATTENTION_MAX).map((i) => (
-                          <li key={i.key}><button type="button" onClick={() => open(i)}><span style={{ flex: 1, minWidth: 0 }}><strong><bdi>{i.from}</bdi>:</strong> <bdi>{i.text}</bdi></span><Chevron size={18} /></button></li>
+                          <li key={i.key}><button type="button" onClick={() => open(i)}><span style={{ flex: 1, minWidth: 0 }}><strong><bdi>{stripBidi(i.from)}</bdi>:</strong> <bdi>{i.text}</bdi></span><Chevron size={18} /></button></li>
                         ))}
                       </ul>
                     )}
@@ -449,7 +480,7 @@ export function Inbox() {
                 <ul className="inbox-rows">
                   {g.items.map((item) => (
                     <li key={item.key}>
-                      <FeedRow item={item} selected={item.key === openKey} onOpen={() => open(item)} />
+                      <FeedRow item={item} selected={item.key === openKey} clash={clashes.has(stripBidi(item.from).trim().toLowerCase())} onOpen={() => open(item)} />
                     </li>
                   ))}
                 </ul>
@@ -466,6 +497,7 @@ export function Inbox() {
           <Detail
             key={opened.key}
             item={opened}
+            clash={clashes.has(stripBidi(opened.from).trim().toLowerCase())}
             unread={isUnread(opened)}
             onBack={() => setOpenKey(null)}
             onReply={setReplying}
@@ -481,20 +513,22 @@ export function Inbox() {
 }
 
 /** One email or conversation in the list: who, when, what about, the start of it, and where it came from. */
-function FeedRow({ item, selected, onOpen }: { item: FeedItem; selected: boolean; onOpen: () => void }) {
+function FeedRow({ item, selected, clash, onOpen }: { item: FeedItem; selected: boolean; clash: boolean; onOpen: () => void }) {
   const { t, settings } = useSettings();
   const email = item.channel === 'email';
   const unread = isUnread(item);
+  const phone = senderPhone(item);
   return (
     <button type="button" className={`inbox-row${unread ? ' unread' : ''}`} onClick={onOpen} aria-current={selected || undefined}>
       <span className="avatar" aria-hidden="true">{initials(item.from)}</span>
       <span className="inbox-row-main">
         <span className="inbox-row-top">
-          <span className="inbox-from" dir="auto">{item.from}</span>
+          <span className="inbox-from"><bdi>{stripBidi(item.from)}</bdi></span>
           {item.needsReply !== 'no' && <span className={`tag${item.needsReply === 'maybe' ? ' maybe' : ' reply'}`}>{item.needsReply === 'maybe' ? t.maybeReplyTag : t.needsReplyTag}</span>}
           <span className="inbox-time">{time(item.at, settings.lang)}</span>
         </span>
-        {item.subject && <span className="inbox-subject" dir="auto">{item.subject}</span>}
+        {phone && <span className="inbox-phone"><Phone phone={phone} />{clash && <> · <span className="tag maybe">{t.sameNameTag}</span></>}</span>}
+        {item.subject && <span className="inbox-subject" dir="auto"><bdi>{stripBidi(item.subject)}</bdi></span>}
         <span className="inbox-preview" dir="auto">{item.text}</span>
         <span className="inbox-source">
           {email ? <Mail size={16} /> : <Chat size={16} />}
@@ -507,11 +541,12 @@ function FeedRow({ item, selected, onOpen }: { item: FeedItem; selected: boolean
 }
 
 /** One message opened: all of it, maai's read, and what can be done with it. */
-function Detail({ item, unread, onBack, onReply, onRead, onLabel }: { item: FeedItem; unread: boolean; onBack: () => void; onReply: (m: InboxMessage) => void; onRead: (read: boolean) => void; onLabel: (v: 'yes' | 'no' | null) => Promise<void> }) {
+function Detail({ item, clash, unread, onBack, onReply, onRead, onLabel }: { item: FeedItem; clash: boolean; unread: boolean; onBack: () => void; onReply: (m: InboxMessage) => void; onRead: (read: boolean) => void; onLabel: (v: 'yes' | 'no' | null) => Promise<void> }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   const { busy, error, run } = useAction();
   const link = sourceLink(item);
+  const phone = senderPhone(item);
   const email = item.channel === 'email';
   const what = item.subject || item.text;
   const decide = (choice: string) =>
@@ -523,20 +558,22 @@ function Detail({ item, unread, onBack, onReply, onRead, onLabel }: { item: Feed
       : null;
 
   return (
-    <article className="detail" aria-label={item.from}>
+    <article className="detail" aria-label={stripBidi(item.from)}>
       <button className="btn ghost detail-back" onClick={onBack} style={{ paddingInline: 0, alignSelf: 'flex-start' }}>
         <span style={{ display: 'inline-flex', transform: lang === 'ar' ? 'scaleX(-1)' : undefined }}><Back size={20} /></span>{t.inboxTitle}
       </button>
       <header className="detail-head">
         <span className="avatar" aria-hidden="true">{initials(item.from)}</span>
         <div style={{ minWidth: 0 }}>
-          <h2 className="h2" dir="auto">{item.from}</h2>
+          <h2 className="h2"><bdi>{stripBidi(item.from)}</bdi></h2>
+          {phone && <div className="sub" aria-label={t.senderNumber}><Phone phone={phone} /></div>}
+          {clash && phone && <div className="error" role="alert">{t.sameNameOtherNumber}</div>}
           <div className="sub">
             {email ? t.tagEmail : t.tagWhatsApp}{item.address ? <> · <span dir="ltr">{item.address}</span></> : null} · {t.receivedOn(`${dayHeading(item.at, lang)} ${time(item.at, lang)}`)}
           </div>
         </div>
       </header>
-      {item.subject && <h3 className="detail-subject" dir="auto">{item.subject}</h3>}
+      {item.subject && <h3 className="detail-subject" dir="auto"><bdi>{stripBidi(item.subject)}</bdi></h3>}
       <div className="row wrap" style={{ gap: 6 }}>
         {item.needsReply !== 'no' && <span className={`tag${item.needsReply === 'maybe' ? ' maybe' : ' reply'}`}>{item.needsReply === 'maybe' ? t.maybeReplyTag : t.needsReplyTag}{item.labelled ? ` · ${t.classifiedByYou}` : ''}</span>}
         {item.urgentSaid && <span className="tag urgent">{t.saidUrgent}</span>}

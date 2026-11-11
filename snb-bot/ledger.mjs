@@ -8,7 +8,13 @@ import path from 'node:path';
  * "submitting" left behind by a crash means the order may or may not be at SNB: it is never retried.
  */
 export function openLedger(dir) {
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // The ledger holds orders: owner-only, also when the folder or file already existed with looser rights.
+  try {
+    fs.chmodSync(dir, 0o700);
+  } catch {
+    // Windows has no such modes.
+  }
   const file = path.join(dir, 'commands.jsonl');
   const entries = new Map();
   if (fs.existsSync(file)) {
@@ -22,7 +28,12 @@ export function openLedger(dir) {
       }
     }
   }
-  const fd = fs.openSync(file, 'a');
+  const fd = fs.openSync(file, 'a', 0o600);
+  try {
+    fs.fchmodSync(fd, 0o600);
+  } catch {
+    // Windows has no such modes.
+  }
   // After a power cut the last line may be cut short: start on a fresh line, so the next entry is not glued to it
   // (and lost with it at the following start).
   const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
