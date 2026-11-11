@@ -36,7 +36,7 @@ function parseStyle(style: string): Record<string, string> {
 interface Look { hidden: boolean; bg: string }
 
 /** Whether this element's own attributes hide it, and the background it sets (white when none is known). */
-function look(attrs: Record<string, string>, parentBg: string): Look {
+function look(name: string, attrs: Record<string, string>, parentBg: string): Look {
   const s = parseStyle(attrs.style ?? '');
   const bg = s['background-color'] ?? s.background?.split(/\s+/).find((w) => WHITE.test(w) || w.startsWith('#') || w.startsWith('rgb')) ?? attrs.bgcolor?.toLowerCase() ?? parentBg;
   const color = s.color ?? attrs.color?.toLowerCase();
@@ -44,6 +44,10 @@ function look(attrs: Record<string, string>, parentBg: string): Look {
   const clipped = (s.overflow ?? '').startsWith('hidden') || (s['overflow-x'] ?? '') === 'hidden' || (s['overflow-y'] ?? '') === 'hidden';
   const hidden =
     'hidden' in attrs ||
+    // A collapsed <details> shows only its summary: the rest is not on screen (its summary is dropped too, which is safe).
+    (name === 'details' && !('open' in attrs)) ||
+    (s.clip !== undefined && /rect\(\s*0(?:px)?[\s,]+0(?:px)?[\s,]+0(?:px)?[\s,]+0(?:px)?\s*\)/.test(s.clip)) ||
+    (s['clip-path'] !== undefined && /inset\(\s*(?:50|100)%|circle\(\s*0/.test(s['clip-path'])) ||
     attrs['aria-hidden'] === 'true' ||
     s.display === 'none' ||
     s.visibility === 'hidden' || s.visibility === 'collapse' ||
@@ -111,7 +115,7 @@ export function visibleText(html: string): string {
       continue;
     }
     if (VOID.has(name) || tag[0].endsWith('/>')) continue;
-    const l = look(parseAttrs(tag[3]), stack.at(-1)?.bg ?? 'white');
+    const l = look(name, parseAttrs(tag[3]), stack.at(-1)?.bg ?? 'white');
     stack.push({ name, hidden: l.hidden, bg: l.bg });
     if (l.hidden) hiddenDepth += 1;
   }

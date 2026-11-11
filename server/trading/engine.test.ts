@@ -147,6 +147,16 @@ describe('the SNB desktop bot', () => {
     expect(trading.events.some((e) => e.type === 'position.drift' && /النقد/.test(e.text))).toBe(true);
   });
 
+  it('halts when reports each just under the limit walk the cash away in total, and counts again after a resume (retest finding)', () => {
+    reconcile({ cash: 100_000, positions: [] }, OPEN);
+    expect(reconcile({ cash: 104_999, positions: [] }, OPEN).drift).toBe(false); // under 5% of the capital: adopted
+    expect(trading.halted).toBe(false);
+    expect(reconcile({ cash: 109_998, positions: [] }, OPEN).drift).toBe(true); // the total is over the limit now
+    expect(trading.halted).toBe(true);
+    expect(resume(OPEN)).toBe(true);
+    expect(reconcile({ cash: 111_000, positions: [] }, OPEN).drift).toBe(false); // confirmed: the count starts again
+  });
+
   it('starts the live day from the broker’s first report, not from an empty book', () => {
     reconcile({ cash: 25_000, positions: [{ symbol: '2222', qty: 100, avgCost: 27 }] }, OPEN);
     expect(trading.books.live.dayStart.value).toBe(27_700);

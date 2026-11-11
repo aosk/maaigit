@@ -34,3 +34,14 @@ describe('visibleText (B-03)', () => {
     expect(visibleText('<div style="display:none">x</div>after')).toBe('after');
   });
 });
+
+describe('visibleText: more ways to hide text (retest finding)', () => {
+  it('drops text clipped to nothing and the body of a collapsed <details>', () => {
+    expect(visibleText('<p>seen</p><span style="clip:rect(0,0,0,0);position:absolute">secret one</span>')).not.toContain('secret');
+    expect(visibleText('<p>seen</p><span style="clip: rect(0px, 0px, 0px, 0px)">secret two</span>')).not.toContain('secret');
+    expect(visibleText('<p>seen</p><div style="clip-path:inset(100%)">secret three</div>')).not.toContain('secret');
+    expect(visibleText('<p>seen</p><details><summary>more</summary>secret four</details>')).not.toContain('secret');
+    expect(visibleText('<p>seen</p><details open><summary>more</summary>shown text</details>')).toContain('shown text');
+    expect(visibleText('<p>seen</p><span style="clip:rect(0,0,0,0)">secret</span>')).toContain('seen');
+  });
+});

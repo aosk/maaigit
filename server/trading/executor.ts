@@ -388,8 +388,13 @@ export function reconcile(report: { cash: number; positions: Position[] }, now =
   // The cash the broker reports is checked like the positions: a sum far from the book's (with nothing in flight to explain
   // it) halts trading, so a wrong or tampered report cannot quietly raise the capital the risk limits work from. A deposit
   // or withdrawal also stops it once, until the user resumes.
+  // Small differences (fees, rounding) are adopted, but only up to the same limit IN TOTAL until the user confirms it by
+  // resuming: ten reports each just under the limit must not walk the cash anywhere.
   const cashLimit = Math.max(500, trading.limits.capital * 0.05);
-  const cashJump = !firstReport && moving.size === 0 && Math.abs(round2(report.cash) - live.cash) > cashLimit ? { was: live.cash, now: round2(report.cash) } : null;
+  const step = Math.abs(round2(report.cash) - live.cash);
+  const adopted = (live.cashAdopted ?? 0) + (moving.size === 0 ? step : 0);
+  const cashJump = !firstReport && moving.size === 0 && (step > cashLimit || adopted > cashLimit) ? { was: live.cash, now: round2(report.cash) } : null;
+  live.cashAdopted = firstReport || cashJump ? 0 : adopted;
   live.cash = round2(report.cash);
   live.positions = report.positions.filter((p) => p.qty > 0).map((p) => ({ symbol: p.symbol, qty: p.qty, avgCost: p.avgCost > 0 ? p.avgCost : live.positions.find((x) => x.symbol === p.symbol)?.avgCost ?? 0 }));
   // The broker's first report is where the live day starts: before it the book was empty, not worth zero.
@@ -425,6 +430,8 @@ export function resume(now = new Date()): boolean {
   if (unknownOrders().length) return false;
   trading.halted = false;
   trading.haltReason = undefined;
+  // Resuming confirms the book as it is: the total the broker's reports may have moved the cash starts again.
+  trading.books.live.cashAdopted = 0;
   emit('system.resumed', 'user', 'استأنفت التداول', {}, now);
   return true;
 }

@@ -21,6 +21,8 @@ export interface Book {
   dayStart: { day: string; value: number; realized: number };
   /** Today's value through the day, for the chart. */
   curve: { at: string; value: number }[];
+  /** How much the broker's reports have moved the cash since the user last confirmed it (resume, first report): a limit on the total. */
+  cashAdopted?: number;
 }
 
 export interface TradingData {

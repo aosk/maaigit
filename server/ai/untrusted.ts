@@ -16,8 +16,14 @@ const OUR_TAGS = new RegExp(String.raw`[<＜〈](?=${JUNK}\/?${JUNK}(?:${NAMES})
 // A chat-turn marker at the start of a line ("Human: ...") is how some prompt formats switch speakers.
 const TURN_MARKER = /^([ \t]*)(human|assistant)([ \t]*):/gim;
 
+// Inside anything that opens like a tag, invisible, control and combining characters are removed first: "<con\u200btext>" or
+// "<cón\u0301text>" would otherwise slip between the letters of a name, and a model may read them as the real tag.
+const TAGISH = /[<＜〈][^<>＜＞〈〉]{0,80}/gu;
+const NOISE = /(?!\s)[\p{Cf}\p{Mn}\p{Cc}]/gu;
+const squash = (text: string): string => text.replace(TAGISH, (span) => span.normalize('NFKD').replace(NOISE, ''));
+
 export const neutralize = (text: string): string =>
-  text
+  squash(text)
     .replace(/\0/g, '')
     .replace(OUR_TAGS, '‹')
     .replace(TURN_MARKER, '$1$2 ‹›$3:');
