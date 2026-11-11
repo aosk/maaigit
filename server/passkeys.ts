@@ -33,14 +33,19 @@ const rpID = (req: Request) => new URL(origin(req)).hostname;
 
 // ---------- One-time challenges ----------
 
-const challenges = new Map<string, { kind: 'register' | 'login'; expires: number }>();
+const challenges = new Map<string, { kind: 'register' | 'login'; expires: number; from: string }>();
+/** One address may hold this many unused challenges: a single caller cannot fill the list and shut Face ID for the owner. */
+const PER_ADDRESS = 10;
 
-function rememberChallenge(challenge: string, kind: 'register' | 'login', now = Date.now()) {
+function rememberChallenge(challenge: string, kind: 'register' | 'login', from: string, now = Date.now()) {
   for (const [key, value] of challenges) if (value.expires < now) challenges.delete(key);
+  let own = 0;
+  for (const value of challenges.values()) if (value.from === from) own++;
+  if (own >= PER_ADDRESS) throw new HttpError(429, 'Too many tries. Wait a few minutes, or use the password.');
   // A bounded list: nobody can fill the server's memory by asking for challenges. When it is full of challenges still
   // in use, ask for patience rather than throw out the oldest one (which may be the owner's).
   if (challenges.size >= 200) throw new HttpError(429, 'Too many tries. Wait a few minutes, or use the password.');
-  challenges.set(challenge, { kind, expires: now + CHALLENGE_MS });
+  challenges.set(challenge, { kind, expires: now + CHALLENGE_MS, from });
 }
 
 /** At most `max` calls from one address in `windowMs`. */
@@ -93,7 +98,7 @@ passkeyManagement.post('/passkeys/options', wrap(async (req, res) => {
     excludeCredentials: state.passkeys.map((p) => ({ id: p.id, transports: p.transports as never })),
     authenticatorSelection: { residentKey: 'preferred', userVerification: 'required', authenticatorAttachment: 'platform' },
   });
-  rememberChallenge(options.challenge, 'register');
+  rememberChallenge(options.challenge, 'register', req.ip ?? '');
   res.json(options);
 }));
 
@@ -151,7 +156,7 @@ export function passkeyLogin(startSession: (res: Response) => void): Router {
       userVerification: 'required',
       allowCredentials: state.passkeys.map((p) => ({ id: p.id, transports: p.transports as never })),
     });
-    rememberChallenge(options.challenge, 'login');
+    rememberChallenge(options.challenge, 'login', req.ip ?? '');
     res.json(options);
   }));
 

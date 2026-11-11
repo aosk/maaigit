@@ -29,10 +29,15 @@ function botKey(req: Request, res: Response, next: NextFunction) {
   const now = Date.now();
   const where = req.ip ?? 'unknown';
   const failed = failures.get(where);
-  if (failed && now - failed.since < WINDOW_MS && failed.count >= MAX_FAILURES) return res.status(429).json({ error: 'Too many wrong keys. Try again later.' });
   const given = /^Bearer\s+(\S{1,200})$/i.exec(req.get('authorization') ?? '')?.[1] ?? '';
+  // The right key is checked first and always works: wrong keys from the same address (a shared network, a proxy)
+  // must not lock the owner's own bot out.
   if (!botKeyMatches(given)) {
+    if (failed && now - failed.since < WINDOW_MS && failed.count >= MAX_FAILURES) return res.status(429).json({ error: 'Too many wrong keys. Try again later.' });
     const fresh = !failed || now - failed.since >= WINDOW_MS;
+    // The list is kept small: addresses whose window has passed are forgotten.
+    if (failures.size >= 500) for (const [key, f] of failures) if (now - f.since >= WINDOW_MS) failures.delete(key);
+    if (failures.size >= 5000) failures.clear();
     failures.set(where, { count: fresh ? 1 : failed.count + 1, since: fresh ? now : failed.since });
     return res.status(401).json({ error: 'The bot key is missing or wrong.' });
   }

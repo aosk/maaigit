@@ -1,5 +1,6 @@
 import type { NewsItem } from './agents.js';
 import { deskId } from './desk.js';
+import { simulated } from './market.js';
 import { emit, saveTrading, trading } from './store.js';
 import { instrument, UNIVERSE } from './tadawul.js';
 
@@ -84,6 +85,8 @@ export const resetFilings = () => void (lastRun = 0);
 
 /** Reads each US stock's latest filings (at most every 30 minutes); new ones are logged once. Errors are logged, never thrown. */
 export async function filingsRound(now = new Date(), fetcher: typeof fetch = fetch): Promise<void> {
+  // With simulated prices (development, tests) the SEC is not read either, unless a reader is handed in.
+  if (simulated && fetcher === fetch) return;
   if (deskId() !== 'us' || trading.agents.news?.enabled === false || now.getTime() - lastRun < EVERY_MS) return;
   lastRun = now.getTime();
   const d = data();

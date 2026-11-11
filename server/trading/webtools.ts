@@ -29,5 +29,9 @@ export function fetchOutcomes(content: Anthropic.Beta.Messages.BetaContentBlock[
     });
 }
 
+/** How a search agent's call went, for its log line: how many searches it ran and why it stopped. */
+export const searchLine = (response: { content: Anthropic.Beta.Messages.BetaContentBlock[]; stop_reason?: string | null }) =>
+  `${response.content.filter((b) => b.type === 'server_tool_use' && b.name === 'web_search').length} search(es), stopped: ${response.stop_reason ?? 'unknown'}`;
+
 /** "argaam.com ok, saudiexchange.sa url_not_accessible", for a log line. */
 export const outcomesLine = (o: FetchOutcome[]) => (o.length ? o.map((x) => `${x.host} ${x.ok ? 'ok' : x.error}`).join(', ') : 'no page opened');

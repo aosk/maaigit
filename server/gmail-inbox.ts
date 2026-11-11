@@ -79,6 +79,8 @@ async function readMessages(client: ImapFlow, uids: number[]): Promise<MailItem[
       date: (mail.date ?? new Date()).toISOString(),
       unread: !msg.flags?.has('\\Seen'),
       body: cleanBody(mail.text ?? ''),
+      messageId: mail.messageId,
+      replyTo: mail.replyTo?.value[0]?.address && mail.replyTo.value[0].address.toLowerCase() !== from?.address?.toLowerCase() ? mail.replyTo.value[0].address : undefined,
     });
   }
   return items;

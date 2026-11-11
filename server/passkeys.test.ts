@@ -121,7 +121,7 @@ describe('setting up Face ID', () => {
 });
 
 describe('Face ID sign-in under flood (penetration-test finding)', () => {
-  it('limits challenge requests per address, and a full list refuses rather than evicting the owner\'s challenge', async () => {
+  it('limits unused challenges per address, and a full list refuses rather than evicting the owner\'s challenge', async () => {
     resetPasskeyState();
     state.passkeys = [{ id: 'aWQ', publicKey: 'AAAA', counter: 0, name: 'iPhone', createdAt: new Date().toISOString() }];
     const inner = createInnerApp();
@@ -130,8 +130,9 @@ describe('Face ID sign-in under flood (penetration-test finding)', () => {
     try {
       const codes: number[] = [];
       for (let i = 0; i < 30; i++) codes.push((await raw(site.port, 'POST', '/api/passkey/login/options', { body: '{}' })).status);
-      expect(codes.filter((c) => c === 200)).toHaveLength(20);
-      expect(codes.slice(20).every((c) => c === 429)).toBe(true);
+      // One address holds at most ten unused challenges, so it cannot fill the list (200) and shut Face ID for the owner.
+      expect(codes.filter((c) => c === 200)).toHaveLength(10);
+      expect(codes.slice(10).every((c) => c === 429)).toBe(true);
     } finally {
       await site.close();
       state.passkeys = [];

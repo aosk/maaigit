@@ -15,6 +15,7 @@ import { startLiveCalendar } from './livecal.js';
 import { startNews } from './news/index.js';
 import { briefing } from './ai/briefing.js';
 import { createApp, createInnerApp, createOnlineSite } from './site.js';
+import { localHostOnly, sameOriginOnly } from './security.js';
 import { writePrivate } from './secure-fs.js';
 import { flushSave } from './store.js';
 import { dataIsPersistent } from './storage.js';
@@ -94,8 +95,13 @@ if (config.production) {
   const site = createOnlineSite(app, { password: config.password, secret: fs.readFileSync(secretFile, 'utf8').trim() });
   site.listen(config.port, '0.0.0.0', () => console.log(`MAAI is online on port ${config.port} [${ai}]`));
 } else {
-  // The computer itself: no sign-in, and only reachable from this computer.
-  app.listen(config.port, '127.0.0.1', () => {
+  // The computer itself: no sign-in, and only reachable from this computer, by its own name, and (for anything that
+  // changes something) only from MAAI's own page, never from another website open in the browser.
+  const local = express();
+  local.use(localHostOnly(config.port));
+  local.use('/api', sameOriginOnly);
+  local.use(app);
+  local.listen(config.port, '127.0.0.1', () => {
     console.log(`\n  MAAI is running: http://localhost:${config.port}   [${ai}]`);
     console.log(`  Admin portal:    http://localhost:${config.port}/#/admin\n`);
   });

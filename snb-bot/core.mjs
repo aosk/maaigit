@@ -33,10 +33,12 @@ export function signature(cmd, secret) {
 export function verify(cmd, secret, nowMs) {
   if (!cmd || typeof cmd !== 'object') return 'not a command';
   if (!/^ord_[0-9a-f]{16}$/.test(cmd.commandId ?? '')) return 'bad command id';
-  if (!/^\d{4}$/.test(cmd.symbol ?? '')) return 'bad symbol';
+  if (typeof cmd.symbol !== 'string' || !/^\d{4}$/.test(cmd.symbol)) return 'bad symbol';
   if (cmd.side !== 'buy' && cmd.side !== 'sell') return 'bad side';
   if (!Number.isInteger(cmd.qty) || cmd.qty <= 0) return 'bad quantity';
-  if (!(Number(cmd.limitPrice) > 0)) return 'bad price';
+  // A number, and exactly the price that was signed (to the halala): "25.5", [25.5] or 25.504 are refused, since the
+  // signature covers the rounded price and the unrounded one would be what reached the broker.
+  if (typeof cmd.limitPrice !== 'number' || !(cmd.limitPrice > 0) || Math.abs(cmd.limitPrice - Number(cmd.limitPrice.toFixed(2))) > 1e-9) return 'bad price';
   const expires = Date.parse(cmd.expiresAt);
   if (!Number.isFinite(expires) || !Number.isFinite(Date.parse(cmd.issuedAt))) return 'bad times';
   const given = Buffer.from(String(cmd.sig ?? ''), 'hex');
@@ -333,7 +335,13 @@ export function createBot({ url, key, secret, broker, ledger, log = console.log,
       await recover().catch((e) => log(`! Recovering: ${e.message}`));
       every(HEARTBEAT_MS, 'Heartbeat', heartbeat);
       every(POSITIONS_MS, 'Account report', positions);
-      every(FOLLOW_MS, 'Following orders at SNB', () => (busy = busy.then(follow)));
+      // The queue survives one failed look at the broker: without the catch, a single error would stop every later
+      // order, cancel and follow-up.
+      every(FOLLOW_MS, 'Following orders at SNB', () => (busy = busy.then(follow).catch((e) => log(`! Following orders: ${e.message}`))));
+      // A result maai Stocks did not take (it was restarting, the network dropped) is sent again, not only after a restart.
+      every(HEARTBEAT_MS, 'Sending results again', async () => {
+        for (const e of ledger.unreported()) await report(e.commandId, e.result);
+      });
       void pollLoop();
       return done;
     },

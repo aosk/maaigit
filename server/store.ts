@@ -220,14 +220,31 @@ function readSaved(): Partial<State> | null {
     // Any other failure (permissions, a failing disk) must not look like a first run: the next save would overwrite the real data.
     throw new Error(`The saved data at ${DATA_FILE} could not be opened (${(error as Error).message}). MAAI is stopping rather than replace it.`, { cause: error });
   }
+  const backup = `${DATA_FILE}.bak`;
   try {
     const parsed: unknown = JSON.parse(text);
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
+    // The file read well: keep a copy as it stood at this start, in case a later one cannot be read.
+    try {
+      writePrivate(backup, text);
+    } catch {
+      /* the copy is a precaution: a full disk must not stop MAAI from starting */
+    }
     return parsed;
   } catch (error) {
     // Starting fresh would overwrite the damaged file on the next save, so keep a copy first.
     const kept = `${DATA_FILE}.damaged-${Date.now()}`;
     writePrivate(kept, text);
+    // Better the data as it stood at the last good start than none: passkeys, chats and reminders survive.
+    try {
+      const older: unknown = JSON.parse(fs.readFileSync(backup, 'utf8'));
+      if (older !== null && typeof older === 'object' && !Array.isArray(older)) {
+        console.error(`\n  The saved data could not be read (${(error as Error).message}). A copy was kept at ${kept}; starting from the last good copy (${backup}).\n`);
+        return older;
+      }
+    } catch {
+      /* no usable copy either */
+    }
     console.error(`\n  The saved data could not be read (${(error as Error).message}). A copy was kept at ${kept}; starting with fresh data.\n`);
     return null;
   }

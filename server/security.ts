@@ -64,6 +64,19 @@ export const sameOriginOnly: RequestHandler = (req, res, next) => {
   next();
 };
 
+/**
+ * For MAAI on the home computer, where there is no sign-in: only this computer's own address may be asked for.
+ * A web page the owner visits could otherwise point its own name at 127.0.0.1 (DNS rebinding) and read the inbox
+ * through the browser; with the name checked, such a request is refused before it reaches anything.
+ */
+export const localHostOnly = (port: number): RequestHandler => {
+  const allowed = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`]);
+  return (req, res, next) => {
+    if (allowed.has((req.get('host') ?? '').toLowerCase())) return next();
+    res.status(421).json({ error: 'MAAI answers only on this computer\'s own address.' });
+  };
+};
+
 /** A request whose body could not be read, answered plainly (and never with a stack trace). */
 export const bodyErrors: ErrorRequestHandler = (error: { type?: string; status?: number }, _req, res, next) => {
   if (error.type === 'entity.too.large') return res.status(413).json({ error: 'That is too much to send.' });

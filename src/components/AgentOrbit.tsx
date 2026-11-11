@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { TradeEvent, TradingState } from '../../shared/trading';
 import { time } from '../format';
 import { useSettings } from '../settings';
@@ -65,6 +65,9 @@ function stopOf(e: TradeEvent): Stop | undefined {
   return undefined;
 }
 
+/** YYYY-MM-DD in Riyadh, the day the desks count "today" by. */
+const riyadhDay = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+
 const reducedMotion = () => document.documentElement.dataset.motion === 'reduce' || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function Glyph({ k, x, y, size, color }: { k: string; x: number; y: number; size: number; color: string }) {
@@ -110,7 +113,6 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
   }, [st.events, s.obArrived]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  const lastOf = (actor: string): TradeEvent | undefined => [...st.events].reverse().find((e) => e.actor === actor && e.type !== 'executor.heartbeat');
   const enabled = (id: string) => st.agents.find((a) => a.id === id)?.enabled !== false;
 
   /** The agents on the outer ring: who applies to this desk, whether each has something to show, and what it says. */
@@ -139,25 +141,43 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
   const total = MAIN.length + side.length;
   const moving = Boolean(hot) && !reducedMotion();
 
-  // The line under the picture: what is playing, else who was tapped, else the last thing that happened.
-  const pickedLine = (() => {
-    if (!picked) return null;
-    const m = MAIN.find((x) => x.id === picked);
-    if (m) {
-      const e = lastOf(m.id);
-      return { group: m.group, icon: m.id, name: s.agentNames[m.id], text: e ? e.text : s.officeNothingYet, at: e?.ts };
-    }
-    const a = side.find((x) => x.id === picked);
-    return a ? { group: a.group, icon: a.id, name: s.obNames[a.id as keyof typeof s.obNames], text: a.line, at: undefined } : null;
-  })();
+  // The line under the picture: what is playing now, else the last thing that happened.
   const last = [...st.events].reverse().find((e) => stopOf(e));
   const line = hot
     ? { group: STAGE_GROUP[stage], icon: hot.stop === 'start' ? 'market' : hot.stop === 'end' ? 'broker' : hot.stop, name: hot.stop === 'start' ? s.obStart : hot.stop === 'end' ? s.obEnd : s.agentNames[hot.stop], text: hot.text, at: undefined }
-    : pickedLine ?? (last ? { group: STAGE_GROUP[STAGE[stopOf(last)!]], icon: stopOf(last) === 'end' ? 'broker' : last.actor, name: s.obLast, text: last.text, at: last.ts } : null);
+    : last
+      ? { group: STAGE_GROUP[STAGE[stopOf(last)!]], icon: stopOf(last) === 'end' ? 'broker' : last.actor, name: s.obLast, text: last.text, at: last.ts }
+      : null;
+
+  /** Whoever was tapped: what it does, how it works, and what it did today (by the desk's own day, Riyadh). */
+  const detail = (() => {
+    if (!picked) return null;
+    const today = riyadhDay(new Date());
+    const todays = (keep: (e: TradeEvent) => boolean) =>
+      st.events.filter((e) => e.type !== 'executor.heartbeat' && riyadhDay(new Date(e.ts)) === today && keep(e)).reverse().slice(0, 6).map((e) => ({ at: e.ts, text: e.text }));
+    const info = s.obInfo[picked as keyof typeof s.obInfo];
+    const main = MAIN.find((x) => x.id === picked);
+    if (main) return { group: main.group, icon: main.id, name: s.agentNames[main.id], ...info, state: enabled(main.id) ? '' : s.obOff, items: todays((e) => e.actor === main.id), note: '' };
+    const a = side.find((x) => x.id === picked);
+    if (a) {
+      const by: Record<string, (e: TradeEvent) => boolean> = { second: (e) => Boolean(e.data?.secondOpinion), scoring: (e) => Boolean(e.data?.scored), review: (e) => Boolean(e.data?.review) };
+      const upcoming = picked === 'calendar' ? st.calendar.slice(0, 4).map((e) => ({ at: undefined, text: `${e.date} · ${e.title}` })) : [];
+      return { group: a.group, icon: a.id, name: s.obNames[a.id as keyof typeof s.obNames], ...info, state: '', items: by[picked] ? todays(by[picked]) : upcoming, note: a.line };
+    }
+    if (picked === 'start') return { group: 'read' as Group, icon: 'market', name: s.obStart, ...info, state: '', items: [], note: `${st.indexName?.[lang === 'ar' ? 'ar' : 'en'] ?? ''}${st.quotesSource ? ` · ${s.sources[st.quotesSource]}` : ''}${st.quotesAsOf ? ` · ${time(st.quotesAsOf, lang)}` : ''}` };
+    if (picked === 'end') return { group: 'exec' as Group, icon: 'broker', name: s.obEnd, ...info, state: '', items: todays((e) => e.type === 'order.filled'), note: st.mode === 'live' ? status : s.obEndPaper };
+    return null;
+  })();
+  const pick = (id: string) => setPicked(picked === id ? null : id);
+  const keys = (id: string) => (e: KeyboardEvent<SVGGElement>) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault(); // Space would scroll the page
+    pick(id);
+  };
 
   // A name sits under its agent, or above it for the ones high on the outer ring (clear of the agents below them).
   const node = (id: string, group: Group, x: number, y: number, r: number, name: string, state: 'on' | 'idle' | 'hot', above = false) => (
-    <g key={id} className={`ob-n ${state}${picked === id ? ' picked' : ''}`} role="button" tabIndex={0} aria-label={name} onClick={() => setPicked(picked === id ? null : id)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setPicked(picked === id ? null : id)}>
+    <g key={id} className={`ob-n ${state}${picked === id ? ' picked' : ''}`} role="button" tabIndex={0} aria-label={name} aria-pressed={picked === id} onClick={() => pick(id)} onKeyDown={keys(id)}>
       <circle className="ob-halo" cx={x} cy={y} r={r + 9} style={{ fill: ink(group) }} filter="url(#ob-blur)" />
       <circle className="ob-ring" cx={x} cy={y} r={r} style={{ fill: soft(group), stroke: ink(group) }} />
       <circle className="ob-spinner" cx={x} cy={y} r={r + 6} fill="none" style={{ stroke: ink(group) }} strokeWidth="1.3" strokeDasharray="3 6" />
@@ -166,7 +186,7 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
     </g>
   );
   const capsule = (id: 'start' | 'end', y: number, group: Group, icon: string, title: string, sub: string, tag: string) => (
-    <g className={`ob-cap${hot?.stop === id ? ' hot' : ''}`}>
+    <g className={`ob-cap${hot?.stop === id ? ' hot' : ''}${picked === id ? ' picked' : ''}`} role="button" tabIndex={0} aria-label={title} aria-pressed={picked === id} onClick={() => pick(id)} onKeyDown={keys(id)}>
       <rect className="ob-halo" x="58" y={y - 4} width="240" height="52" rx="26" style={{ fill: ink(group) }} filter="url(#ob-blur)" />
       <rect className="ob-body" x="62" y={y} width="232" height="44" rx="22" style={{ fill: soft(group), stroke: ink(group) }} />
       <Glyph k={icon} x={273} y={y + 22} size={22} color={ink(group)} />
@@ -178,7 +198,7 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
   );
 
   return (
-    <section className={`card ob${asleep ? ' asleep' : ''}${st.halted ? ' halted' : ''}`} aria-label={s.obTitle}>
+    <section className={`card ob${asleep ? ' asleep' : ''}${st.halted ? ' halted' : ''}${picked ? ' reading' : ''}`} aria-label={s.obTitle}>
       <div className="between" style={{ gap: 8 }}>
         <div>
           <h2 className="h2" style={{ margin: 0 }}>{s.obTitle}</h2>
@@ -186,7 +206,7 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
         </div>
         <span className="ob-pill"><i aria-hidden="true" />{s.obWorking(working, total)}</span>
       </div>
-      <svg viewBox="0 0 356 528" className="ob-svg" role="img" aria-label={s.obSub}>
+      <svg viewBox="0 0 356 528" className="ob-svg" role="group" aria-label={s.obSub}>
         <defs>
           <filter id="ob-blur" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="9" /></filter>
           <filter id="ob-blur-s" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="2.5" /></filter>
@@ -235,6 +255,42 @@ export function AgentOrbit({ st, status }: { st: TradingState; status: string })
           <span className="sub">{s.obHint}</span>
         )}
       </div>
+      {detail ? (
+        <div className="ob-detail" style={{ borderColor: ink(detail.group) }}>
+          <div className="between" style={{ gap: 8 }}>
+            <b className="ob-detail-name" style={{ color: ink(detail.group) }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ stroke: ink(detail.group), flex: 'none' }} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICON[detail.icon] ?? ICON.decision}</svg>
+              {detail.name}
+              {detail.state && <span className="sub"> · {detail.state}</span>}
+            </b>
+            <button type="button" className="ob-close" onClick={() => setPicked(null)} aria-label={s.obClose}>✕</button>
+          </div>
+          <dl>
+            <dt>{s.obWhat}</dt>
+            <dd>{detail.what}</dd>
+            <dt>{s.obHow}</dt>
+            <dd>{detail.how}</dd>
+            <dt>{picked === 'calendar' ? s.obNext : s.obToday}</dt>
+            <dd>
+              {detail.note && <span className="ob-note" dir="auto">{detail.note}</span>}
+              {detail.items.length > 0 ? (
+                <ul>
+                  {detail.items.map((it, i) => (
+                    <li key={i}>
+                      {it.at && <time dateTime={it.at} className="sub">{time(it.at, lang)}</time>}
+                      <span dir="auto">{it.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                !detail.note && <span className="sub">{s.obNoneToday}</span>
+              )}
+            </dd>
+          </dl>
+        </div>
+      ) : (
+        <span className="sub ob-hint">{s.obHint}</span>
+      )}
     </section>
   );
 }

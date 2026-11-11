@@ -57,7 +57,14 @@ export function Today() {
   const closeSheet = useCallback(() => setSelected(null), []);
 
   const load = useCallback((background = false) => {
-    api.today(background === true).then(setData).catch((e: Error) => setError(e.message));
+    api
+      .today(background === true)
+      .then((d) => {
+        setData(d);
+        // A later success clears an earlier failure: one missed poll must not leave the error up for good.
+        setError('');
+      })
+      .catch((e: Error) => setError(e.message));
   }, []);
 
   useEffect(() => {

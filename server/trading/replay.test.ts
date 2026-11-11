@@ -11,7 +11,7 @@ vi.hoisted(() => {
 
 import type { DailyBars } from './market';
 import { refreshQuotes, resetQuotes } from './market';
-import { benchmarkView, latestReplay, noteBenchmark, replayRule, runReplay } from './replay';
+import { benchmarkView, latestReplay, noteBenchmark, rebaseBenchmark, replayRule, runReplay } from './replay';
 import { resetTrading, trading } from './store';
 
 const SUN = new Date('2026-11-01T08:00:00Z');
@@ -84,5 +84,18 @@ describe('the benchmark', () => {
     expect(b).toMatchObject({ since: '2026-11-01', days: 2, deskPct: 3 });
     expect(b.indexPct).toBeGreaterThan(0);
     expect(b.points[0]).toMatchObject({ desk: 100, index: 100 });
+  });
+
+  it('does not count money added to the book as performance', () => {
+    const prices = new Map<string, number>();
+    noteBenchmark(prices, SUN);
+    trading.books.paper.cash = 102_000;
+    noteBenchmark(prices, new Date(SUN.getTime() + 86_400_000));
+    expect(benchmarkView()!.deskPct).toBe(2);
+    // The owner doubles the capital: the desk is still up 2%, not 100%.
+    trading.books.paper.cash += 100_000;
+    rebaseBenchmark(100_000);
+    noteBenchmark(prices, new Date(SUN.getTime() + 2 * 86_400_000));
+    expect(benchmarkView()!.deskPct).toBeCloseTo(2, 1);
   });
 });

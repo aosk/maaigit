@@ -180,7 +180,7 @@ export function setLiveProblem(message: string) {
 async function readSource(source: (typeof sources)[number]): Promise<void> {
   if (replacedByLive(source)) return;
   try {
-    const res = await fetch(source.url, { headers: { 'User-Agent': 'MAAI' } });
+    const res = await fetch(source.url, { headers: { 'User-Agent': 'MAAI' }, signal: AbortSignal.timeout(15_000) });
     if (!res.ok) throw new Error(failure(res.status));
     bySource.set(source.name, eventsFromIcs(await res.text(), new Date(), source.name));
     problems.delete(source.name);

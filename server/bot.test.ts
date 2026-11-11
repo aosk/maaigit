@@ -223,7 +223,8 @@ describe('messages the bot delivers', () => {
   });
 
   it('shows in the one Inbox list, tagged, and in what the assistant reads', async () => {
-    receiveFromBot({ messages: [wa(), { id: 'e2', channel: 'email', from: 'Noura', email: 'noura@example.com', subject: 'Training', text: 'Please confirm', at: now() }] });
+    // Given different times on purpose: with the same millisecond the newest-first order was decided by chance.
+    receiveFromBot({ messages: [wa(), { id: 'e2', channel: 'email', from: 'Noura', email: 'noura@example.com', subject: 'Training', text: 'Please confirm', at: new Date(Date.now() - 60_000).toISOString() }] });
     const feed = JSON.parse((await asUser('GET', '/inbox/feed?lang=en')).body) as { items: { channel: string; source: string; from: string }[]; bot: { connected: boolean } };
     expect(feed.bot.connected).toBe(true);
     expect(feed.items).toEqual(expect.arrayContaining([expect.objectContaining({ channel: 'whatsapp', source: 'bot', from: 'Ahmed' }), expect.objectContaining({ channel: 'email', source: 'bot', from: 'Noura' })]));
@@ -391,7 +392,14 @@ describe('commands', () => {
     const created: Proposal[] = [];
     const { result } = await runTool({ type: 'tool_use', id: 'w1', name: 'propose_whatsapp', input: { phone: '0501234567', name: 'Khalid', body: 'Are you free tomorrow?' } }, created);
     expect(result.is_error).toBeUndefined();
-    expect(created[0]).toMatchObject({ kind: 'whatsapp', phone: '966501234567', toName: 'Khalid', canSend: true });
+    // A number nobody wrote from and not in the contacts: the card shows the number, not the name the model gave, and warns.
+    expect(created[0]).toMatchObject({ kind: 'whatsapp', phone: '966501234567', toName: '+966501234567', newNumber: true, canSend: true });
+    state.contacts = [{ name: 'خالد العتيبي', phone: '966501234567' }];
+    const known: Proposal[] = [];
+    await runTool({ type: 'tool_use', id: 'w0', name: 'propose_whatsapp', input: { phone: '0501234567', name: 'Someone else', body: 'hi' } }, known);
+    expect(known[0]).toMatchObject({ toName: 'خالد العتيبي' });
+    expect((known[0] as { newNumber?: boolean }).newNumber).toBeUndefined();
+    state.contacts = [];
     expect(takeCommands()).toEqual([]);
     state.proposals.push(...created);
     expect((await asUser('POST', `/proposals/${created[0].id}/approve`, { body: 'Are you free tomorrow at 5?' })).status).toBe(200);

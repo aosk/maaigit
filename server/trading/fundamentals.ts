@@ -3,6 +3,7 @@ import { client, create, textOf, type ServerTool } from '../ai/claude.js';
 import { config } from '../config.js';
 import { deskConfig, deskId } from './desk.js';
 import { saveTrading, trading } from './store.js';
+import { searchLine } from './webtools.js';
 import { instrument, tradingDay, UNIVERSE } from './tadawul.js';
 
 /**
@@ -111,10 +112,12 @@ Use null for any number you could not find stated: never estimate, calculate fro
       maxTokens: 3000,
       format: SCHEMA,
     });
-    const stored = applyFundamentals(JSON.parse(textOf(response.content)) as { companies?: Raw[] }, asked, now);
+    const parsed = JSON.parse(textOf(response.content)) as { companies?: Raw[] };
+    const stored = applyFundamentals(parsed, asked, now);
     d.lastRunAt = now.toISOString();
     saveTrading();
-    console.log(`StockSmart fundamentals (${deskId()}): ${stored} of ${asked.length} compan${asked.length === 1 ? 'y' : 'ies'} read.`);
+    // How many it answered about and how it searched, so an empty day can be told from a failed one.
+    console.log(`StockSmart fundamentals (${deskId()}): ${stored} of ${asked.length} compan${asked.length === 1 ? 'y' : 'ies'} read (${parsed.companies?.length ?? 0} answered; ${searchLine(response)}).`);
   } catch (error) {
     console.error(`StockSmart fundamentals (${deskId()}): could not be read (${(error as Error).message}).`);
   }

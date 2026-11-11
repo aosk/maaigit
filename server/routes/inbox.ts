@@ -32,8 +32,13 @@ inbox.post('/inbox', (req, res) => {
   if (email && !isEmail(email)) throw new HttpError(400, `"${email}" is not a valid email address`);
   const message = { id: id(), from, phone, email: email || undefined, channel: email && !phone ? ('email' as const) : ('whatsapp' as const), text: body, receivedAt: new Date().toISOString(), replied: false };
   state.inbox.push(message);
-  // Pasted messages are kept like the WhatsApp ones: the newest 500.
-  if (state.inbox.length > 500) state.inbox.splice(0, state.inbox.length - 500);
+  // Pasted messages are kept like the WhatsApp ones: the newest 500. Only pasted ones are counted and dropped:
+  // messages the bot or Twilio delivered have their own limits, and must never be deleted by a paste.
+  const pasted = state.inbox.filter((m) => !m.via);
+  if (pasted.length > 500) {
+    const drop = new Set(pasted.slice(0, pasted.length - 500));
+    state.inbox = state.inbox.filter((m) => !drop.has(m));
+  }
   save();
   res.status(201).json(message);
 });

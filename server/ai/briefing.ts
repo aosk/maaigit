@@ -3,7 +3,7 @@ import { dayPeriod, type DayPeriod } from '../../shared/schedule.js';
 import { config } from '../config.js';
 import { agentEnabled } from '../store.js';
 import { client, create, textOf } from './claude.js';
-import { contextNote, refreshContext } from './context.js';
+import { contextNote, refreshContext, steadyContext } from './context.js';
 import { demoBriefing } from './demo.js';
 import { remember } from './memo.js';
 
@@ -26,7 +26,7 @@ export async function briefing(lang: Lang, now = new Date()): Promise<Briefing> 
   const text = await remember(
     'briefing',
     `briefing:${lang}`,
-    { period, day: now.toLocaleDateString('en-CA', { timeZone: config.timezone }), context: context.split('\n').slice(1) },
+    { period, day: now.toLocaleDateString('en-CA', { timeZone: config.timezone }), about: steadyContext(now) },
     async () => {
       const response = await create({
         purpose: 'briefing',

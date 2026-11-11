@@ -68,6 +68,8 @@ export function Assistant() {
         setTurns(c.turns);
         setProposals(Object.fromEntries(c.proposals.map((p) => [p.id, p])));
         const arrival = takeArrival();
+        // The history just loaded counts as already there when the arrival prompt is sent (the render has not run yet).
+        turnsRef.current = c.turns;
         if (arrival.prompt) void send(arrival.prompt);
         else if (arrival.listen) listenWanted.current = true;
         setChatLoaded(true);

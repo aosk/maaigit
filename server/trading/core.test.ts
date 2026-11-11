@@ -6,6 +6,7 @@ vi.hoisted(() => {
 
 import type { Quote } from '../../shared/trading';
 import { marketClock, onTick, riyadh, UNIVERSE } from './tadawul';
+import { inDesk } from './desk';
 import { applyFill, bookValue, dayPnl, rollDay } from './portfolio';
 import { checkOrder, type RiskContext } from './risk';
 import { dailyVolatility, readStock } from './indicators';
@@ -193,5 +194,33 @@ describe('the technical readings', () => {
     expect(plain.relStrength).toBeUndefined();
     expect(withIndex.relStrength).toBeGreaterThan(5); // the stock rose about 8% in 20 days, the index stood still
     expect(withIndex.volatilityPct).toBeGreaterThan(0);
+  });
+});
+
+describe('fractions of a coin', () => {
+  it('adds and takes fractions without leaving dust, so everything held can be sold', () => {
+    inDesk('crypto', () => {
+      const book = newBook(1000, OPEN);
+      applyFill(book, 'buy', 'ETH', 0.3, 3500);
+      applyFill(book, 'sell', 'ETH', 0.1, 3500);
+      expect(book.positions[0].qty).toBe(0.2);
+      // 0.3 − 0.1 is 0.19999999999999998 in floats: the sale of 0.2 must still book.
+      applyFill(book, 'sell', 'ETH', 0.2, 3500);
+      expect(book.positions).toEqual([]);
+      applyFill(book, 'buy', 'SOL', 0.1, 180);
+      applyFill(book, 'buy', 'SOL', 0.2, 180);
+      applyFill(book, 'sell', 'SOL', 0.3, 180);
+      expect(book.positions).toEqual([]);
+      expect(() => applyFill(book, 'sell', 'SOL', 0.1, 180)).toThrow(/only 0 held/);
+    });
+  });
+
+  it('keeps a coin under a dollar on its own tick, not on cents', () => {
+    inDesk('crypto', () => {
+      expect(onTick(0.74661, 'sell')).toBe(0.7467);
+      expect(onTick(0.75349, 'buy')).toBe(0.7534);
+      expect(onTick(101_234.567, 'buy')).toBe(101_234.56);
+    });
+    expect(onTick(27.43, 'buy')).toBe(27.4); // Tadawul, unchanged
   });
 });

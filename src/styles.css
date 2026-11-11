@@ -1053,13 +1053,17 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 @keyframes ob-sway { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
 .ob-unsway { transform-box: fill-box; transform-origin: center; animation: ob-unsway 8s ease-in-out infinite alternate; }
 @keyframes ob-unsway { from { transform: rotate(6deg); } to { transform: rotate(-6deg); } }
-.ob.asleep .ob-sway, .ob.asleep .ob-unsway { animation-play-state: paused; }
+.ob.asleep .ob-sway, .ob.asleep .ob-unsway, .ob.reading .ob-sway, .ob.reading .ob-unsway { animation-play-state: paused; }
 .ob-n { cursor: pointer; outline: none; }
 .ob-n .ob-ring { stroke-width: 1.3; transition: stroke-width 0.3s; }
 .ob-n .ob-halo { opacity: 0; transition: opacity 0.35s; }
 .ob-n .ob-spinner { opacity: 0; transition: opacity 0.3s; transform-box: fill-box; transform-origin: center; }
 .ob-n.hot .ob-halo { opacity: 0.5; }
-.ob-n.hot .ob-ring, .ob-n.picked .ob-ring, .ob-n:focus-visible .ob-ring { stroke-width: 2.6; }
+.ob-n.hot .ob-ring, .ob-n.picked .ob-ring { stroke-width: 2.6; }
+/* Keyboard focus is its own, clearly visible ring. */
+.ob-n:focus-visible .ob-ring, .ob-cap:focus-visible .ob-body { stroke: var(--text) !important; stroke-width: 3; }
+.ob-cap { cursor: pointer; outline: none; }
+.ob-cap.picked .ob-body { stroke-width: 2.4; }
 .ob-n.hot .ob-spinner { opacity: 1; animation: ob-spin 5s linear infinite; }
 @keyframes ob-spin { to { transform: rotate(360deg); } }
 .ob-n.idle { opacity: 0.5; }
@@ -1074,3 +1078,15 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .ob-steps { display: flex; gap: 4px; }
 .ob-steps i { flex: 1; height: 4px; border-radius: 2px; background: var(--sep); transition: background 0.3s; }
 .ob-now { display: flex; gap: 10px; align-items: flex-start; border-radius: 12px; padding: 10px 12px; font-size: 0.87em; line-height: 1.5; min-height: 44px; background: var(--raised); transition: background 0.3s; overflow-wrap: anywhere; }
+.ob-hint { font-size: 0.8em; text-align: center; }
+.ob-detail { border: 1px solid var(--sep); border-inline-start-width: 4px; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--raised); }
+.ob-detail-name { display: inline-flex; align-items: center; gap: 8px; font-size: 1.02em; }
+.ob-close { border: 0; background: transparent; color: var(--text2); font-size: 1em; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; }
+.ob-close:hover, .ob-close:focus-visible { background: var(--sep); }
+.ob-detail dl { margin: 0; display: grid; gap: 4px; }
+.ob-detail dt { font-size: 0.74em; font-weight: 700; color: var(--text2); margin-top: 6px; }
+.ob-detail dd { margin: 0; font-size: 0.87em; line-height: 1.55; overflow-wrap: anywhere; }
+.ob-detail ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.ob-detail li { display: flex; gap: 8px; align-items: baseline; }
+.ob-detail li time { flex: none; font-size: 0.85em; font-variant-numeric: tabular-nums; }
+.ob-note { display: block; }

@@ -196,6 +196,15 @@ export function contextNote(): string {
 }
 
 /**
+ * What the daily briefing is about, without what changes by the minute (prices, the bots' last contact): the key
+ * that decides whether a written briefing still stands.
+ */
+export function steadyContext(now = new Date()): string {
+  const reminders = state.reminders.filter((r) => !r.done).map((r) => `- ${r.title} (${r.when})`);
+  return [upcomingEvents(now).join('\n'), reminders.join('\n'), inboxOverview(), asanaOverview(), whatsappOverview(), keysNote(now)].join('\n\n');
+}
+
+/**
  * Loads what the context needs that is not already in memory (Asana), best effort. A reply never waits for Asana once
  * its tasks were read before: the refresh then runs alongside and the next message has it. The very first time it waits
  * a moment at most, so a slow Asana never holds up an answer.

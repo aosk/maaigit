@@ -56,5 +56,6 @@ export const config = {
   /** Once Face ID is set up: minutes of not using MAAI before it asks for Face ID again. */
   lockMinutes: Math.max(1, Math.min(1440, num(process.env.MAAI_LOCK_MINUTES, 30))),
   /** Required online: the password that protects MAAI. */
-  password: process.env.MAAI_PASSWORD ?? '',
+  // Trimmed, as the typed password is: a stray space or newline in the saved setting would make every sign-in fail.
+  password: (process.env.MAAI_PASSWORD ?? '').trim(),
 };

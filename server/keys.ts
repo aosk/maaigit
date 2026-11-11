@@ -2,6 +2,7 @@ import type { ApiKeyEntry, ApiKeyView, HealthCheck, KeyService, MailItem } from 
 import { config } from './config.js';
 import { cachedInbox } from './gmail-inbox.js';
 import { alertKey } from './notify.js';
+import { neutralize } from './ai/untrusted.js';
 import { id, save, state } from './store.js';
 
 /**
@@ -155,6 +156,9 @@ function parseDay(text: string): string | undefined {
   return `${year}-${String(m + 1).padStart(2, '0')}-${String(Number(day)).padStart(2, '0')}`;
 }
 
+/** How many reminders may come from email notices in all. */
+const MAX_FROM_EMAIL = 20;
+
 /** The service an email comes from, by the sender's own domain (a display name can say anything). */
 function serviceOf(address: string): KeyService | undefined {
   const domain = address.toLowerCase().split('@')[1] ?? '';
@@ -172,7 +176,9 @@ export function readExpiryNotice(mail: Pick<MailItem, 'fromAddress' | 'subject' 
   if (!expiresOn) return undefined;
   // Anthropic writes: The API key <name> (apikey_…) in your organization …
   const named = /\b(?:API key|key|token)\s+["“]?([\w.-]{2,60})["”]?\s*\((?:apikey_|id:? )/i.exec(text) ?? /\b(?:API key|token)\s+["“]([^"”]{2,60})["”]/i.exec(text);
-  const name = (named?.[1] ?? mail.subject).trim().slice(0, 80);
+  // Never the subject as the name: a subject is anyone's text (an issue title, a document comment), and the name is
+  // shown in notifications and given to the assistant.
+  const name = (named?.[1] ?? `${SERVICES[service].name} key`).trim().slice(0, 80);
   if (looksSecret(name)) return undefined;
   return { service, name, expiresOn };
 }
@@ -192,6 +198,8 @@ export function noteExpiryNotices(mails: MailItem[], now = new Date()): number {
       same.expiresOn = found.expiresOn;
       same.emailUid = mail.uid;
     } else {
+      // A bounded list: mail cannot grow it without end.
+      if (keys().filter((k) => k.source === 'email').length >= MAX_FROM_EMAIL) continue;
       keys().push({ id: id(), name: found.name, service: found.service, expiresOn: found.expiresOn, source: 'email', emailUid: mail.uid, addedAt: now.toISOString(), note: `From the email “${mail.subject.slice(0, 80)}”` });
     }
     changed++;
@@ -241,7 +249,7 @@ export function keysCheck(now = new Date()): HealthCheck {
 export function keysNote(now = new Date()): string {
   const soon = keysView(now).filter((k) => k.daysLeft !== undefined && k.daysLeft <= 30);
   if (!soon.length) return '';
-  return `API keys to renew soon (names only; the user renews them in the service's console, then in Admin → Keys & audit): ${soon.map((k) => `${k.name} (${SERVICES[k.service].name}${k.envVar ? `, ${k.envVar}` : ''}) ${k.daysLeft! < 0 ? `EXPIRED on ${k.expiresOn}` : `expires ${k.expiresOn}, in ${k.daysLeft} day(s)`}`).join('; ')}.`;
+  return `API keys to renew soon (names only; the user renews them in the service's console, then in Admin → Keys & audit): ${soon.map((k) => `${neutralize(k.name)} (${SERVICES[k.service].name}${k.envVar ? `, ${k.envVar}` : ''}) ${k.daysLeft! < 0 ? `EXPIRED on ${k.expiresOn}` : `expires ${k.expiresOn}, in ${k.daysLeft} day(s)`}`).join('; ')}.`;
 }
 
 /** Reads new expiry notices from the inbox and sends the reminders that are due. */

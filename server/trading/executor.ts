@@ -30,7 +30,7 @@ const label = (symbol: string) => `${instrument(symbol)?.nameAr ?? symbol} (${sy
 const sideAr = (side: Side) => (side === 'buy' ? 'شراء' : 'بيع');
 
 /** Records an order that passed the risk gate, and (paper) tries to fill it at once. */
-export function submit(decisionId: string, symbol: string, side: Side, qty: number, limitPrice: number, now = new Date(), priceAsOf?: string): TradeOrder {
+export function submit(decisionId: string, symbol: string, side: Side, qty: number, limitPrice: number, now = new Date(), priceAsOf?: string, refPrice?: number): TradeOrder {
   const order: TradeOrder = {
     id: `ord_${randomBytes(8).toString('hex')}`,
     decisionId,
@@ -44,6 +44,7 @@ export function submit(decisionId: string, symbol: string, side: Side, qty: numb
     expiresAt: new Date(now.getTime() + ORDER_TTL_MS).toISOString(),
     filledQty: 0,
     priceAsOf,
+    refPrice,
   };
   trading.orders.push(order);
   const day = tradingDay(now);
@@ -69,9 +70,13 @@ function tryPaperFill(order: TradeOrder, now: Date) {
   const end = windowEnd(order);
   const through = observedBetween(order.symbol, order.createdAt, end).find((q) => (order.side === 'buy' ? q.price < order.limitPrice : q.price > order.limitPrice));
   if (through) {
-    const profit = applyFill(trading.books.paper, order.side, order.symbol, order.qty, order.limitPrice);
+    // A sale priced under the market (an exit) sells at about the market, as it would at a broker: at the price seen,
+    // never above the price it was placed against. Anything else fills at its limit.
+    const marketable = order.side === 'sell' && order.refPrice !== undefined && order.limitPrice < order.refPrice;
+    const price = marketable ? Math.min(through.price, order.refPrice!) : order.limitPrice;
+    const profit = applyFill(trading.books.paper, order.side, order.symbol, order.qty, price);
     order.fillPriceAsOf = through.asOf;
-    fill(order, order.qty, order.limitPrice, now, profit, through);
+    fill(order, order.qty, price, now, profit, through);
     return;
   }
   const latest = latestObserved(order.symbol);
@@ -114,7 +119,14 @@ const LOST_AFTER_MS = 30 * 60_000;
 export function processOrders(now = new Date()): void {
   for (const order of trading.orders.filter((o) => OPEN.includes(o.status) && o.status !== 'unknown')) {
     if (order.mode === 'paper') {
-      tryPaperFill(order, now);
+      // One order that cannot be booked must not stop the others, nor the tick behind them (the daily loss stop, the rounds).
+      try {
+        tryPaperFill(order, now);
+      } catch (error) {
+        order.status = 'failed';
+        order.error = (error as Error).message;
+        emit('order.failed', 'executor', `تعذّر تسجيل أمر ${sideAr(order.side)} ${label(order.symbol)}: ${order.error}`, { correlationId: order.decisionId, data: { orderId: order.id } }, now);
+      }
       continue;
     }
     const botHasIt = Boolean(order.ackedAt) && order.status !== 'queued';
@@ -347,7 +359,9 @@ export function commandResult(r: BotResult, now = new Date()): boolean {
     }
     let profit = 0;
     try {
-      profit = applyFill(trading.books.live, order.side, order.symbol, qty - order.filledQty, price);
+      // The bot reports the average over everything filled so far: the part just filled is booked at its own price.
+      const before = order.filledQty * (order.avgFillPrice ?? price);
+      profit = applyFill(trading.books.live, order.side, order.symbol, qty - order.filledQty, (qty * price - before) / (qty - order.filledQty));
     } catch {
       // The broker says it sold what our book does not hold: the reconciliation will catch the difference.
     }
@@ -415,5 +429,7 @@ export function setMode(mode: TradeMode, by: 'user' | 'system', text: string, no
   // Orders of the other mode never carry over.
   for (const order of trading.orders.filter((o) => OPEN.includes(o.status) && o.mode !== mode && !o.ackedAt)) cancel(order, 'تغيّر وضع التداول', now);
   trading.mode = mode;
+  // The benchmark compares one book with the index: a different book starts its own.
+  delete trading.track;
   emit('system.mode', by, text, { data: { mode } }, now);
 }

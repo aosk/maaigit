@@ -27,6 +27,8 @@ const prices = perDesk(() => ({
 }));
 const KEEP_OBSERVED = 200;
 
+/** Prices are simulated (development and tests): nothing outside is read. */
+export const simulated = SOURCE === 'sim';
 export const currentQuotes = () => prices().quotes;
 
 /** The Tadawul All Share Index (TASI): the market as a whole, read with the stocks. */

@@ -98,6 +98,25 @@ describe('the assistant never acts on its own', () => {
     expect(sentMail).not.toHaveBeenCalled();
   });
 
+  it('offers web search five times a turn at most, and not at all once an email has been read in that turn', async () => {
+    const offered: (number | undefined)[] = [];
+    const queue = [
+      reply([{ type: 'server_tool_use', id: 's1', name: 'web_search', input: {} }, { type: 'server_tool_use', id: 's2', name: 'web_search', input: {} }, tool('search_email', { query: 'contract' })], 'tool_use'),
+      reply([say('Done.')], 'end_turn'),
+    ];
+    scripted.mockImplementation((async (req: { tools: { name: string; max_uses?: number }[] }) => {
+      offered.push(req.tools.find((t) => t.name === 'web_search')?.max_uses);
+      return queue.shift();
+    }) as never);
+    await chat(conversation(), 'find the contract email and look it up', 'en');
+    // First round: all five. After two searches and an email's text in the turn: no search at all.
+    expect(offered).toEqual([5, undefined]);
+    // A new message is a new turn: search is offered again.
+    queue.push(reply([say('Hello.')], 'end_turn'));
+    await chat(conversation(), 'hello', 'en');
+    expect(offered.at(-1)).toBe(5);
+  });
+
   it('makes the model correct itself when it gives a bad address, a time in prayer, or an unknown task', async () => {
     script(reply([tool('propose_email', { to: 'Ahmed', to_name: '', subject: 's', body: 'b' }, 'a'), tool('propose_asana_update', { task_gid: '999999999', comment: 'x', complete: false, due_on: '' }, 'b'), tool('propose_asana_task', { name: 'x', notes: '', due_on: 'soon', project_name: '' }, 'c'), tool('propose_asana_task', { name: 'x', notes: '', due_on: '', project_name: 'No such project' }, 'd')], 'tool_use'), reply([say('I need the address.')], 'end_turn'));
     const result = await chat(conversation(), 'email Ahmed', 'en');

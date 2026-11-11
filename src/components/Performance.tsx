@@ -27,7 +27,7 @@ function Lines({ points, label }: { points: { a: number; b: number }[]; label: s
 export function Performance({ st, busy, act }: { st: TradingState; busy: boolean; act: (run: () => Promise<TradingState>) => Promise<boolean> }) {
   const { t, settings } = useSettings();
   const s = t.ss;
-  const index = st.indexName[settings.lang === 'ar' ? 'ar' : 'en'];
+  const index = st.indexName?.[settings.lang === 'ar' ? 'ar' : 'en'] ?? '';
   const b = st.benchmark;
   const r = st.replay;
   return (

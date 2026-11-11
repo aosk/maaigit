@@ -97,6 +97,23 @@ describe('keeping your data safe', () => {
     expect(fs.readFileSync(path.join(dir, kept[0]), 'utf8')).toBe(damaged);
   });
 
+  it('starts from the last good copy when the saved file cannot be read', async () => {
+    const dir = freshDir();
+    const file = path.join(dir, 'store.json');
+    // A good start: the file is read and a copy kept beside it.
+    const first = await loadStore(file);
+    first.state.reminders.push({ id: 'r1', title: 'Renew the passport', when: 'tomorrow', done: false } as never);
+    first.save();
+    first.flushSave();
+    await loadStore(file);
+    expect(fs.existsSync(`${file}.bak`)).toBe(true);
+    // Then the file is cut short (a power cut mid-write on a disk that lies about it).
+    fs.writeFileSync(file, '');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { state } = await loadStore(file);
+    expect(state.reminders.some((r) => r.title === 'Renew the passport')).toBe(true);
+  });
+
   it('saves and loads back exactly what was there', async () => {
     const dir = freshDir();
     const file = path.join(dir, 'store.json');

@@ -61,7 +61,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-10-24h';
+const VERSION = '2026-11-11a';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -332,7 +332,15 @@ async function toItem(msg, knownChat) {
   };
 }
 
+/** Every message this run has already heard of (by event, by the first read, or by the catch-up), so none is taken twice. */
+const known = new Set();
+function heard(id) {
+  known.add(id);
+  if (known.size > 6000) for (const old of [...known].slice(0, 1000)) known.delete(old);
+}
+
 function add(item) {
+  if (item) heard(item.id);
   if (!item || queued.has(item.id)) return false;
   queued.add(item.id);
   queue.push(item);
@@ -477,6 +485,7 @@ async function sendVoice(msg, item) {
 async function onMessage(msg) {
   try {
     const item = await toItem(msg);
+    if (item) heard(item.id);
     if (item && orderPhone && item.phone === orderPhone && !item.fromMe && !item.group && (msg.type === 'ptt' || msg.type === 'audio')) {
       await sendVoice(msg, item);
       return;
@@ -511,6 +520,38 @@ async function shareContacts() {
 
 /** The last day of chats, read once when the bot starts, so MAAI also sees what arrived before (repeats are ignored by MAAI). */
 const BACKFILL_HOURS = Math.max(1, Number(process.env.BACKFILL_HOURS) || 24);
+/**
+ * A safety net under the live events. Some WhatsApp Web versions stop telling the bot about new messages; they then
+ * reached MAAI only with the hourly delivery, and its replies went out up to an hour late. Every minute, chats with
+ * something new in the last ten minutes are read again, and anything the events missed is handled as if it had
+ * just arrived (a private message still goes to MAAI within seconds).
+ */
+let catching = false;
+async function catchUp() {
+  if (catching) return;
+  catching = true;
+  try {
+    const all = await Promise.race([wa.getChats(), pause(20_000).then(() => Promise.reject(new Error('took too long')))]);
+    const since = Date.now() / 1000 - 10 * 60;
+    let found = 0;
+    for (const chat of all.filter((c) => (c.timestamp ?? 0) >= since && !/@broadcast|@newsletter/.test(c.id?._serialized ?? '')).slice(0, 20)) {
+      const messages = await tryGet(() => chat.fetchMessages({ limit: 5 }));
+      for (const msg of messages ?? []) {
+        if ((msg.timestamp ?? 0) < since) continue;
+        const item = await toItem(msg, chat).catch(() => null);
+        if (!item || known.has(item.id)) continue;
+        found += 1;
+        await onMessage(msg);
+      }
+    }
+    if (found) log(`Caught ${found} message(s) the live feed missed.`);
+  } catch (error) {
+    if (process.env.DEBUG) log('Catch-up skipped:', why(error));
+  } finally {
+    catching = false;
+  }
+}
+
 async function backfill() {
   // Right after linking, WhatsApp Web is still loading the chats: wait, and try again a few times.
   let all;
@@ -859,7 +900,9 @@ wa.on('ready', async () => {
   log('Listening for new messages. Reading the last day of chats in the background…');
   void backfill()
     .then(() => sync())
-    .catch((error) => log('⚠ Could not read recent chats:', why(error)));
+    .catch((error) => log('⚠ Could not read recent chats:', why(error)))
+    // Once the first read is in: the minute-by-minute safety net for messages the live events miss.
+    .finally(() => setInterval(() => void catchUp(), 60_000));
   setInterval(() => void shareContacts().catch(() => {}), 24 * 3_600_000);
   await sync();
   setInterval(sync, SYNC_MS);

@@ -54,6 +54,7 @@ beforeEach(async () => {
   state.replyMode = 'smart';
   state.proposals = [];
   state.audit = [];
+  state.alerts = [];
   answered.mockReset();
   vi.mocked(transcribe).mockReset();
   answered.mockResolvedValue({ text: 'Tomorrow: stand-up at 9.', proposals: [] });
@@ -284,6 +285,17 @@ describe('orders from the user\'s own WhatsApp number', () => {
       await vi.waitFor(() => expect(answered).toHaveBeenCalledWith(expect.anything(), '(from my WhatsApp) What is in my inbox?', 'en'));
       expect(JSON.stringify(answered.mock.calls)).not.toContain(PIN);
       expect(state.audit.some((a) => a.event.includes('unlocked'))).toBe(true);
+    });
+
+    it('gives the same answer while locked whether or not a number in the message is the PIN, and never runs it', async () => {
+      const wrong = await send('note 111111 222222');
+      const right = await send(`note 111111 ${PIN}`);
+      expect(right).toBe(wrong);
+      expect(right).toContain('🔒');
+      // Unlocking then runs the held message without the PIN, not the one that carried it.
+      expect(await send(`unlock ${PIN}`)).toContain('🔓');
+      await vi.waitFor(() => expect(answered).toHaveBeenCalled());
+      expect(JSON.stringify(answered.mock.calls)).not.toContain(PIN);
     });
 
     it('locks again on "قفل" and from the app, and a voice note cannot unlock it', async () => {

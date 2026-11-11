@@ -56,8 +56,11 @@ describe('an email stops asking for a decision once it was dealt with', () => {
     expect(contextNote()).not.toMatch(/#102 .*already handled/);
   });
 
-  it('is found by the sender\'s address when the reply was not tagged with the email number', async () => {
-    const reply = card({ kind: 'email', to: 'AHMED@example.com', subject: 'Re: Lunch', body: 'Yes!' });
+  it('is found by the sender\'s address and subject when the reply was not tagged with the email number', async () => {
+    // A new, unrelated email to the same person does not mark their question as answered.
+    await approve(card({ kind: 'email', to: 'ahmed@example.com', subject: 'Quarterly report', body: 'Attached.' }));
+    expect(state.handledMail['102']).toBeUndefined();
+    const reply = card({ kind: 'email', to: 'AHMED@example.com', subject: 'Re: Lunch?', body: 'Yes!' });
     await approve(reply);
     expect(state.handledMail['102']).toMatchObject({ how: 'replied' });
   });

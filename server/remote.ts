@@ -256,7 +256,8 @@ async function carryOut(order: Order, now: number): Promise<void> {
   if (recent.length >= PER_HOUR) {
     // Said once, when the limit is reached; then quiet until the hour passes.
     if (recent.length === PER_HOUR) reply(lang === 'ar' ? `وصلت الحد (${PER_HOUR} أمر في الساعة). جرّب بعد قليل.` : `That is ${PER_HOUR} orders this hour, the limit. Try again a little later.`);
-    state.bot.orderTimes = [...recent, new Date(now).toISOString()];
+    // One entry past the limit marks that the notice was sent; more would only grow the list.
+    state.bot.orderTimes = recent.length === PER_HOUR ? [...recent, new Date(now).toISOString()] : recent;
     return;
   }
   state.bot.orderTimes = [...recent, new Date(now).toISOString()];
@@ -337,14 +338,18 @@ async function carryOut(order: Order, now: number): Promise<void> {
     return;
   }
   // An approval or unlock MAAI could not read, or anything with the PIN in it, stays out of the assistant too.
-  if (LOOKS_LIKE_APPROVAL.test(plain) || /^(?:unlock|فتح|افتح)\s*\d/i.test(plain) || holdsPin(plain)) {
+  // While the number is locked, a number in the message is not checked against the PIN here: the answer would
+  // differ when it matched, letting someone holding the phone test five guesses a message past the three-tries lock.
+  const withPin = holdsPin(plain);
+  if (LOOKS_LIKE_APPROVAL.test(plain) || /^(?:unlock|فتح|افتح)\s*\d/i.test(plain) || (withPin && unlocked(now))) {
     reply(lang === 'ar' ? 'ما فهمت الموافقة. اكتبها هكذا: موافق 3 ثم رمزك (مثال: موافق 3 123456).' : 'I could not read that approval. Write it like: approve 3 and your PIN (for example: approve 3 123456).');
     return;
   }
 
   // Questions and orders need the number unlocked: a phone in someone else's hand learns nothing.
   if (!order.audio && !unlocked(now)) {
-    held = { order, at: now };
+    // Kept to run after unlocking, unless it holds the PIN (which never reaches the assistant). The reply is the same.
+    if (!withPin) held = { order, at: now };
     reply(ar ? '🔒 رقم الأوامر مقفل. أرسل: فتح ثم رمزك (مثال: فتح 123456)، وأنفّذ طلبك بعدها.' : '🔒 Locked. Send: unlock <your PIN> (e.g. unlock 123456), and your order runs then.');
     return;
   }

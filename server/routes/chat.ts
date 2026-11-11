@@ -55,6 +55,9 @@ assistant.post('/chat/stream', async (req, res) => {
 });
 
 assistant.post('/chat/reset', (_req, res) => {
+  // The conversation being left keeps its turns for display; its raw exchange with Claude (email bodies read,
+  // search results, context snapshots) is never read again, and is not kept on disk.
+  for (const old of state.conversations) old.apiMessages = [];
   state.conversations.unshift({ id: id(), apiMessages: [], turns: [] });
   state.conversations.length = Math.min(state.conversations.length, 20);
   save();

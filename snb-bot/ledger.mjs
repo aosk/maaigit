@@ -23,6 +23,10 @@ export function openLedger(dir) {
     }
   }
   const fd = fs.openSync(file, 'a');
+  // After a power cut the last line may be cut short: start on a fresh line, so the next entry is not glued to it
+  // (and lost with it at the following start).
+  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  if (text && !text.endsWith('\n')) fs.writeSync(fd, '\n');
 
   function write(commandId, change) {
     const entry = { ...entries.get(commandId), ...change, commandId, at: new Date().toISOString() };

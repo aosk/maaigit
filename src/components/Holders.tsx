@@ -13,7 +13,7 @@ export function Holders({ view, universe }: { view: HoldersView; universe: Instr
     return i ? (lang === 'ar' ? i.nameAr : i.nameEn) : symbol;
   };
   const when = view.updatedAt ? new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-GB', { day: 'numeric', month: 'short' }).format(new Date(view.updatedAt)) : '';
-  const shared = view.investors.filter((i) => i.stakes.length > 1 || i.stakes[0].pct >= 10).slice(0, 8);
+  const shared = view.investors.filter((i) => i.stakes.length > 1 || (i.stakes[0]?.pct ?? 0) >= 10).slice(0, 8);
 
   return (
     <section className="card hd" aria-label={s.holdersTitle}>

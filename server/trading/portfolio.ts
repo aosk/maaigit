@@ -25,15 +25,16 @@ export function applyFill(book: Book, side: Side, symbol: string, qty: number, p
     book.cash = round2(book.cash - value - cost);
     if (held) {
       held.avgCost = round4((held.qty * held.avgCost + value + cost) / (held.qty + qty));
-      held.qty += qty;
+      held.qty = whole(held.qty + qty);
     } else book.positions.push({ symbol, qty, avgCost: round4((value + cost) / qty) });
     return 0;
   }
-  if (!held || held.qty < qty) throw new Error(`Cannot sell ${qty} ${symbol}: only ${held?.qty ?? 0} held.`);
+  // Fractions of a coin are held to a millionth: without the tolerance, 0.3 − 0.1 leaves 0.19999999999999998 and "sell 0.2" fails.
+  if (!held || held.qty + 1e-9 < qty) throw new Error(`Cannot sell ${qty} ${symbol}: only ${held?.qty ?? 0} held.`);
   const profit = round2((price - held.avgCost) * qty - cost);
   book.cash = round2(book.cash + value - cost);
-  held.qty -= qty;
-  if (held.qty === 0) book.positions = book.positions.filter((p) => p !== held);
+  held.qty = whole(held.qty - qty);
+  if (held.qty < 1e-6) book.positions = book.positions.filter((p) => p !== held);
   book.realized = round2(book.realized + profit);
   return profit;
 }
@@ -51,5 +52,7 @@ export function dayPnl(book: Book, prices: Map<string, number>): number {
   return round2(bookValue(book, prices) - book.dayStart.value);
 }
 
+/** A quantity to a millionth, so adding and taking fractions never leaves float dust behind. */
+const whole = (q: number) => Math.round(q * 1e6) / 1e6;
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;

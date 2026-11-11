@@ -11,6 +11,8 @@ import { Admin } from './admin/Admin';
 import { ProfileScreen } from './screens/Profile';
 import { Unlock } from './screens/Unlock';
 import { LOCKED_EVENT, api } from './api';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { forgetFeeds } from './inboxCache';
 import { AlertBanner } from './components/AlertBanner';
 import { Wordmark } from './components/Logo';
 import { worker } from './push';
@@ -69,6 +71,8 @@ export function App() {
   useEffect(() => {
     const onLocked = (e: Event) => {
       const detail = (e as CustomEvent).detail as { kind?: string; face?: boolean };
+      // Locked: the copy of the inbox kept on this device for a quick first paint is removed with the screen.
+      forgetFeeds();
       setLocked({ kind: detail.kind === 'password' ? 'password' : 'pin', face: detail.face === true });
     };
     window.addEventListener(LOCKED_EVENT, onLocked);
@@ -98,7 +102,7 @@ export function App() {
   }, [route, t]);
 
   if (locked) return <Unlock kind={locked.kind} idle={locked.face} />;
-  if (route === 'admin') return <Admin />;
+  if (route === 'admin') return <ErrorBoundary resetKey="admin"><Admin /></ErrorBoundary>;
 
   const tabs: { route: Route; label: string; icon: JSX.Element }[] = [
     { route: 'today', label: t.today, icon: <Calendar size={26} /> },
@@ -114,13 +118,15 @@ export function App() {
       <AlertBanner />
       <PullToRefresh onRefresh={refreshAll} disabled={route === 'assistant'} />
       <main>
-        {route === 'today' && <Today />}
-        {route === 'assistant' && <Assistant />}
-        {route === 'inbox' && <Inbox />}
-        {route === 'news' && <News />}
-        {route === 'stocks' && <StockSmart />}
-        {route === 'settings' && <SettingsScreen />}
-        {route === 'profile' && <ProfileScreen />}
+        <ErrorBoundary resetKey={route}>
+          {route === 'today' && <Today />}
+          {route === 'assistant' && <Assistant />}
+          {route === 'inbox' && <Inbox />}
+          {route === 'news' && <News />}
+          {route === 'stocks' && <StockSmart />}
+          {route === 'settings' && <SettingsScreen />}
+          {route === 'profile' && <ProfileScreen />}
+        </ErrorBoundary>
       </main>
       <nav className="tabs" aria-label={t.tabsLabel}>
         <div className="tabs-brand"><Wordmark width={112} title={`${t.appName} | maai`} /></div>

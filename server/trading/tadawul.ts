@@ -37,7 +37,9 @@ export function onTick(price: number, side: 'buy' | 'sell'): number {
   // US stocks and ETFs above $1 trade in cents.
   const tick = deskId() === 'us' ? 0.01 : deskId() === 'crypto' ? (price >= 1 ? 0.01 : 0.0001) : tickFor(price);
   const steps = side === 'buy' ? Math.floor(price / tick + 1e-9) : Math.ceil(price / tick - 1e-9);
-  return Math.round(steps * tick * 100) / 100;
+  // To the tick's own precision: a coin under a dollar moves in hundredths of a cent, and cents would misplace its limit.
+  const scale = tick < 0.01 ? 10_000 : 100;
+  return Math.round(steps * tick * scale) / scale;
 }
 
 /** The day's allowed range around the previous close. */

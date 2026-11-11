@@ -173,7 +173,7 @@ export function Scorecard({ st }: { st: TradingState }) {
     <section className="card dk" aria-label={s.scTitle}>
       <div>
         <h2 className="h2" style={{ margin: 0 }}>{s.scTitle}</h2>
-        <span className="sub">{s.scSub(c.holdDays, st.indexName[settings.lang === 'ar' ? 'ar' : 'en'])}</span>
+        <span className="sub">{s.scSub(c.holdDays, st.indexName?.[settings.lang === 'ar' ? 'ar' : 'en'] ?? '')}</span>
       </div>
       <div className="dk-stats">
         <div><b>{c.right}/{c.settled}</b><span>{s.scRight}</span></div>

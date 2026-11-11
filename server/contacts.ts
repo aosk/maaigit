@@ -59,6 +59,9 @@ function everyone(): AddressCard[] {
   return [...state.addressBook.cards, ...state.contacts.filter((c) => !known.has(c.phone)).map((c) => ({ name: c.name, phones: [c.phone], emails: [] }))];
 }
 
+/** The name a number is saved under, if it is in the contacts. */
+export const contactNameOf = (phone: string): string | undefined => everyone().find((c) => c.phones.includes(phone))?.name;
+
 /** Contacts whose name (or company) contains every word of the query, best first. */
 export function findContacts(query: string, limit = 8): AddressCard[] {
   const words = fold(query).split(/\s+/).filter(Boolean);

@@ -63,6 +63,7 @@ async function accessToken(): Promise<string> {
   if (token && Date.now() < token.expiresAt) return token.value;
   const res = await fetch(KEY.token_uri ?? TOKEN_URL, {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: signJwt(KEY) }),
   }).catch(() => {
@@ -79,6 +80,7 @@ export async function eventsCall(method: string, path: string, options: { body?:
   const query = options.query ? `?${new URLSearchParams(options.query)}` : '';
   return fetch(`${API}/calendars/${encodeURIComponent(calendarId!)}/events${path}${query}`, {
     method,
+    signal: AbortSignal.timeout(15_000),
     headers: { Authorization: `Bearer ${await accessToken()}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
     body: options.body ? JSON.stringify(options.body) : undefined,
   }).catch(() => {

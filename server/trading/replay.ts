@@ -36,6 +36,18 @@ export function noteBenchmark(prices: Map<string, number>, now = new Date()): vo
   if (track.length > KEEP_DAYS) track.splice(0, track.length - KEEP_DAYS);
 }
 
+/**
+ * Money added to or taken from the book (a change of capital) is not performance: the earlier points are scaled so
+ * that every day's return so far stays what it was, and the line carries on from the new value without a jump.
+ */
+export function rebaseBenchmark(delta: number): void {
+  const track = trading.track;
+  const last = track?.at(-1);
+  if (!track || !last || !(last.value > 0) || !(last.value + delta > 0)) return;
+  const factor = (last.value + delta) / last.value;
+  for (const p of track) p.value = round2(p.value * factor);
+}
+
 const pctOf = (now: number, then: number) => (then > 0 ? round2((now / then - 1) * 100) : 0);
 
 /** The desk against its index since the first day noted. */

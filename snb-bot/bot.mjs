@@ -37,7 +37,8 @@ function setup(message) {
 const url = process.env.STOCKSMART_URL ?? '';
 const key = process.env.STOCKSMART_KEY ?? '';
 const secret = process.env.STOCKSMART_SECRET ?? '';
-if (!/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(url)) setup('STOCKSMART_URL is missing or not https (for example https://maaigit.onrender.com).');
+// Plain http only for this computer itself: "http://localhost.example.com" is not it.
+if (!/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(url)) setup('STOCKSMART_URL is missing or not https (for example https://maaigit.onrender.com).');
 if (!/^stk_\S{20,}$/.test(key)) setup('STOCKSMART_KEY is missing. Make it in maai: maai Stocks → Limits and settings → Connect the SNB bot.');
 if (!/^[0-9a-f]{64}$/.test(secret)) setup('STOCKSMART_SECRET is missing or not the 64-character signing secret shown with the key.');
 

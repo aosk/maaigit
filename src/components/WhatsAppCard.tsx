@@ -22,6 +22,9 @@ export function WhatsAppCard({ proposal, onChange }: { proposal: WhatsAppProposa
   return (
     <section className={`card approval${done ? ' done' : ''}`} aria-label={t.whatsappDraft}>
       <div className="card-label"><Send size={18} />{t.whatsappDraft} · {proposal.toName}</div>
+      {/* The number itself, always: a name alone cannot show a wrong recipient. */}
+      <div className="sub"><bdi dir="ltr">+{proposal.phone}</bdi></div>
+      {proposal.newNumber && !done && <div className="error" role="alert">{t.whatsappNewNumber}</div>}
       <div className="field">
         <label htmlFor={fid}>{t.message}</label>
         <textarea id={fid} dir="auto" value={body} onChange={(e) => setBody(e.target.value)} disabled={done} style={{ minHeight: 120 }} />

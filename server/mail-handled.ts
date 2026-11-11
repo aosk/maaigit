@@ -21,10 +21,12 @@ export function markHandled(uid: number | undefined, how: HandledMail['how']): v
 }
 
 /** For a reply the model did not tag with an email number: the newest inbox email from that address. */
-export function markReplyTo(address: string, how: HandledMail['how']): void {
+export function markReplyTo(address: string, how: HandledMail['how'], subject = ''): void {
   const wanted = address.trim().toLowerCase();
+  // Only an email on the same subject counts as answered: a new, unrelated email to the same person does not.
+  const topic = (s: string) => s.replace(/^\s*((re|fwd?|رد)\s*:\s*)+/i, '').trim().toLowerCase();
   const mail = cachedInbox()
-    .filter((m) => m.fromAddress.toLowerCase() === wanted)
+    .filter((m) => (m.fromAddress.toLowerCase() === wanted || m.replyTo?.toLowerCase() === wanted) && (!subject || topic(m.subject) === topic(subject)))
     .sort((a, b) => b.date.localeCompare(a.date))[0];
   if (mail) markHandled(mail.uid, how);
 }

@@ -119,6 +119,8 @@ export type Proposal =
       toName: string;
       /** Their number, digits only. */
       phone: string;
+      /** Nobody with this number wrote lately and it is not in the contacts: the card warns before sending. */
+      newNumber?: boolean;
       body: string;
       /** MAAI can send it itself: the number is connected and they wrote within the last 24 hours. */
       canSend: boolean;
@@ -558,6 +560,10 @@ export interface MailItem {
   unread: boolean;
   /** Plain text, quoted history removed, shortened. */
   body: string;
+  /** The email's own id, so a reply joins its thread. */
+  messageId?: string;
+  /** Where the sender asks replies to go, when not their own address (forms, lists, ticket systems). */
+  replyTo?: string;
 }
 
 type MailCategory = 'decide' | 'reply' | 'fyi' | 'ignore';

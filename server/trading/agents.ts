@@ -11,9 +11,9 @@ import { referenceFor } from './reference.js';
 import { holdersForDecision } from './holders.js';
 import { upcoming } from './calendar.js';
 import { trackRecord } from './scoring.js';
-import { fetchOutcomes, outcomesLine } from './webtools.js';
+import { fetchOutcomes, outcomesLine, searchLine } from './webtools.js';
 import { fundamentalsForDecision } from './fundamentals.js';
-import { instrument, units, UNIVERSE } from './tadawul.js';
+import { instrument, tradingDay, units, UNIVERSE } from './tadawul.js';
 import { deskConfig, perDesk, unitAr } from './desk.js';
 
 /**
@@ -219,6 +219,7 @@ Report only items from the last 24 hours that could move the price, at most 8, t
     mem().news = { at: now.getTime(), items, market };
     for (const m of market) emit('agent.observation', 'news', `سياق السوق · ${m.severity === 'high' ? 'خطورة عالية' : m.severity === 'medium' ? 'خطورة متوسطة' : 'خطورة منخفضة'}: ${m.headline}${m.confirmed ? '' : ' (غير مؤكد)'} · ${m.source}`, { data: { market: true, severity: m.severity, sectors: m.sectors, confirmed: m.confirmed } }, now);
     if (saudi) noteOfficialRead(response.content);
+    console.log(`StockSmart news (${deskConfig().id}): ${items.length} item(s), ${market.length} market item(s); ${searchLine(response)}.`);
     for (const i of items) emit('agent.observation', 'news', `${i.official ? '📢 إعلان رسمي · ' : ''}${label(i.symbol)}: ${i.headline} · ${i.tone === 'positive' ? 'إيجابي' : i.tone === 'negative' ? 'سلبي' : 'محايد'} · ${i.source}`, { data: { symbol: i.symbol, tone: i.tone, official: i.official } }, now);
     if (!items.length) emit('agent.observation', 'news', 'ما فيه أخبار أو إعلانات مؤثرة اليوم على الأسهم المتابعة', {}, now);
     ran('news', undefined, now);
@@ -313,7 +314,8 @@ export const lastDecisionRecord = () => mem().decision;
 /** The portfolio manager: weighs the technical reads and the news against what is held and the user's instructions. */
 export async function decisionRound(reads: TechRead[], news: NewsItem[], minutesToClose: number, now = new Date(), pulse?: MarketPulse): Promise<Decision[]> {
   mem().decision = { source: 'none', decisions: [] };
-  if (!enabled('decision') || !reads.length) return [];
+  // With the decision agent off, or nothing read this round, nothing is decided: only the stop below still acts.
+  const stopsOnly = !enabled('decision') || !reads.length;
   const book = trading.books[trading.mode];
   const quotes = currentQuotes();
   const held = book.positions.map((p) => {
@@ -323,7 +325,10 @@ export async function decisionRound(reads: TechRead[], news: NewsItem[], minutes
   });
   let decisions: Omit<Decision, 'id'>[];
   let summary: string;
-  if (trading.decider === 'rules') {
+  if (stopsOnly) {
+    decisions = [];
+    summary = '';
+  } else if (trading.decider === 'rules') {
     ({ decisions, summary } = ruleBased(reads, held, book.cash));
     mem().decision = { source: 'rules', promptVersion: RULE_VERSION, summary, decisions: [] };
     ran('decision', undefined, now);
@@ -342,7 +347,7 @@ export async function decisionRound(reads: TechRead[], news: NewsItem[], minutes
         minutesToClose,
         limits: trading.limits,
         cash: book.cash,
-        ordersLeftToday: Math.max(0, trading.limits.maxOrdersPerDay - (trading.ordersToday.day === now.toISOString().slice(0, 10) ? trading.ordersToday.count : 0)),
+        ordersLeftToday: Math.max(0, trading.limits.maxOrdersPerDay - (trading.ordersToday.day === tradingDay(now) ? trading.ordersToday.count : 0)),
         held,
         technical: reads.map((r) => ({ symbol: r.symbol, sector: instrument(r.symbol)?.sector, price: r.price, priceAsOf: quotes.get(r.symbol)?.asOf, changePct: +r.changePct.toFixed(2), trend: r.trend, rsi: r.rsi && Math.round(r.rsi), volumeRatio: r.volumeRatio && +r.volumeRatio.toFixed(2), breakout: r.breakout, score: +r.score.toFixed(2), trendShort: r.trendShort, volatilityPct: r.volatilityPct && +r.volatilityPct.toFixed(1), relStrengthPct: r.relStrength !== undefined ? +r.relStrength.toFixed(1) : undefined })),
         news,
@@ -396,7 +401,7 @@ export async function decisionRound(reads: TechRead[], news: NewsItem[], minutes
   // The stop is a rule in code, not a preference: a holding at or below it is sold whoever decides, and whether or
   // not Claude answered. Its sales come first and are never crowded out by the round's limit.
   // (The plain rule applies the same stop itself.)
-  const stops = trading.decider === 'rules' ? [] : hardStops(held);
+  const stops = trading.decider === 'rules' && !stopsOnly ? [] : hardStops(held);
   const stopped = new Set(stops.map((d) => d.symbol));
   const made = [
     ...stops,
@@ -413,12 +418,19 @@ export async function decisionRound(reads: TechRead[], news: NewsItem[], minutes
   return made;
 }
 
+/**
+ * The limit an exit is sent with: a little under the market (as far as the risk gate lets a sale go), so that it
+ * fills even while the price keeps falling. A sale priced at the last price never fills in a falling stock: the next
+ * price is already below it.
+ */
+const exitLimit = (price: number) => price * 0.99;
+
 /** The stop-loss, enforced in code: everything held of a stock that is at or below the desk's stop (-4% for stocks, -8% for coins). */
 function hardStops(held: { symbol: string; qty: number; avgCost: number; price: number; pnlPct: number }[]): Omit<Decision, 'id'>[] {
   const { stopPct } = deskConfig();
   return held
     .filter((h) => h.avgCost > 0 && h.qty > 0 && h.pnlPct <= stopPct && instrument(h.symbol))
-    .map((h) => ({ symbol: h.symbol, side: 'sell' as const, qty: h.qty, limitPrice: h.price, confidence: 1, rationale: `وقف خسارة إلزامي عند ${stopPct}٪ (قاعدة في الكود): السهم نازل ${Math.abs(h.pnlPct).toFixed(1)}٪ عن تكلفته` }));
+    .map((h) => ({ symbol: h.symbol, side: 'sell' as const, qty: h.qty, limitPrice: exitLimit(h.price), confidence: 1, rationale: `وقف خسارة إلزامي عند ${stopPct}٪ (قاعدة في الكود): السهم نازل ${Math.abs(h.pnlPct).toFixed(1)}٪ عن تكلفته` }));
 }
 
 /** Without Claude: a plain momentum rule, so paper mode still shows the whole path working. */
@@ -429,7 +441,7 @@ export function ruleBased(reads: TechRead[], held: { symbol: string; qty: number
   const ar = (n: number) => `${n > 0 ? '+' : ''}${n}٪`;
   for (const h of held) {
     const r = reads.find((x) => x.symbol === h.symbol);
-    if (h.pnlPct <= stopPct || h.pnlPct >= takePct || r?.signal === 'sell') out.push({ symbol: h.symbol, side: 'sell', qty: h.qty, limitPrice: h.price, confidence: 0.6, rationale: h.pnlPct <= stopPct ? `وقف خسارة عند ${ar(stopPct)}` : h.pnlPct >= takePct ? `جني ربح عند ${ar(takePct)}` : 'الإشارة الفنية تحولت للبيع' });
+    if (h.pnlPct <= stopPct || h.pnlPct >= takePct || r?.signal === 'sell') out.push({ symbol: h.symbol, side: 'sell', qty: h.qty, limitPrice: exitLimit(h.price), confidence: 0.6, rationale: h.pnlPct <= stopPct ? `وقف خسارة عند ${ar(stopPct)}` : h.pnlPct >= takePct ? `جني ربح عند ${ar(takePct)}` : 'الإشارة الفنية تحولت للبيع' });
   }
   const buyable = (x: TechRead) => x.signal === 'buy' || (x.trend === 'up' && x.score >= 0.3 && (x.rsi ?? 50) < 70);
   for (const r of reads.filter((x) => buyable(x) && !held.some((h) => h.symbol === x.symbol)).sort((a, b) => b.score - a.score).slice(0, 1)) {

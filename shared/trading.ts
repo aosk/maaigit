@@ -86,6 +86,8 @@ export interface TradeOrder {
   stage?: string;
   /** When the price the risk gate priced it from was true at the exchange. */
   priceAsOf?: string;
+  /** The market price when it was placed: a sale priced under it is marketable, and fills on paper at the market, not at its limit. */
+  refPrice?: number;
   /** When the exchange price that filled it (paper) was true. */
   fillPriceAsOf?: string;
   /** Asked to be cancelled (Stop, or expiry while at the broker): a paper order's window ends here; a live one is cancelled at SNB. */

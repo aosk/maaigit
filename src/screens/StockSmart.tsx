@@ -48,6 +48,9 @@ function clock12(hm: string, lang: string): string {
   return `${h12}:${String(m).padStart(2, '0')} ${lang === 'ar' ? (pm ? 'م' : 'ص') : pm ? 'PM' : 'AM'}`;
 }
 
+/** ٠-٩ and ۰-۹ as 0-9, so a number typed on an Arabic keypad is read. */
+const latinDigits = (s: string) => s.replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660)).replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06f0)).replace('٫', '.');
+
 export function StockSmart() {
   const { t, settings } = useSettings();
   const lang = settings.lang;
@@ -60,6 +63,10 @@ export function StockSmart() {
     }
   });
   setTradingMarket(market);
+  // The desk on screen right now. A reply that was on its way for another desk (a poll, a retry, a slow action)
+  // is dropped: shown under the wrong desk, its Stop, limits and LIVE buttons would act on the desk selected.
+  const showing = useRef(market);
+  showing.current = market;
   const [st, setSt] = useState<TradingState | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -69,6 +76,7 @@ export function StockSmart() {
     api
       .trading(background, market)
       .then((s) => {
+        if (s.market !== showing.current) return;
         setSt(s);
         setError('');
       })
@@ -80,18 +88,35 @@ export function StockSmart() {
     const poll = setInterval(() => !document.hidden && load(true), 60_000);
     // The log as it happens; the numbers follow a moment after each event.
     let source: EventSource | undefined;
-    if (typeof EventSource !== 'undefined') {
+    let again: ReturnType<typeof setTimeout> | undefined;
+    let closed = false;
+    const listen = () => {
+      if (closed || typeof EventSource === 'undefined') return;
       source = new EventSource(onMarket('/api/trading/stream', market));
       source.addEventListener('trade', (msg) => {
-        const event = JSON.parse((msg as MessageEvent<string>).data) as TradeEvent;
+        let event: TradeEvent;
+        try {
+          event = JSON.parse((msg as MessageEvent<string>).data) as TradeEvent;
+        } catch {
+          return;
+        }
         setSt((prev) => (prev && prev.market === market && !prev.events.some((e) => e.id === event.id) ? { ...prev, events: [...prev.events, event].slice(-150) } : prev));
         clearTimeout(refetch.current);
         refetch.current = setTimeout(() => load(true), 800);
       });
-    }
+      // A refused connection (the server restarting after an update) is not retried by the browser: try again shortly.
+      source.addEventListener('error', () => {
+        if (source?.readyState !== EventSource.CLOSED) return;
+        source.close();
+        again = setTimeout(listen, 15_000);
+      });
+    };
+    listen();
     return () => {
+      closed = true;
       clearInterval(poll);
       clearTimeout(refetch.current);
+      clearTimeout(again);
       source?.close();
     };
   }, [load, market]);
@@ -122,7 +147,8 @@ export function StockSmart() {
   async function act(run: () => Promise<TradingState>): Promise<boolean> {
     setBusy(true);
     try {
-      setSt(await run());
+      const next = await run();
+      if (next.market === showing.current) setSt(next);
       setError('');
       return true;
     } catch (e) {
@@ -201,7 +227,7 @@ export function StockSmart() {
           <Review st={st} busy={busy} act={act} />
           {st.market === 'sa' && st.holders && <Holders view={st.holders} universe={st.universe} />}
           <Orders st={st} t={t} lang={lang} />
-          <SettingsPanel st={st} t={t} busy={busy} act={act} />
+          <SettingsPanel key={st.market} st={st} t={t} busy={busy} act={act} />
         </div>
         <div className="ss-col ss-side">
           <Feed st={st} t={t} lang={lang} onAsk={(q) => api.tradingAsk(q, lang).then((r) => r.answer)} onKeep={(text) => act(() => api.tradingDirective(text))} />
@@ -382,7 +408,10 @@ function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boo
 
   async function saveLimits(e: FormEvent) {
     e.preventDefault();
-    if (!(await act(() => api.tradingLimits(Object.fromEntries(LIMIT_KEYS.map((k) => [k, Number(limits[k])])))))) return;
+    // Only what was changed is sent: the other limits may have moved since this form opened (another device).
+    const changed = Object.fromEntries(LIMIT_KEYS.filter((k) => latinDigits(limits[k]).trim() !== String(st.limits[k])).map((k) => [k, Number(latinDigits(limits[k]))]));
+    if (Object.keys(changed).length === 0) return;
+    if (!(await act(() => api.tradingLimits(changed)))) return;
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -489,7 +518,16 @@ function SettingsPanel({ st, t, busy, act }: { st: TradingState; t: T; busy: boo
             </div>
           )}
           <div className="row wrap" style={{ gap: 8 }}>
-            <button className="btn secondary" disabled={busy} onClick={async () => setKeys(await api.tradingBotKey())}>{st.executor.connected ? t.ss.newBotKey : t.ss.connectBot}</button>
+            <button className="btn secondary" disabled={busy} onClick={async () => {
+              if (st.executor.connected && !window.confirm(t.ss.newBotKeyConfirm)) return;
+              try {
+                setKeys(await api.tradingBotKey());
+                // Shown for two minutes, long enough to copy, then hidden.
+                setTimeout(() => setKeys(null), 120_000);
+              } catch (e) {
+                window.alert((e as Error).message);
+              }
+            }}>{st.executor.connected ? t.ss.newBotKey : t.ss.connectBot}</button>
             {st.executor.connected && <button className="btn danger" disabled={busy} onClick={() => window.confirm(t.ss.disconnectConfirm) && act(api.tradingRevokeBot).then(() => setKeys(null))}>{t.ss.disconnectBot}</button>}
           </div>
         </div>

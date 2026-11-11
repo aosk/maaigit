@@ -9,7 +9,7 @@ import { marketClock, UNIVERSE } from '../trading/tadawul.js';
 import { HttpError, lang, text, wrap } from './http.js';
 import { deskConfig, inDesk } from '../trading/desk.js';
 import { weeklyReview } from '../trading/review.js';
-import { runReplay } from '../trading/replay.js';
+import { rebaseBenchmark, runReplay } from '../trading/replay.js';
 import { shariahRound } from '../trading/shariah.js';
 
 /**
@@ -108,6 +108,7 @@ tradingRoutes.put('/trading/limits', (req, res) => {
   if (delta) {
     paper.cash = Math.round((paper.cash + delta) * 100) / 100;
     paper.dayStart.value = Math.round((paper.dayStart.value + delta) * 100) / 100;
+    if (trading.mode === 'paper') rebaseBenchmark(delta);
   }
   if (changes.length) emit('system.limits', 'user', `غيّرت الحدود: ${changes.join(' · ')}${delta ? ` · الكاش التجريبي ${delta > 0 ? 'زاد' : 'نقص'} ${deskConfig().money(Math.abs(delta))}` : ''}`);
   saveTrading();

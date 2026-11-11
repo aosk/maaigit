@@ -3,6 +3,7 @@ import { addFact } from './profile.js';
 import { config } from './config.js';
 import { firstPrayerTime } from './notify.js';
 import { sendMail } from './mail.js';
+import { cachedInbox } from './gmail-inbox.js';
 import { createTask, updateTask, validateNewTask } from './asana.js';
 import { mirrorToGoogle } from './gwrite.js';
 import { canAnswer, sendWhatsApp, whatsappConfigured } from './whatsapp.js';
@@ -20,10 +21,11 @@ async function carryOut(p: Proposal, body: Record<string, unknown>): Promise<str
     case 'email': {
       if (!agentEnabled('messaging')) throw new HttpError(403, 'Messaging is switched off by the admin.');
       const mail = { to: text(body.to, 320) || p.to, subject: text(body.subject, 300) || p.subject, body: text(body.body, 20_000) || p.body };
-      await sendMail(mail);
+      const answers = p.replyToUid ? cachedInbox().find((m) => m.uid === p.replyToUid) : undefined;
+      await sendMail({ ...mail, inReplyTo: answers?.messageId });
       Object.assign(p, mail, { title: mail.subject });
       if (p.replyToUid) markHandled(p.replyToUid, 'replied');
-      else markReplyTo(mail.to, 'replied');
+      else markReplyTo(mail.to, 'replied', mail.subject);
       return `Emailed ${mail.to}: ${mail.subject}`;
     }
     case 'whatsapp': {

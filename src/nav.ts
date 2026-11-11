@@ -20,29 +20,49 @@ export function readRoute(): Route {
   return ROUTES.includes(name as Route) ? (name as Route) : 'today';
 }
 
+// Kept for this visit; where the browser blocks storage (private mode, site data off), in memory instead.
+const kept = new Map<string, string>();
+function put(key: string, value: string) {
+  kept.set(key, value);
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    /* in memory only */
+  }
+}
+function take(key: string): string | undefined {
+  let value = kept.get(key);
+  kept.delete(key);
+  try {
+    value = sessionStorage.getItem(key) ?? value;
+    sessionStorage.removeItem(key);
+  } catch {
+    /* in memory only */
+  }
+  return value;
+}
+
 function go(route: Route) {
   window.location.hash = `/${route}`;
 }
 
 /** Opens the assistant and sends `prompt` on arrival. */
 export function askAssistant(prompt: string) {
-  sessionStorage.setItem(PROMPT_KEY, prompt);
+  put(PROMPT_KEY, prompt);
   go('assistant');
 }
 
 /** Opens the assistant with the microphone already listening. */
 export function talkToAssistant() {
   unlockSpeech();
-  sessionStorage.setItem(LISTEN_KEY, '1');
+  put(LISTEN_KEY, '1');
   go('assistant');
 }
 
 /** What the assistant was asked to do on arrival (read once). */
 export function takeArrival(): { prompt?: string; listen: boolean } {
-  const prompt = sessionStorage.getItem(PROMPT_KEY) ?? undefined;
-  const listen = Boolean(sessionStorage.getItem(LISTEN_KEY));
-  sessionStorage.removeItem(PROMPT_KEY);
-  sessionStorage.removeItem(LISTEN_KEY);
+  const prompt = take(PROMPT_KEY);
+  const listen = Boolean(take(LISTEN_KEY));
   return { prompt, listen };
 }
 

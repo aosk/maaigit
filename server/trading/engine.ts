@@ -91,6 +91,8 @@ export async function round(now = new Date()): Promise<void> {
 }
 
 async function runRound(now: Date): Promise<void> {
+  // The news, calendar and decision calls can take minutes: orders are checked and stamped with the time it then is.
+  const began = Date.now();
   const clock = marketClock(now);
   const book = trading.books[trading.mode];
   // What the desk knew when the round began, before anything moved.
@@ -134,7 +136,8 @@ async function runRound(now: Date): Promise<void> {
   // Large buys get a second opinion (the case against) before the risk gate; it can only shrink or stop them.
   const decisions = await challengeBuys(await decisionRound(reads, news, clock.minutesToChange, now, pulse), { reads, news, pulse }, now);
   record.decision = { ...lastDecisionRecord() };
-  record.verdicts = decisions.map((d) => gate(d, now));
+  const at = new Date(now.getTime() + (Date.now() - began));
+  record.verdicts = decisions.map((d) => gate(d, at));
   archiveRound(record);
 }
 
@@ -220,7 +223,7 @@ export function gate(d: Decision, now = new Date()): { decisionId: string; verdi
         ? `خفّضت الأمر إلى ${verdict.qty}${unitAr()} بحد ${verdict.limitPrice}: ${why}`
         : `وافقت: ${verdict.qty}${unitAr()} ${name} بحد ${verdict.limitPrice} ضمن كل الحدود`;
   emit('risk.verdict', 'risk', text, { correlationId: d.id, data: { verdict: verdict.verdict, qty: verdict.qty, reasons: verdict.reasons } }, now);
-  const order = verdict.verdict !== 'veto' ? submit(d.id, d.symbol, d.side, verdict.qty, verdict.limitPrice, now, currentQuotes().get(d.symbol)?.asOf) : undefined;
+  const order = verdict.verdict !== 'veto' ? submit(d.id, d.symbol, d.side, verdict.qty, verdict.limitPrice, now, currentQuotes().get(d.symbol)?.asOf, currentQuotes().get(d.symbol)?.price) : undefined;
   return { decisionId: d.id, verdict: verdict.verdict, qty: verdict.qty, limitPrice: verdict.limitPrice, reasons: verdict.reasons, orderId: order?.id };
 }
 

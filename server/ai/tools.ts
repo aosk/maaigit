@@ -7,7 +7,7 @@ import { cachedInbox, getEmail, searchMail } from '../gmail-inbox.js';
 import { AsanaError, asanaConfigured, cachedTasks, getTask, isGid, projects, validateNewTask } from '../asana.js';
 import { canAnswer, lastFrom, whatsappConfigured } from '../whatsapp.js';
 import { BotInputError, DEVICE_ACTIONS, botConnected, botReplyTarget, deviceTarget } from '../bot.js';
-import { findContacts } from '../contacts.js';
+import { contactNameOf, findContacts } from '../contacts.js';
 import { emailForClaude, dayTime } from './context.js';
 import { neutralize } from './untrusted.js';
 import { category, cleanFact } from '../profile.js';
@@ -126,9 +126,12 @@ const propose_whatsapp: ToolSpec<{ phone: string; name: string; body: string }> 
     if (!last && !(botConnected() && /^\d{8,15}$/.test(phone))) {
       throw new ToolError(botConnected() ? 'That is not a valid number. Ask the user for the number in international form, e.g. 9665XXXXXXXX.' : `Nobody with the number ${input.phone || '(empty)'} wrote to the user lately, and the device bot (needed to message someone new) is not connected.`);
     }
-    const toName = last?.from ?? ((input.name ?? '').trim().slice(0, 80) || `+${phone}`);
+    // The name on the card comes from who wrote, or from the contacts: never from the model, which could put a
+    // trusted name on a stranger's number. A number nobody knows is shown as the number, and flagged.
+    const known = last?.from ?? contactNameOf(phone);
+    const toName = known ?? `+${phone}`;
     const canSend = Boolean(byBot) || (whatsappConfigured && canAnswer(phone)) || botConnected();
-    created.push({ id: id(), kind: 'whatsapp', status: 'pending', title: `WhatsApp to ${toName}`, toName, phone, body: input.body.trim(), canSend });
+    created.push({ id: id(), kind: 'whatsapp', status: 'pending', title: `WhatsApp to ${toName}`, toName, phone, body: input.body.trim(), canSend, ...(known ? {} : { newNumber: true }) });
     return canSend
       ? 'WhatsApp card shown. Not sent yet; waiting for the user to tap Send.'
       : 'WhatsApp card shown. MAAI cannot send this one itself (more than 24 hours since they wrote), so the user can open it in WhatsApp instead. Not sent.';
@@ -217,13 +220,19 @@ const propose_asana_task: ToolSpec<{ name: string; notes: string; due_on: string
     if (!asanaConfigured) throw new ToolError('Asana is not connected, so a task cannot be created.');
     const all = await projects().catch(() => []);
     const project = input.project_name ? all.find((p) => p.name.toLowerCase() === input.project_name.trim().toLowerCase()) : undefined;
-    if (input.project_name && !project) throw new ToolError(`No Asana project named "${input.project_name}". Projects: ${all.map((p) => p.name).join(', ') || 'none found'}. Use one of these, or an empty project_name.`);
+    if (input.project_name && !project) throw new ToolError(`No Asana project named "${neutralize(input.project_name)}". Projects: ${all.map((p) => neutralize(p.name)).join(', ') || 'none found'}. Use one of these, or an empty project_name.`);
     const task = validateNewTask({ name: input.name, notes: input.notes, dueOn: input.due_on, projectGid: project?.gid });
     created.push({ id: id(), kind: 'asana_new', status: 'pending', title: task.name, notes: task.notes, dueOn: task.dueOn, projectGid: task.projectGid });
     return 'Asana task card shown. Nothing created yet; waiting for the user to tap Create.';
   },
   detail: lastTitle,
 };
+
+/** A reply goes where the sender asked (Reply-To), when the model addressed it to the sender's own address. */
+function replyAddress(to: string, uid: number): string {
+  const answers = uid > 0 ? cachedInbox().find((m) => m.uid === uid) : undefined;
+  return answers?.replyTo && to.toLowerCase() === answers.fromAddress.toLowerCase() ? answers.replyTo : to;
+}
 
 const propose_email: ToolSpec<{ to: string; to_name: string; subject: string; body: string; reply_to_uid: number }> = {
   definition: {
@@ -249,7 +258,7 @@ const propose_email: ToolSpec<{ to: string; to_name: string; subject: string; bo
       kind: 'email',
       status: 'pending',
       title: input.subject,
-      to: input.to.trim(),
+      to: replyAddress(input.to.trim(), input.reply_to_uid),
       toName: input.to_name || undefined,
       subject: input.subject,
       body: input.body,

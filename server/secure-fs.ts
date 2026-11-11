@@ -12,7 +12,14 @@ export function writePrivate(file: string, data: string): void {
   // never a half-written one.
   const draft = `${file}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(draft, data, { mode: 0o600 });
+    // Flushed to the disk before the move: after a power cut the file is the old one or the new one, never an empty one.
+    const fd = fs.openSync(draft, 'w', 0o600);
+    try {
+      fs.writeFileSync(fd, data);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
     fs.renameSync(draft, file);
   } catch (error) {
     fs.rmSync(draft, { force: true });

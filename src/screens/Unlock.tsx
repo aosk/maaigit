@@ -4,6 +4,9 @@ import { api } from '../api';
 import { useSettings } from '../settings';
 
 /** Sign-in: the PIN from the computer's terminal at home, or the password when MAAI is online. */
+/** ٠-٩ and ۰-۹ as 0-9: a phone set to Arabic numerals can still type the PIN. */
+const latinDigits = (v: string) => v.replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660)).replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+
 export function Unlock({ kind, idle = false }: { kind: 'pin' | 'password'; idle?: boolean }) {
   const { t, settings, update } = useSettings();
   const [pin, setPin] = useState('');
@@ -96,7 +99,7 @@ export function Unlock({ kind, idle = false }: { kind: 'pin' | 'password'; idle?
                 <input
                   id="pin"
                   value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onChange={(e) => setPin(latinDigits(e.target.value).replace(/\D/g, '').slice(0, 6))}
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   dir="ltr"
