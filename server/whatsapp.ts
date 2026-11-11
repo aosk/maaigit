@@ -3,6 +3,7 @@ import express, { Router } from 'express';
 import type { InboxMessage, WhatsAppStatus } from '../shared/types.js';
 import { config } from './config.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
+import { cleanText } from './ai/untrusted.js';
 
 /**
  * WhatsApp through Twilio, on a separate business number. Messages people send to that number
@@ -108,7 +109,7 @@ export function receive(params: Record<string, string>): { message: InboxMessage
   const hasMedia = Number(params.NumMedia ?? 0) > 0;
   const message: InboxMessage = {
     id: id(),
-    from: (params.ProfileName ?? '').trim().slice(0, 100) || `+${phone}`,
+    from: cleanText(params.ProfileName, 60) || `+${phone}`,
     phone,
     channel: 'whatsapp',
     text: body || (hasMedia ? '[A photo, voice note or file: MAAI cannot read these]' : ''),

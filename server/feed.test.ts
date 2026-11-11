@@ -35,3 +35,11 @@ describe('MAAI calendar feed', () => {
     expect(line.replace(/\r\n /g, '')).toBe('SUMMARY:' + 'ناجز '.repeat(30));
   });
 });
+
+describe('B-08: dates outside any calendar', () => {
+  it('leaves an event with an impossible date out of the feed instead of failing', () => {
+    const ics = icsFeed([event({ id: 'far', start: new Date(8.64e15).toISOString() }), event({ id: 'ok' })], now);
+    expect(ics).toContain('UID:ok@maai');
+    expect(ics).not.toContain('UID:far@maai');
+  });
+});

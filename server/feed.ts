@@ -4,6 +4,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { Router } from 'express';
 import type { CalendarEvent } from '../shared/types.js';
 import { config } from './config.js';
+import { sane } from './gcal.js';
 import { writePrivate } from './secure-fs.js';
 import { state } from './store.js';
 
@@ -56,6 +57,8 @@ export function icsFeed(events: CalendarEvent[], now = new Date()): string {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MAAI//Calendar//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:MAAI', 'X-PUBLISHED-TTL:PT15M', 'REFRESH-INTERVAL;VALUE=DURATION:PT15M'];
   for (const e of events) {
     const start = new Date(e.start);
+    // An event with an impossible date would make every request for the feed fail: leave it out.
+    if (!sane(start) || !sane(new Date(start.getTime() + e.minutes * 60_000))) continue;
     lines.push(
       'BEGIN:VEVENT',
       `UID:${e.id}@maai`,

@@ -68,7 +68,9 @@ export function plainNotes(text: string): string {
     .slice(0, 2000);
 }
 
-const MEETING_HOSTS = /(meet\.google\.com|zoom\.us|zoom\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com|whereby\.com|bluejeans\.com|chime\.aws|gotomeeting\.com|meet\.jit\.si)/i;
+const MEETING_HOSTS = ['meet.google.com', 'zoom.us', 'zoom.com', 'teams.microsoft.com', 'teams.live.com', 'webex.com', 'whereby.com', 'bluejeans.com', 'chime.aws', 'gotomeeting.com', 'meet.jit.si'];
+// The host itself or a sub-domain of it, never a look-alike such as zoom.us.evil.example or evilzoom.us.
+const isMeetingHost = (hostname: string) => MEETING_HOSTS.some((h) => hostname === h || hostname.endsWith(`.${h}`));
 const LINK = /https?:\/\/[^\s<>"')\]]+/g;
 
 /** The link to join a meeting: Google's own conference link first, then one found in the location or notes. */
@@ -76,7 +78,8 @@ export function meetingLink(...sources: string[]): string | undefined {
   for (const source of sources) {
     for (const link of source.match(LINK) ?? []) {
       try {
-        if (MEETING_HOSTS.test(new URL(link).hostname)) return link;
+        const url = new URL(link);
+        if (isMeetingHost(url.hostname.toLowerCase())) return link;
       } catch {
         // not a usable address; try the next one
       }
@@ -101,6 +104,15 @@ function toEvent(uid: string, title: string, start: Date, end: Date, extra: { lo
   };
 }
 
+/** Most instances one repeating event may add to the window (a daily event over the window is 31). */
+const MAX_INSTANCES = 400;
+
+/** A date a calendar can really hold: valid, and between 1970 and 9999 (outside that, toISOString throws or the year is absurd). */
+export function sane(d: Date): boolean {
+  const t = d.getTime();
+  return Number.isFinite(t) && t >= 0 && d.getUTCFullYear() <= 9999;
+}
+
 /** Events from one calendar file in the window, with repeating events expanded. */
 export function eventsFromIcs(text: string, now = new Date(), calendar = 'Google Calendar'): CalendarEvent[] {
   const from = new Date(now.getTime() - PAST_DAYS * 86_400_000);
@@ -108,18 +120,27 @@ export function eventsFromIcs(text: string, now = new Date(), calendar = 'Google
   const out: CalendarEvent[] = [];
   for (const item of Object.values(ical.sync.parseICS(text))) {
     if (!item || item.type !== 'VEVENT') continue;
-    const ev = item;
-    if (plain(ev.status).toUpperCase() === 'CANCELLED') continue;
-    const allDay = (ev as { datetype?: string }).datetype === 'date';
-    const extra = { location: plain(ev.location), notes: plain(ev.description), conference: plain((ev as unknown as Record<string, unknown>)['GOOGLE-CONFERENCE']) || plain(ev.url), calendar };
-    if (ev.rrule) {
-      for (const inst of ical.expandRecurringEvent(ev, { from, to })) {
-        out.push(toEvent(ev.uid, plain(inst.summary), new Date(inst.start), new Date(inst.end), extra, inst.isFullDay));
+    // One bad invite (an impossible date, a rule that never ends) must not hide every other event of this calendar.
+    try {
+      const ev = item;
+      if (plain(ev.status).toUpperCase() === 'CANCELLED') continue;
+      const allDay = (ev as { datetype?: string }).datetype === 'date';
+      const extra = { location: plain(ev.location), notes: plain(ev.description), conference: plain((ev as unknown as Record<string, unknown>)['GOOGLE-CONFERENCE']) || plain(ev.url), calendar };
+      if (ev.rrule) {
+        // Every hour, minute or second is no meeting series: such a rule is skipped rather than expanded.
+        if (['HOURLY', 'MINUTELY', 'SECONDLY'].includes(String((ev.rrule.options as { freq?: unknown }).freq).toUpperCase())) continue;
+        for (const inst of ical.expandRecurringEvent(ev, { from, to }).slice(0, MAX_INSTANCES)) {
+          const start = new Date(inst.start);
+          const end = new Date(inst.end);
+          if (sane(start) && sane(end)) out.push(toEvent(ev.uid, plain(inst.summary), start, end, extra, inst.isFullDay));
+        }
+      } else if (ev.start) {
+        const start = new Date(ev.start);
+        const end = ev.end ? new Date(ev.end) : new Date(start.getTime() + (allDay ? 86_400_000 : 3_600_000));
+        if (sane(start) && sane(end) && end >= from && start <= to) out.push(toEvent(ev.uid, plain(ev.summary), start, end, extra, allDay));
       }
-    } else if (ev.start) {
-      const start = new Date(ev.start);
-      const end = ev.end ? new Date(ev.end) : new Date(start.getTime() + (allDay ? 86_400_000 : 3_600_000));
-      if (end >= from && start <= to) out.push(toEvent(ev.uid, plain(ev.summary), start, end, extra, allDay));
+    } catch (error) {
+      console.error('A calendar event was skipped:', (error as Error).message);
     }
   }
   return out;

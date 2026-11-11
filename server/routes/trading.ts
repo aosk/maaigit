@@ -94,7 +94,8 @@ tradingRoutes.put('/trading/limits', (req, res) => {
   for (const [key, [min, max]] of Object.entries(RANGES) as [keyof TradeLimits, [number, number]][]) {
     const value = req.body?.[key];
     if (value === undefined) continue;
-    const n = Number(value);
+    // Only a real number or a numeric string: Number([5000]) is 5000, and an array or object must not pass for one.
+    const n = typeof value === 'number' || (typeof value === 'string' && value.trim() !== '') ? Number(value) : NaN;
     if (!Number.isFinite(n) || n < min || n > max) throw new HttpError(400, `${key} must be between ${min} and ${max}.`);
     next[key] = n;
   }

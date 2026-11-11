@@ -10,3 +10,4 @@ coverage/
 *.tsbuildinfo
 *.zip
 stocksmart-scenarios.json
+.vitest/

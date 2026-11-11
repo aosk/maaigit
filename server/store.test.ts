@@ -166,3 +166,31 @@ describe('keeping your data safe', () => {
     expect(state.events.map((e) => e.demo ?? false)).toEqual([true, false]);
   });
 });
+
+describe('B-16: copies kept beside the store', () => {
+  it('makes the last good copy and damaged copies owner-only, and deletes damaged ones older than 30 days', async () => {
+    const dir = freshDir();
+    const file = path.join(dir, 'store.json');
+    const day = 86_400_000;
+    const old = `${file}.damaged-1`;
+    const recent = `${file}.damaged-2`;
+    for (const f of [file, `${file}.bak`, old, recent]) fs.writeFileSync(f, '{}', { mode: 0o644 });
+    fs.utimesSync(old, new Date(Date.now() - 40 * day), new Date(Date.now() - 40 * day));
+    const store = await loadStore(file);
+    store.tidyCopies(file);
+    expect(fs.existsSync(old)).toBe(false);
+    expect(fs.existsSync(recent)).toBe(true);
+    expect(fs.statSync(recent).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(`${file}.bak`).mode & 0o777).toBe(0o600);
+  });
+
+  it('creates the data folder with owner-only access', async () => {
+    const parent = freshDir();
+    const dir = path.join(parent, 'fresh-data');
+    vi.resetModules();
+    vi.stubEnv('MAAI_DATA_DIR', dir);
+    vi.stubEnv('MAAI_DATA_FILE', '');
+    await import('./config');
+    expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
+  });
+});

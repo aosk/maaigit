@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { eventsFromIcs, meetingLink, plainNotes } from './gcal';
+import { eventsFromIcs, meetingLink, plainNotes, sane } from './gcal';
 
 const ics = `BEGIN:VCALENDAR
 VERSION:2.0
@@ -133,5 +133,35 @@ describe('which calendar addresses are accepted', () => {
   it('is off when nothing usable is given', async () => {
     expect((await loaded('http://169.254.169.254/latest/meta-data/')).calendarConfigured).toBe(false);
     expect((await loaded('')).calendarConfigured).toBe(false);
+  });
+});
+
+describe('B-07: meeting hosts', () => {
+  it('accepts the host and its sub-domains, never a look-alike', () => {
+    expect(meetingLink('https://us02web.zoom.us/j/1')).toBe('https://us02web.zoom.us/j/1');
+    expect(meetingLink('https://meet.google.com/abc')).toBe('https://meet.google.com/abc');
+    expect(meetingLink('https://zoom.us.evil.example/j/1')).toBeUndefined();
+    expect(meetingLink('https://meet.google.com.attacker.example/abc')).toBeUndefined();
+    expect(meetingLink('https://evilzoom.us/x')).toBeUndefined();
+  });
+});
+
+describe('B-08: calendar poison', () => {
+  const vevent = (lines: string) => `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\n${lines}\nEND:VEVENT\nEND:VCALENDAR`;
+  const now = new Date('2026-10-13T10:00:00Z');
+
+  it('a minutely repeating invite does not fail the whole calendar', () => {
+    const ics = vevent('UID:a\nDTSTART:20261013T100000Z\nDTEND:20261013T110000Z\nRRULE:FREQ=MINUTELY\nSUMMARY:Spam\nEND:VEVENT\nBEGIN:VEVENT\nUID:b\nDTSTART:20261014T100000Z\nDTEND:20261014T110000Z\nSUMMARY:Real');
+    const events = eventsFromIcs(ics, now);
+    expect(events.map((e) => e.title)).toEqual(['Real']);
+  });
+
+  it('caps what one repeating event adds, and skips events dated outside 1970 to 9999', () => {
+    const daily = eventsFromIcs(vevent('UID:d\nDTSTART:20261013T100000Z\nDTEND:20261013T110000Z\nRRULE:FREQ=DAILY\nSUMMARY:Daily'), now);
+    expect(daily.length).toBeGreaterThan(20);
+    expect(daily.length).toBeLessThanOrEqual(400);
+    expect(sane(new Date('+275760-09-13T00:00:00Z'))).toBe(false);
+    expect(sane(new Date('1960-01-01T00:00:00Z'))).toBe(false);
+    expect(sane(now)).toBe(true);
   });
 });

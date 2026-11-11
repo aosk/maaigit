@@ -77,6 +77,13 @@ describe('StockSmart for the user', () => {
     expect(trading.events.at(-1)?.text).toMatch(/capital: 100000 → 20000/);
   });
 
+  it('B-12: a limit must be a real number or a numeric string, not an array, object or NaN', async () => {
+    for (const bad of [[5000], { v: 5000 }, null, true, '', 'abc', 'Infinity']) {
+      expect((await asUser('PUT', '/trading/limits', { capital: bad })).status).toBe(400);
+    }
+    expect((await asUser('PUT', '/trading/limits', { capital: '120000' })).status).toBe(200);
+  });
+
   it('moves the paper money with the capital even while stocks are held, keeping the profit so far', async () => {
     const paper = trading.books.paper;
     paper.cash = 60_000;

@@ -5,6 +5,7 @@ import { config } from './config.js';
 import { isEmail } from './mail.js';
 import { phoneDigits } from '../shared/vcard.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
+import { cleanText } from './ai/untrusted.js';
 import { answer, tell, whyNot } from './intake.js';
 
 /**
@@ -171,10 +172,10 @@ function parse(raw: unknown, now: number, why?: (reason: Unusable) => void): Inc
   return {
     externalId: `bot:${externalId}`,
     channel,
-    from: str(m.from, 100) || (phone ? `+${phone}` : email || 'Unknown'),
+    from: cleanText(m.from, 60) || (phone ? `+${phone}` : email || 'Unknown'),
     phone: phone.length >= 5 && phone.length <= 20 ? phone : undefined,
     email: email && isEmail(email) ? email : undefined,
-    subject: channel === 'email' ? str(m.subject, 300) || undefined : undefined,
+    subject: channel === 'email' ? cleanText(m.subject, 200) || undefined : undefined,
     text,
     // A time in the future (a wrong device clock) counts as now.
     at: Number.isFinite(at) ? Math.min(at, now) : now,

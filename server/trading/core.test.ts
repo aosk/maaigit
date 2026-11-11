@@ -224,3 +224,9 @@ describe('fractions of a coin', () => {
     expect(onTick(27.43, 'buy')).toBe(27.4); // Tadawul, unchanged
   });
 });
+
+describe('B-11: numbers that are not numbers', () => {
+  it.each([[Number.NaN, 10], [27.4, Number.NaN], [Number.POSITIVE_INFINITY, 10], [27.4, Number.POSITIVE_INFINITY], [0, 10], [-1, 10]])('vetoes limit %s, quantity %s', (limitPrice, qty) => {
+    expect(checkOrder({ symbol: '2222', side: 'buy', qty, limitPrice }, ctx()).verdict).toBe('veto');
+  });
+});

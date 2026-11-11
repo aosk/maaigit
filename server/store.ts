@@ -210,8 +210,37 @@ function seed(): State {
 /** The first-run sample events, so copies saved before they were marked can still be recognised. */
 const SAMPLE_EVENTS = new Set(['Team stand-up|Microsoft Teams', 'Call with Sara|Phone', 'Dentist appointment|Clinic', 'Q4 report review|Office']);
 
+const DAMAGED_KEEP_MS = 30 * 86_400_000;
+
+/**
+ * At start-up: the copies kept beside the store (the last good one, and damaged ones) are owner-only like the store,
+ * and damaged copies older than 30 days are deleted (each holds a full copy of the data, so they should not pile up).
+ */
+export function tidyCopies(file = DATA_FILE, now = Date.now()): void {
+  const dir = path.dirname(file);
+  const base = path.basename(file);
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return; // no folder yet: nothing to tidy
+  }
+  for (const name of names) {
+    const isDamaged = name.startsWith(`${base}.damaged-`);
+    if (!isDamaged && name !== `${base}.bak`) continue;
+    const full = path.join(dir, name);
+    try {
+      if (isDamaged && now - fs.statSync(full).mtimeMs > DAMAGED_KEEP_MS) fs.rmSync(full, { force: true });
+      else fs.chmodSync(full, 0o600);
+    } catch {
+      /* a copy that cannot be changed is left as it is; starting matters more */
+    }
+  }
+}
+
 /** The saved data, null on a first run, and null (with the unreadable file kept aside) if it is damaged. */
 function readSaved(): Partial<State> | null {
+  tidyCopies();
   let text: string;
   try {
     text = fs.readFileSync(DATA_FILE, 'utf8');

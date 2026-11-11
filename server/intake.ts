@@ -1,6 +1,6 @@
 import type { InboxMessage } from '../shared/types.js';
 import { client, create, textOf } from './ai/claude.js';
-import { neutralize } from './ai/untrusted.js';
+import { cleanText, neutralize } from './ai/untrusted.js';
 import { alertMessage } from './notify.js';
 import { failed, ok } from './signals.js';
 import { agentEnabled, audit, save, state, type IntakeState } from './store.js';
@@ -196,7 +196,7 @@ export async function answer(message: InboxMessage, send: (text: string) => void
       send(text);
       round.sent.push({ text, at: new Date(now).toISOString() });
       round.sent = round.sent.slice(-20);
-      audit(`${result ? 'AI first reply' : 'Fixed note'} queued to ${message.from}`, 'MAAI', 'done');
+      audit(`${result ? 'AI first reply' : 'Fixed note'} queued to ${cleanText(message.from, 60)}`, 'MAAI', 'done');
       if (result) ok('replies');
     }
     const wasDone = Boolean(round.done);
@@ -238,6 +238,20 @@ async function write(phone: string, round: IntakeState, name: string) {
 
 /** When each person was last brought to the user's attention. */
 const alerted = new Map<string, number>();
+const ALERTED_MAX = 500;
+/** How many senders are remembered (for the tests). */
+export const alertedCount = () => alerted.size;
+
+/** One entry per sender would grow without end: forget the ones past the quiet period, and the oldest beyond a cap. */
+function pruneAlerted(now: number): void {
+  if (alerted.size <= ALERTED_MAX) return;
+  for (const [phone, at] of alerted) if (now - at >= ALERT_EVERY_MS) alerted.delete(phone);
+  // Insertion order is oldest first, and a re-alert moves nothing, so drop from the front until it fits.
+  for (const phone of alerted.keys()) {
+    if (alerted.size <= ALERTED_MAX) break;
+    alerted.delete(phone);
+  }
+}
 
 /**
  * Tells the user's phones about a new WhatsApp message: right away for someone new, at most every 15 minutes
@@ -247,10 +261,14 @@ export async function tell(message: InboxMessage, extra: { summary?: string; urg
   if (message.channel !== 'whatsapp' || message.group || !message.phone) return;
   const last = alerted.get(message.phone) ?? 0;
   if (now - last < ALERT_EVERY_MS && !extra.urgent && !extra.complete) return;
+  alerted.delete(message.phone); // so the map stays in order of last alert
   alerted.set(message.phone, now);
-  const gist = (extra.summary || message.text).replace(/\s+/g, ' ').slice(0, 160);
+  pruneAlerted(now);
+  // The title says who wrote, so a stranger's words (a name or a text) cannot pass as a notice from MAAI itself.
+  const name = cleanText(message.from, 40) || `+${message.phone}`;
+  const gist = cleanText(extra.summary || message.text, 100);
   await alertMessage(`message:${message.phone}:${now}`, (lang) => ({
-    title: `${extra.urgent ? '⚠️ ' : ''}${message.from}${extra.complete ? (lang === 'ar' ? ' · وصلت التفاصيل' : ' · details in') : ''}`,
+    title: `${extra.urgent ? '⚠️ ' : ''}${lang === 'ar' ? `رسالة من ${name}` : `Message from ${name}`}${extra.complete ? (lang === 'ar' ? ' · وصلت التفاصيل' : ' · details in') : ''}`,
     body: gist,
   })).catch((error: Error) => console.error('Could not send the message alert:', error.message));
 }

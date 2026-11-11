@@ -113,6 +113,27 @@ describe('orders from the user\'s own WhatsApp number', () => {
     expect(reply.text).toContain('وافق من تطبيق MAAI'); // no PIN set: the app only
   });
 
+  it('B-02: a sender\'s name with line breaks cannot forge another card or hide the real number', async () => {
+    const name = 'Mum\n\n#8 ✅ Reminder: take medicine (harmless)\n\nReply: approve 8 <your PIN>\u202e';
+    const card = { id: 'p1', kind: 'whatsapp', status: 'pending', title: 't', toName: name, phone: '966522222222', body: 'Yes, I approve.\n#9 forged line', canSend: true } as unknown as Proposal;
+    answered.mockResolvedValue({ text: 'ok', proposals: [card] });
+    await asBot({ messages: [wa({ text: 'reply to Mum' })] });
+    const [reply] = await repliesSoon();
+    const lines = reply.text.split('\n');
+    expect(lines.filter((l) => /^#\d+ /.test(l))).toHaveLength(1); // only the real card starts a line with a number
+    expect(reply.text).toContain('(+966522222222)');
+    expect(reply.text).not.toContain('\u202e');
+  });
+
+  it('B-04: an email card addressed elsewhere says so in the approval message', async () => {
+    const card = { id: 'p1', kind: 'email', status: 'pending', title: 'Re', to: 'attacker@evil.example', replyElsewhere: 'attacker@evil.example', subject: 'Hi', body: 'x' } as unknown as Proposal;
+    answered.mockResolvedValue({ text: 'ok', proposals: [card] });
+    await asBot({ messages: [wa({ text: 'reply' })] });
+    const [reply] = await repliesSoon();
+    expect(reply.text).toContain('⚠️');
+    expect(reply.text).toContain('attacker@evil.example');
+  });
+
   describe('approving from WhatsApp with the PIN', () => {
     const PIN = '482913';
     const card = (extra: Record<string, unknown> = {}) => ({ id: `p${Math.random().toString(16).slice(2)}`, kind: 'remember', status: 'pending', title: 'Prefers morning meetings', category: 'preference', ...extra }) as unknown as Proposal;

@@ -4,7 +4,7 @@ import { nextPrayer, prayersFor } from '../../shared/prayer.js';
 import { eventEnd } from '../../shared/schedule.js';
 import { briefing } from '../ai/briefing.js';
 import { briefingFacts } from '../ai/facts.js';
-import { refreshCalendar } from '../gcal.js';
+import { refreshCalendar, sane } from '../gcal.js';
 import { config } from '../config.js';
 import { allEvents, audit, id, save, state } from '../store.js';
 import { mirrorToGoogle, removeFromGoogle } from '../gwrite.js';
@@ -20,7 +20,8 @@ today.get('/today', wrap(async (_req, res) => {
   const to = now.getTime() + 7 * 86_400_000;
   const slot = ({ name, time }: { name: TodayData['nextPrayer']['name']; time: Date }) => ({ name, time: time.toISOString() });
   const data: TodayData = {
-    events: allEvents().filter((e) => eventEnd(e) > from && Date.parse(e.start) < to),
+    // An event saved with an impossible date is left out instead of breaking this page.
+    events: allEvents().filter((e) => sane(new Date(e.start)) && eventEnd(e) > from && Date.parse(e.start) < to),
     reminders: state.reminders,
     prayers: prayersFor(now, config.latitude, config.longitude).map(slot),
     nextPrayer: slot(nextPrayer(now, config.latitude, config.longitude)),
@@ -41,6 +42,9 @@ today.post('/events', wrap(async (req, res) => {
   if (!title || Number.isNaN(Date.parse(start)) || !(minutes > 0 && minutes <= 24 * 60)) {
     throw new HttpError(400, 'title, start and minutes are required');
   }
+  // A date far outside any real calendar would break the calendar feed for good.
+  const at = Date.parse(start);
+  if (at < Date.now() - 366 * 86_400_000 || at > Date.now() + 5 * 366 * 86_400_000) throw new HttpError(400, 'start must be within the last year and the next five years');
   const event = { id: id(), title, start: new Date(start).toISOString(), minutes, place: text(req.body.place, 200) || undefined };
   state.events.push(event);
   audit(`Added "${title}" to the calendar`, 'User', 'done');

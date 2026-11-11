@@ -59,6 +59,8 @@ const CHASE = 0.01;
 
 export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
   const veto = (reason: string): Verdict => ({ verdict: 'veto', qty: 0, limitPrice: p.limitPrice, reasons: [reason] });
+  // A price or quantity that is not a real number must never reach the sums below (NaN passes every comparison).
+  if (!Number.isFinite(p.limitPrice) || !(p.limitPrice > 0) || !Number.isFinite(p.qty)) return veto('The price or quantity is not a valid number.');
   if (ctx.halted) return veto('Trading is halted.');
   if (!ctx.clock.open) return veto('The market is closed.');
   const stock = ctx.universe.find((i) => i.symbol === p.symbol);

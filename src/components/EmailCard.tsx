@@ -39,6 +39,9 @@ export function EmailCard({ proposal, gmail, onChange }: { proposal: EmailPropos
         <textarea id={fid('body')} dir="auto" value={body} onChange={(e) => setBody(e.target.value)} disabled={done} style={{ minHeight: 160 }} />
       </div>
 
+      {/* The reply goes to the Reply-To address the sender chose, not to the one it came from: say so, with the real address. */}
+      {proposal.replyElsewhere && !done && <div className="error" role="alert" dir="auto">{t.emailReplyElsewhere(proposal.replyElsewhere)}</div>}
+
       {error && <div className="error" role="alert">{error}</div>}
 
       {done ? (

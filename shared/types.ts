@@ -109,6 +109,8 @@ export type Proposal =
       body: string;
       /** The inbox email this answers, so it can be marked as handled once sent. */
       replyToUid?: number;
+      /** The sender asked for answers at this other address (Reply-To): the card is addressed there, and says so. */
+      replyElsewhere?: string;
     }
   | {
       id: string;

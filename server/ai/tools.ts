@@ -9,7 +9,7 @@ import { canAnswer, lastFrom, whatsappConfigured } from '../whatsapp.js';
 import { BotInputError, DEVICE_ACTIONS, botConnected, botReplyTarget, deviceTarget } from '../bot.js';
 import { contactNameOf, findContacts } from '../contacts.js';
 import { emailForClaude, dayTime } from './context.js';
-import { neutralize } from './untrusted.js';
+import { cleanText, neutralize } from './untrusted.js';
 import { category, cleanFact } from '../profile.js';
 import type { Tool, ToolResult, ToolUse } from './claude.js';
 
@@ -129,7 +129,7 @@ const propose_whatsapp: ToolSpec<{ phone: string; name: string; body: string }> 
     // The name on the card comes from who wrote, or from the contacts: never from the model, which could put a
     // trusted name on a stranger's number. A number nobody knows is shown as the number, and flagged.
     const known = last?.from ?? contactNameOf(phone);
-    const toName = known ?? `+${phone}`;
+    const toName = cleanText(known, 60) || `+${phone}`;
     const canSend = Boolean(byBot) || (whatsappConfigured && canAnswer(phone)) || botConnected();
     created.push({ id: id(), kind: 'whatsapp', status: 'pending', title: `WhatsApp to ${toName}`, toName, phone, body: input.body.trim(), canSend, ...(known ? {} : { newNumber: true }) });
     return canSend
@@ -228,10 +228,13 @@ const propose_asana_task: ToolSpec<{ name: string; notes: string; due_on: string
   detail: lastTitle,
 };
 
-/** A reply goes where the sender asked (Reply-To), when the model addressed it to the sender's own address. */
-function replyAddress(to: string, uid: number): string {
+/**
+ * A reply goes where the sender asked (Reply-To) when the model addressed it to the sender's own address. The card
+ * then says so (replyElsewhere), because a spoofed From with a different Reply-To is how a reply is steered to a thief.
+ */
+function replyAddress(to: string, uid: number): { to: string; replyElsewhere?: string } {
   const answers = uid > 0 ? cachedInbox().find((m) => m.uid === uid) : undefined;
-  return answers?.replyTo && to.toLowerCase() === answers.fromAddress.toLowerCase() ? answers.replyTo : to;
+  return answers?.replyTo && to.toLowerCase() === answers.fromAddress.toLowerCase() ? { to: answers.replyTo, replyElsewhere: answers.replyTo } : { to };
 }
 
 const propose_email: ToolSpec<{ to: string; to_name: string; subject: string; body: string; reply_to_uid: number }> = {
@@ -258,8 +261,8 @@ const propose_email: ToolSpec<{ to: string; to_name: string; subject: string; bo
       kind: 'email',
       status: 'pending',
       title: input.subject,
-      to: replyAddress(input.to.trim(), input.reply_to_uid),
-      toName: input.to_name || undefined,
+      ...replyAddress(input.to.trim(), input.reply_to_uid),
+      toName: input.to_name ? cleanText(input.to_name, 60) : undefined,
       subject: input.subject,
       body: input.body,
       replyToUid: input.reply_to_uid > 0 ? input.reply_to_uid : undefined,

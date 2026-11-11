@@ -1,6 +1,8 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import type { MailItem } from '../shared/types.js';
+import { cleanText } from './ai/untrusted.js';
+import { visibleText } from './hidden-html.js';
 import { MailError } from './mail.js';
 import { failed, ok } from './signals.js';
 
@@ -73,12 +75,13 @@ async function readMessages(client: ImapFlow, uids: number[]): Promise<MailItem[
     const from = mail.from?.value[0];
     items.push({
       uid: msg.uid,
-      fromName: from?.name || from?.address || 'Unknown',
+      fromName: cleanText(from?.name || from?.address, 60) || 'Unknown',
       fromAddress: from?.address ?? '',
-      subject: mail.subject ?? '(no subject)',
+      subject: cleanText(mail.subject, 200) || '(no subject)',
       date: (mail.date ?? new Date()).toISOString(),
       unread: !msg.flags?.has('\\Seen'),
-      body: cleanBody(mail.text ?? ''),
+      // The HTML is read for what a person sees: mail.text would also carry text hidden with CSS.
+      body: cleanBody((typeof mail.html === 'string' ? visibleText(mail.html) : '') || mail.text || ''),
       messageId: mail.messageId,
       replyTo: mail.replyTo?.value[0]?.address && mail.replyTo.value[0].address.toLowerCase() !== from?.address?.toLowerCase() ? mail.replyTo.value[0].address : undefined,
     });

@@ -7,6 +7,7 @@ import { alertOrderCards, alertWhatsAppApproval } from './notify.js';
 import { config } from './config.js';
 import { sttConfigured, transcribe } from './stt.js';
 import { audit, save, state } from './store.js';
+import { cleanText, stripInvisible } from './ai/untrusted.js';
 
 /**
  * Orders the user sends from their own second WhatsApp number (state.bot.orderPhone, set only in the signed-in
@@ -134,7 +135,7 @@ function number(cards: Proposal[], lang: Lang, now: number): string[] {
     const fits = full.length <= room;
     if (fits) room -= full.length;
     list.push({ no, id: card.id, at: new Date(now).toISOString(), ...(fits ? {} : { appOnly: true }) });
-    return fits ? full : `#${no} ${card.title} (${lang === 'ar' ? 'طويلة: وافق عليها من التطبيق' : 'too long to show here: approve it in the app'})`;
+    return fits ? full : `#${no} ${cleanText(card.title, 80)} (${lang === 'ar' ? 'طويلة: وافق عليها من التطبيق' : 'too long to show here: approve it in the app'})`;
   });
   state.bot.orderCards = list.slice(-50);
   return shown;
@@ -148,17 +149,28 @@ function number(cards: Proposal[], lang: Lang, now: number): string[] {
 function describe(p: Proposal, lang: Lang): string {
   const when = (iso: string) => new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA' : 'en-GB', { timeZone: config.timezone, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
   const ar = lang === 'ar';
+  // Names, subjects and titles can carry a stranger's words: one clean line each, so none can forge a "#N" line or hide text.
+  const one = (text: string | undefined, max = 120) => cleanText(text, max);
   switch (p.kind) {
-    case 'email': return `✉️ ${ar ? 'إيميل إلى' : 'Email to'} ${p.toName ? `${p.toName} <${p.to}>` : p.to}\n${ar ? 'الموضوع' : 'Subject'}: ${p.subject}\n${p.body}`;
-    case 'whatsapp': return `💬 ${ar ? 'واتساب إلى' : 'WhatsApp to'} ${p.toName} (+${p.phone})\n${p.body}`;
-    case 'meeting': return `📅 ${p.title}${p.attendeeEmail ? ` · ${p.attendeeEmail}` : ''}${p.options[0] ? ` · ${when(p.options[0].start)} (${p.minutes} ${ar ? 'دقيقة' : 'min'})` : ''}${p.options.length > 1 ? (ar ? ' (الخيار الأول)' : ' (first option)') : ''}`;
-    case 'reminder': return `⏰ ${p.title} · ${p.when}`;
-    case 'asana': return `✅ ${p.taskName}${p.comment ? `\n${ar ? 'تعليق' : 'Comment'}: ${p.comment}` : ''}${p.complete ? (ar ? '\n(إنهاء المهمة)' : '\n(mark done)') : ''}${p.dueOn ? `\n${ar ? 'الموعد' : 'Due'}: ${p.dueOn}` : ''}`;
-    case 'asana_new': return `➕ ${p.title}${p.notes ? `\n${p.notes}` : ''}${p.dueOn ? `\n${ar ? 'الموعد' : 'Due'}: ${p.dueOn}` : ''}${p.projectGid ? `\n${ar ? 'المشروع' : 'Project'}: ${p.projectGid}` : ''}`;
-    case 'remember': return `🧠 ${p.title}`;
-    case 'device': return p.action === 'open_url' ? `🌐 ${ar ? 'فتح على جهازك' : 'Open on your computer'}: ${p.task}` : `🖥️ ${p.title}`;
+    case 'email': {
+      const elsewhere = p.replyElsewhere ? `\n⚠️ ${ar ? `عنوان الرد عندهم ${one(p.replyElsewhere, 120)} وليس عنوان المرسل` : `They asked for replies at ${one(p.replyElsewhere, 120)}, not the sender's own address`}` : '';
+      return `✉️ ${ar ? 'إيميل إلى' : 'Email to'} ${p.toName ? `${one(p.toName, 40)} <${one(p.to, 200)}>` : one(p.to, 200)}${elsewhere}\n${ar ? 'الموضوع' : 'Subject'}: ${one(p.subject, 200)}\n${block(p.body)}`;
+    }
+    case 'whatsapp': return `💬 ${ar ? 'واتساب إلى' : 'WhatsApp to'} ${one(p.toName, 40)} (+${one(p.phone, 20)})\n${block(p.body)}`;
+    case 'meeting': return `📅 ${one(p.title)}${p.attendeeEmail ? ` · ${one(p.attendeeEmail, 200)}` : ''}${p.options[0] ? ` · ${when(p.options[0].start)} (${p.minutes} ${ar ? 'دقيقة' : 'min'})` : ''}${p.options.length > 1 ? (ar ? ' (الخيار الأول)' : ' (first option)') : ''}`;
+    case 'reminder': return `⏰ ${one(p.title)} · ${one(p.when, 80)}`;
+    case 'asana': return `✅ ${one(p.taskName)}${p.comment ? `\n${ar ? 'تعليق' : 'Comment'}: ${block(p.comment)}` : ''}${p.complete ? (ar ? '\n(إنهاء المهمة)' : '\n(mark done)') : ''}${p.dueOn ? `\n${ar ? 'الموعد' : 'Due'}: ${one(p.dueOn, 40)}` : ''}`;
+    case 'asana_new': return `➕ ${one(p.title)}${p.notes ? `\n${block(p.notes)}` : ''}${p.dueOn ? `\n${ar ? 'الموعد' : 'Due'}: ${one(p.dueOn, 40)}` : ''}${p.projectGid ? `\n${ar ? 'المشروع' : 'Project'}: ${one(p.projectGid, 40)}` : ''}`;
+    case 'remember': return `🧠 ${one(p.title)}`;
+    case 'device': return p.action === 'open_url' ? `🌐 ${ar ? 'فتح على جهازك' : 'Open on your computer'}: ${block(p.task)}` : `🖥️ ${one(p.title)}`;
   }
 }
+
+/**
+ * A longer text shown whole (a message body) without invisible or direction-changing characters. Line breaks stay, but
+ * every continuation line is indented, so a line inside it can never start with "#8 ..." and pass for another card.
+ */
+const block = (text: string) => stripInvisible(text).split(/\r\n|\r|\n/).map((l, i) => (i ? `  ${l}` : l)).join('\n');
 
 /** Room in one WhatsApp answer for the cards' full descriptions (the rest is the assistant's words and the how-to). */
 const ROOM_FOR_CARDS = 3000;

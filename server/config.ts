@@ -10,7 +10,8 @@ const num = (value: string | undefined, fallback: number) => {
 /** Whether MAAI can create and write in this folder. */
 function writable(dir: string): boolean {
   try {
-    fs.mkdirSync(dir, { recursive: true });
+    // Owner only: the names of the files inside should not be listable by other users of the machine.
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     fs.accessSync(dir, fs.constants.W_OK);
     return true;
   } catch {
