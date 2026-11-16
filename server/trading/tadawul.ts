@@ -100,6 +100,19 @@ const SA_UNIVERSE: Instrument[] = [
   { symbol: '4002', nameAr: 'المواساة', nameEn: 'Mouwasat', sector: 'health' },
   { symbol: '4200', nameAr: 'الدريس', nameEn: 'Aldrees', sector: 'energy' },
   { symbol: '1212', nameAr: 'أسترا الصناعية', nameEn: 'Astra Industrial', sector: 'industrials' },
+  // Added 2026-11-16: liquid names in the sectors Saudi brokers' 2026 outlooks favour (technology and software, healthcare,
+  // tourism and leisure, retail, financial infrastructure). Their codes were not checked against the exchange's list
+  // (only 7203, 7202 and 4164 were seen on a public listing): the first live prices on Render show any that is wrong.
+  { symbol: '7203', nameAr: 'علم', nameEn: 'Elm', sector: 'tech' },
+  { symbol: '7202', nameAr: 'سلوشنز', nameEn: 'Solutions by stc', sector: 'tech' },
+  { symbol: '4164', nameAr: 'النهدي الطبية', nameEn: 'Nahdi Medical', sector: 'retail' },
+  { symbol: '4004', nameAr: 'دله الصحية', nameEn: 'Dallah Healthcare', sector: 'health' },
+  { symbol: '8210', nameAr: 'بوبا العربية', nameEn: 'Bupa Arabia', sector: 'health' },
+  { symbol: '1111', nameAr: 'مجموعة تداول السعودية', nameEn: 'Saudi Tadawul Group', sector: 'financials' },
+  { symbol: '2020', nameAr: 'سابك للمغذيات الزراعية', nameEn: 'SABIC Agri-Nutrients', sector: 'materials' },
+  { symbol: '1810', nameAr: 'سيرا القابضة', nameEn: 'Seera Group', sector: 'consumer' },
+  { symbol: '1830', nameAr: 'لجام للرياضة', nameEn: 'Leejam Sports', sector: 'consumer' },
+  { symbol: '4003', nameAr: 'إكسترا', nameEn: 'Extra (United Electronics)', sector: 'retail' },
 ];
 
 /** The followed list of the desk in use (Tadawul, or the US list). Reads like an array wherever it is used. */

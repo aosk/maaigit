@@ -9,6 +9,7 @@ vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof impo
 
 import { applyHolders, checkListing, diffListings, holdersForDecision, holdersRound, holdersView, nameKey } from './holders';
 import { resetTrading, trading } from './store';
+import { UNIVERSE } from './tadawul';
 
 const DAY1 = new Date('2026-11-01T08:00:00Z'); // Sunday, Tadawul open
 const DAY2 = new Date('2026-11-02T08:00:00Z');
@@ -59,7 +60,7 @@ describe('the daily run', () => {
     const req = create.mock.calls[0][0] as { system: string; tools: { name: string; allowed_domains?: string[] }[] };
     expect(req.system).toMatch(/never guess or recall numbers/);
     expect(req.tools[1].allowed_domains).toEqual(['argaam.com', 'www.argaam.com', 'saudiexchange.sa', 'www.saudiexchange.sa']);
-    expect(holdersView(DAY1)).toMatchObject({ covered: 2, total: 18, changes: [] }); // a first listing is not a change
+    expect(holdersView(DAY1)).toMatchObject({ covered: 2, total: UNIVERSE.length, changes: [] }); // a first listing is not a change
 
     create.mockResolvedValueOnce(answer([listing('7010', [[PIF, 62], ['المؤسسة العامة للتأمينات الاجتماعية', 5.2]], '2026-11-02')], [
       { symbol: '7010', holder: 'المؤسسة العامة للتأمينات الاجتماعية', fromPct: 4.9, toPct: 5.2, date: '2026-11-02', source: 'Saudi Exchange', official: true },

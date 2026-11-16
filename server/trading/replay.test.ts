@@ -13,6 +13,7 @@ import type { DailyBars } from './market';
 import { refreshQuotes, resetQuotes } from './market';
 import { benchmarkView, latestReplay, noteBenchmark, rebaseBenchmark, replayRule, runReplay } from './replay';
 import { resetTrading, trading } from './store';
+import { UNIVERSE } from './tadawul';
 
 const SUN = new Date('2026-11-01T08:00:00Z');
 /** `n` weekdays of bars from a price function. */
@@ -63,7 +64,7 @@ describe('the replay of the plain rule', () => {
 
   it('reads history, replays, and keeps the result for the screen', async () => {
     const r = await runReplay(SUN);
-    expect(r.symbols).toBe(18);
+    expect(r.symbols).toBe(UNIVERSE.length);
     expect(r.curve.length).toBeGreaterThan(20);
     expect(latestReplay()).toEqual(r);
     expect(trading.replay?.ranAt).toBe(SUN.toISOString());

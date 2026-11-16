@@ -75,7 +75,7 @@ const CONFIGS: Record<DeskId, DeskConfig> = {
     indexEn: 'TASI',
     liveAllowed: true,
     saudi: true,
-    sectors: ['energy', 'banks', 'materials', 'telecom', 'utilities', 'food', 'retail', 'health', 'industrials'],
+    sectors: ['energy', 'banks', 'materials', 'telecom', 'utilities', 'food', 'retail', 'health', 'industrials', 'tech', 'financials', 'consumer'],
     halalList: false,
     fractional: false,
     newsEveryMs: 60 * 60_000,

@@ -15,6 +15,7 @@ vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof impo
 import { inDesk } from './desk';
 import { applyFundamentals, fundamentalsForDecision, fundamentalsRound, fundamentalsView } from './fundamentals';
 import { resetTrading } from './store';
+import { UNIVERSE } from './tadawul';
 
 /** What the API returns when an agent really searched (an agent that answers with no search is sent back once). */
 const searched = { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } };
@@ -51,15 +52,16 @@ describe('the fundamentals agent', () => {
     await fundamentalsRound(new Date(SUN.getTime() + 3_600_000));
     expect(create).toHaveBeenCalledTimes(1);
     expect(create.mock.calls[0][0]).toMatchObject({ purpose: 'trading-fundamentals' });
-    expect(fundamentalsView()).toMatchObject({ covered: 6, total: 18 });
-    await fundamentalsRound(new Date(SUN.getTime() + 86_400_000));
-    await fundamentalsRound(new Date(SUN.getTime() + 2 * 86_400_000));
-    expect(fundamentalsView()).toMatchObject({ covered: 18 });
+    expect(fundamentalsView()).toMatchObject({ covered: 6, total: UNIVERSE.length });
+    // Six a day: the whole list is read in as many days as it takes.
+    const days = Math.ceil(UNIVERSE.length / 6);
+    for (let d = 1; d < days; d++) await fundamentalsRound(new Date(SUN.getTime() + d * 86_400_000));
+    expect(fundamentalsView()).toMatchObject({ covered: UNIVERSE.length });
     // All read: nothing more is asked until the 90 days pass.
-    await fundamentalsRound(new Date(SUN.getTime() + 3 * 86_400_000));
-    expect(create).toHaveBeenCalledTimes(3);
+    await fundamentalsRound(new Date(SUN.getTime() + days * 86_400_000));
+    expect(create).toHaveBeenCalledTimes(days);
     await fundamentalsRound(new Date(SUN.getTime() + 91 * 86_400_000));
-    expect(create).toHaveBeenCalledTimes(4);
+    expect(create).toHaveBeenCalledTimes(days + 1);
   });
 
   it('skips the funds on the US desk, and coins altogether', async () => {
