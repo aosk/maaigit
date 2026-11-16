@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { StreamEvent } from '../../shared/types.js';
 import { answering, chat, currentConversation as conversation } from '../ai/chat.js';
 import { approveCard, cancelCard } from '../approve.js';
+import { chatSuggestions } from '../suggestions.js';
 import { releaseUploads, takeUploads } from '../uploads.js';
 import { id, save, state } from '../store.js';
 import { explain, find, lang, text, wrap } from './http.js';
@@ -12,6 +13,11 @@ assistant.get('/chat', (_req, res) => {
   const c = conversation();
   const ids = new Set(c.turns.flatMap((t) => t.proposalIds ?? []));
   res.json({ turns: c.turns, proposals: state.proposals.filter((p) => ids.has(p.id)) });
+});
+
+/** What the empty chat offers to tap: the user's own repeated orders, then what today calls for. */
+assistant.get('/chat/suggestions', (req, res) => {
+  res.json({ suggestions: chatSuggestions(lang(req.query.lang)) });
 });
 
 /**

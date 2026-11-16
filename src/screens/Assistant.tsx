@@ -45,6 +45,8 @@ export function Assistant() {
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<Pending[]>([]);
+  // What to offer in an empty chat: the user's own repeated orders and what today calls for (the usual examples until it loads).
+  const [ideas, setIdeas] = useState<{ lang: Lang; list: string[] } | null>(null);
   // What the long-lived callbacks (dictation, a streamed reply, an upload) must see now, not as it was when they started.
   const alive = useRef(true);
   const busyRef = useRef(false);
@@ -240,6 +242,14 @@ export function Assistant() {
     inputRef.current?.focus();
   }
 
+  const empty = chatLoaded && turns.length === 0;
+  useEffect(() => {
+    if (!empty) return;
+    let current = true;
+    api.chatSuggestions(lang).then((r) => { if (current && r.suggestions.length) setIdeas({ lang, list: r.suggestions }); }).catch(() => {});
+    return () => { current = false; };
+  }, [empty, lang]);
+
   async function newChat() {
     try {
       await api.resetChat();
@@ -274,7 +284,7 @@ export function Assistant() {
         {turns.length === 0 && (
           <div className="chips">
             <p className="sub" style={{ fontSize: '0.9em' }}>{t.chatEmpty}</p>
-            {t.examples.map((ex) => (
+            {(ideas?.lang === lang ? ideas.list : t.examples).map((ex) => (
               <button key={ex} className="chip" onClick={() => { unlockSpeech(); void send(ex); }}>{ex}</button>
             ))}
           </div>
