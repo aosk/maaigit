@@ -1,4 +1,4 @@
-import type { CourierLogEntry, InboxMessage } from '../shared/types.js';
+import type { CourierFlag, CourierLogEntry, InboxMessage } from '../shared/types.js';
 import { client, create, textOf } from './ai/claude.js';
 import { cleanText, neutralize } from './ai/untrusted.js';
 import { queueCommand } from './bot.js';
@@ -37,19 +37,20 @@ interface Verdict {
   language: string;
 }
 
-/** What is known about a number that looked like a courier, kept for a day since its last courier message (memory only). */
-interface Flag {
-  last: number;
-  shortAt?: number;
-  detailsAt?: number;
-  paymentAt?: number;
-}
-const flags = new Map<string, Flag>();
+/** What is known about each number that looked like a courier, kept for a day since its last courier message. Saved with the rest, so a restart keeps the limits. */
+const flags = {
+  get: (phone: string): CourierFlag | undefined => state.courierFlags[phone],
+  set: (phone: string, flag: CourierFlag) => void (state.courierFlags[phone] = flag),
+  get size() {
+    return Object.keys(state.courierFlags).length;
+  },
+  clear: () => void (state.courierFlags = {}),
+};
 const analyses: number[] = [];
 
 /** Forgets numbers with no courier message in the last day. */
 function prune(now: number): void {
-  for (const [phone, f] of flags) if (now - f.last >= DETAILS_EVERY_MS) flags.delete(phone);
+  for (const [phone, f] of Object.entries(state.courierFlags)) if (now - f.last >= DETAILS_EVERY_MS) delete state.courierFlags[phone];
   while (analyses.length && now - analyses[0] >= HOUR) analyses.shift();
 }
 

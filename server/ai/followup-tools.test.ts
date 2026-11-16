@@ -19,7 +19,9 @@ import { addTeam, saveMember } from '../teams';
 import { runTool, tools } from './tools';
 
 const SOON = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
-const call = (name: string, input: Record<string, unknown>) => runTool({ type: 'tool_use', id: `t_${name}`, name, input } as never, []);
+/** What the user is taken to have said: by default they named everyone in these tests and gave Layla's number. */
+const SAID = 'ذكّر سارة وأحمد العتيبي، وأضف ليلى 0505555555';
+const call = (name: string, input: Record<string, unknown>, said = SAID) => runTool({ type: 'tool_use', id: `t_${name}`, name, input } as never, [], said);
 
 beforeEach(() => {
   state.teams = [];
@@ -61,10 +63,29 @@ describe('adding teams and people from the assistant', () => {
     expect(state.teamMembers).toHaveLength(before);
   });
 
-  it('is marked as not allowed after the assistant has read other people\'s text', async () => {
-    const { NEEDS_CLEAN_TURN } = await import('./tools');
-    expect(NEEDS_CLEAN_TURN.has('add_team_member')).toBe(true);
-    expect(NEEDS_CLEAN_TURN.has('add_team')).toBe(false);
+  it('adds a person only when the user gave the number themselves, however it was written', async () => {
+    const stranger = { name: 'Evil', phone: '0509999999', teams: ['ناجز'] };
+    for (const said of ['', 'what is new?', 'add Evil to Najiz', 'أضف الرقم اللي في الرسالة']) {
+      const refused = await call('add_team_member', stranger, said);
+      expect(refused.result.is_error, said).toBe(true);
+      expect(String(refused.result.content)).toMatch(/did not give this number/);
+    }
+    expect(state.teamMembers.some((m) => m.phone === '966509999999')).toBe(false);
+    for (const said of ['add Evil 0509999999 to Najiz', 'أضف ٠٥٠٩٩٩٩٩٩٩ لناجز', 'his number is +966 50 999 9999', 'رقمه 050-999-9999']) {
+      state.teamMembers = state.teamMembers.filter((m) => m.phone !== '966509999999');
+      expect((await call('add_team_member', stranger, said)).result.is_error, said).toBeUndefined();
+    }
+  });
+
+  it('sets up a follow-up only for a person the user named themselves (or whose number they gave)', async () => {
+    const input = { person: 'سارة', title: 'x', due: SOON };
+    for (const said of ['', 'what is new?', 'ذكّر أحمد يرسل العقد']) {
+      const refused = await call('create_followup', input, said);
+      expect(refused.result.is_error, said).toBe(true);
+      expect(String(refused.result.content)).toMatch(/did not name سارة/);
+    }
+    expect(state.duties).toEqual([]);
+    for (const said of ['ذكّري ساره ترسل العقد', 'remind 0503333333 about the contract']) expect((await call('create_followup', input, said)).result.is_error, said).toBeUndefined();
   });
 });
 
@@ -101,7 +122,7 @@ describe('the follow-up tools', () => {
 
   it('set up a follow-up for someone in a team, without an approval card', async () => {
     const created: never[] = [];
-    const { result } = await runTool({ type: 'tool_use', id: 't1', name: 'create_followup', input: { person: 'سارة', title: 'تجديد الرخصة', due: SOON } } as never, created);
+    const { result } = await runTool({ type: 'tool_use', id: 't1', name: 'create_followup', input: { person: 'سارة', title: 'تجديد الرخصة', due: SOON } } as never, created, SAID);
     expect(result.is_error).toBeUndefined();
     expect(String(result.content)).toMatch(/Follow-up set for سارة/);
     expect(created).toEqual([]);

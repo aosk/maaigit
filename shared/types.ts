@@ -889,6 +889,8 @@ export interface Duty {
   replies: { at: string; text: string; intent: DutyIntent }[];
   /** When the user was told they did not answer (after two reminders). */
   escalatedAt?: string;
+  /** The WhatsApp copy of that alert could not be queued yet (the device bot was not connected): tried again each minute. */
+  alertUnsent?: boolean;
   closedAt?: string;
   source: 'manual' | 'assistant';
 }
@@ -921,6 +923,14 @@ export interface CourierSettings {
   fullDetails: string;
   /** Path of the photo of the door (inside the device bot's allowed folder), sent with the details. */
   doorPhotoPath: string;
+}
+
+/** What was last sent to a number that looked like a courier, so the limits hold across a restart. Times in ms. */
+export interface CourierFlag {
+  last: number;
+  shortAt?: number;
+  detailsAt?: number;
+  paymentAt?: number;
 }
 
 export interface CourierLogEntry {

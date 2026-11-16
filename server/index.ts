@@ -28,14 +28,30 @@ import { startTrading } from './trading/engine.js';
 import { startRenderWatch } from './render-usage.js';
 import { startKeyWatch } from './keys.js';
 import { startCourier } from './courier.js';
+import { answering } from './ai/chat.js';
 import { flushTrading } from './trading/store.js';
 
-// Render stops the server on every deploy: write what is still waiting to be saved first.
+// Render stops the server on every deploy: an answer being written is given a moment to finish (Render waits
+// 30 seconds before it kills the process), then what is still waiting to be saved is written.
+const DRAIN_MS = 20_000;
+let stopping = false;
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
-    flushSave();
-    flushTrading();
-    process.exit(0);
+    if (stopping) return;
+    stopping = true;
+    const stop = () => {
+      flushSave();
+      flushTrading();
+      process.exit(0);
+    };
+    if (!answering.size) return stop();
+    const deadline = Date.now() + DRAIN_MS;
+    const wait = setInterval(() => {
+      if (!answering.size || Date.now() >= deadline) {
+        clearInterval(wait);
+        stop();
+      }
+    }, 250);
   });
 }
 

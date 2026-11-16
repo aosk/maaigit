@@ -14,7 +14,7 @@ vi.hoisted(() => {
   });
 });
 
-import { createKey, resetLink, takeCommands } from './bot';
+import { createKey, resetLink, revokeKey, takeCommands } from './bot';
 import { state } from './store';
 import { nextAction, teamReminderTick } from './team-reminders';
 import { addTeam, createDuty, saveMember, saveTeamSettings, updateDuty } from './teams';
@@ -162,5 +162,27 @@ describe('what a follow-up needs next', () => {
     teamReminderTick(t1);
     expect(nextAction(duty(), at(t1, 1.9))).toBeNull();
     expect(nextAction(duty(), at(t1, 2))).toEqual({ do: 'remind', n: 2 });
+  });
+});
+
+describe('telling the user when the device bot is away', () => {
+  it('keeps the WhatsApp copy of the "did not answer" alert until the bot is back, and sends it once', () => {
+    setUp();
+    const t1 = new Date('2026-11-17T13:00:00+03:00');
+    expect(teamReminderTick(t1)).toBe(1);
+    expect(teamReminderTick(at(t1, 4.1))).toBe(1); // second reminder
+    takeCommands();
+    revokeKey(); // the bot is not connected when the alert falls due
+    const late = at(t1, 8.3);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(teamReminderTick(late)).toBe(1);
+    expect(duty().escalatedAt).toBeDefined();
+    expect(duty().alertUnsent).toBe(true);
+    expect(teamReminderTick(at(late, 0.1))).toBe(0); // still away: nothing more, no second push
+    createKey();
+    expect(teamReminderTick(at(late, 0.2))).toBe(1);
+    expect(duty().alertUnsent).toBe(false);
+    expect(takeCommands().filter((c) => c.phone === ALERT)).toHaveLength(1);
+    expect(teamReminderTick(at(late, 0.3))).toBe(0);
   });
 });

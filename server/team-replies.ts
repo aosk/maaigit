@@ -38,6 +38,9 @@ interface Reading {
 }
 
 const answersToday = new Map<string, { day: string; n: number }>();
+/** People whose answer is being read right now: no reminder goes out to them until it is understood. */
+const reading = new Set<string>();
+export const beingRead = (phone: string): boolean => reading.has(phone);
 
 async function read(message: InboxMessage, duties: { id: string; title: string; due: string }[], now: Date): Promise<Reading | null> {
   try {
@@ -162,8 +165,13 @@ export async function handleTeamMessage(message: InboxMessage, now = new Date())
 /** Lets the delivery loop hand a team member's message to this module instead of the general reply to strangers. */
 export function registerTeamReplies(): void {
   onInbound((message, _fallback, now) => {
-    if (!message.phone || !memberOf(message.phone)) return false;
-    void handleTeamMessage(message, new Date(now)).catch((error: Error) => console.error('Team reply failed:', error.message));
+    // With the reminders switched off this module does nothing, so the message is left to the general reply.
+    if (!message.phone || !memberOf(message.phone) || !state.teamSettings.enabled) return false;
+    const phone = message.phone;
+    reading.add(phone);
+    void handleTeamMessage(message, new Date(now))
+      .catch((error: Error) => console.error('Team reply failed:', error.message))
+      .finally(() => reading.delete(phone));
     return true;
   });
 }
