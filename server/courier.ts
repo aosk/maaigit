@@ -245,7 +245,7 @@ function act(message: InboxMessage & { phone: string }, verdict: Verdict | 'voic
 export function courierHandler(message: InboxMessage, fallback: () => void, now: number): boolean {
   if (!eligible(message, now)) return false;
   const phone = message.phone;
-  if (message.text === VOICE_NOTE) {
+  if (message.text.startsWith(VOICE_NOTE)) {
     act(message, 'voice', fallback, now);
     return true;
   }

@@ -61,7 +61,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-11-17a';
+const VERSION = '2026-11-17b';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -362,7 +362,8 @@ async function toItem(msg, knownChat) {
   }
   const isVoice = msg.type === 'ptt' || msg.type === 'audio';
   // A voice note from one person is written out here, on this computer (see "Voice notes" below); null when it cannot be.
-  const heardText = isVoice && !msg.fromMe && !group && phone ? await voiceText(msg, messageId, phone) : null;
+  const heard = isVoice && !msg.fromMe && !group && phone ? await voiceText(msg, messageId, phone) : null;
+  const heardText = heard?.text ?? null;
   return {
     id: messageId,
     byMaai: (msg.fromMe && isOurs(chatId, body)) || undefined,
@@ -372,6 +373,9 @@ async function toItem(msg, knownChat) {
     // A voice note that could not be written out is named, so MAAI can tell it from a photo or a file.
     text: (heardText || body || (isVoice ? '[A voice note]' : '')).slice(0, 4000),
     voice: heardText ? true : undefined,
+    // Why a voice note could not be written out (a short code and the bot's own words), so MAAI can say so.
+    voiceWhy: heard && !heardText ? heard.why : undefined,
+    voiceDetail: heard && !heardText && heard.detail ? String(heard.detail).slice(0, 120) : undefined,
     media: media || undefined,
     // What kind, so MAAI can ask for the ones it is allowed to read (a picture, a PDF).
     mediaType: media ? mediaKind(msg) : undefined,
@@ -526,6 +530,9 @@ const STT_MODEL = process.env.VOICE_MODEL || 'onnx-community/whisper-small';
 /** 'off' (VOICE_TEXT=off in .env, or it could not be set up), 'installing', or the loaded { decode, hear }. */
 let stt = /^(off|0|no)$/i.test(process.env.VOICE_TEXT ?? '') ? 'off' : null;
 let sttLoading = null;
+/** For MAAI's log and the Inbox: where voice notes stand on this computer, and the last thing that went wrong. */
+const voiceReport = { state: stt === 'off' ? 'off' : 'idle', detail: stt === 'off' ? 'VOICE_TEXT=off in .env' : '', wrote: 0, failed: 0 };
+const voiceFailed = (state, detail) => Object.assign(voiceReport, { state, detail: String(detail ?? '').replace(/\s+/g, ' ').slice(0, 160) });
 
 async function loadStt() {
   if (stt) return stt;
@@ -533,25 +540,32 @@ async function loadStt() {
     let parts;
     try {
       parts = [await import('@huggingface/transformers'), await import('ogg-opus-decoder')];
-    } catch {
+    } catch (missing) {
       // First time: install the two packages beside the bot (a few minutes), then use them from the next voice note on.
       if (stt !== 'installing') {
         stt = 'installing';
+        voiceFailed('installing', why(missing));
         log('Setting up voice notes (installing two packages, a few minutes; voice notes are passed on unread until then)…');
-        const npm = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '--no-save', '--no-audit', '--no-fund', ...STT_PACKAGES], { cwd: HERE, stdio: 'ignore', shell: process.platform === 'win32' });
-        npm.on('error', () => {
+        let last = '';
+        const npm = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '--no-save', '--no-audit', '--no-fund', ...STT_PACKAGES], { cwd: HERE, stdio: ['ignore', 'ignore', 'pipe'], shell: process.platform === 'win32' });
+        npm.stderr?.on('data', (chunk) => (last = `${last}${chunk}`.slice(-400)));
+        npm.on('error', (error) => {
           stt = 'off';
+          voiceFailed('off', `npm could not be started: ${why(error)}`);
           log('⚠ Could not install the voice packages (is npm installed?). Voice notes stay unread.');
         });
         npm.on('exit', (code) => {
           stt = code === 0 ? null : 'off';
-          log(code === 0 ? 'Voice packages installed. The next voice note will be written out.' : '⚠ Installing the voice packages failed. Voice notes stay unread.');
+          if (code === 0) voiceFailed('idle', '');
+          else voiceFailed('off', `npm install failed (${code}): ${last.trim().split('\n').pop() ?? ''}`);
+          log(code === 0 ? 'Voice packages installed. The next voice note will be written out.' : `⚠ Installing the voice packages failed. Voice notes stay unread. ${last.trim().split('\n').pop() ?? ''}`);
         });
       }
       return stt;
     }
     try {
       const [{ pipeline }, { OggOpusDecoder }] = parts;
+      voiceFailed('loading', 'downloading or loading the speech model');
       log('Loading the speech model (the first time it is downloaded, about 250 MB)…');
       const hear = await pipeline('automatic-speech-recognition', STT_MODEL, { dtype: 'q8' });
       const decode = async (bytes) => {
@@ -564,9 +578,11 @@ async function loadStt() {
         }
       };
       stt = { decode, hear };
+      voiceFailed('ready', '');
       log('Voice notes will be written out on this computer.');
     } catch (error) {
       // No internet for the model right now, or too little memory: try again at the next voice note, not for ever.
+      voiceFailed('model', why(error));
       log(`⚠ The speech model could not be loaded (${why(error)}).`);
     }
     return stt;
@@ -604,32 +620,44 @@ const voiceTexts = new Map();
 /** One at a time: the model uses the whole processor. */
 let voiceLine = Promise.resolve();
 
+/** How long a message waits for its voice note to be written out before it goes on without the words. */
+const VOICE_WAIT_MS = 120_000;
+
+/** Resolves with { text } or, when it could not be written out, { why, detail }: a short code and the bot's own words. */
 function voiceText(msg, id, phone) {
   if (voiceTexts.has(id)) return voiceTexts.get(id);
   const age = Date.now() - (msg.timestamp || 0) * 1000;
-  if (stt === 'off' || age > VOICE_FRESH_MS) return Promise.resolve(null);
-  const job = (voiceLine = voiceLine.then(async () => {
+  if (stt === 'off') return Promise.resolve({ why: 'off', detail: voiceReport.detail });
+  if (age > VOICE_FRESH_MS) return Promise.resolve({ why: 'old' });
+  const work = (voiceLine = voiceLine.then(async () => {
     try {
       const ready = await loadStt();
-      if (!ready || typeof ready === 'string') return null;
+      if (!ready || typeof ready === 'string') return { why: voiceReport.state === 'idle' ? 'installing' : voiceReport.state, detail: voiceReport.detail };
       if (!voiceAllowed(voiceUsed, phone, new Date().toISOString().slice(0, 10))) {
         log(`A voice note from +${phone} is passed on unread (today's limit is reached).`);
-        return null;
+        return { why: 'limit' };
       }
       const got = await fetchMedia(msg, idText(msg.id), MAX_VOICE_BYTES);
-      if (!got.data) return log(`⚠ A voice note could not be read (${got.reason}).`), null;
+      if (!got.data) return log(`⚠ A voice note could not be read (${got.reason}).`), { why: got.reason === 'too-big' ? 'too-long' : 'no-file', detail: got.reason };
       const sound = await ready.decode(got.data);
       const samples = to16k(sound.channelData, sound.sampleRate);
-      if (!samples.length) return null;
+      if (!samples.length) return { why: 'empty', detail: 'no sound decoded' };
       const out = await withTimeout(ready.hear(samples, { chunk_length_s: 30, return_timestamps: false }), 180_000, 'writing out a voice note');
       const text = String(out?.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 4000);
-      if (text) log(`Wrote out a voice note from +${phone} (${Math.round(samples.length / 16000)} s).`);
-      return text || null;
+      if (!text) return { why: 'empty' };
+      log(`Wrote out a voice note from +${phone} (${Math.round(samples.length / 16000)} s).`);
+      return { text };
     } catch (error) {
       log(`⚠ A voice note could not be written out (${why(error)}).`);
-      return null;
+      return { why: 'error', detail: why(error) };
     }
+  }).then((result) => {
+    if (result.text) voiceReport.wrote += 1;
+    else voiceReport.failed += 1;
+    return result;
   }));
+  // The message is not held back for ever by a slow first download: after two minutes it goes on without the words.
+  const job = Promise.race([work, pause(VOICE_WAIT_MS).then(() => ({ why: 'timeout', detail: voiceReport.detail }))]);
   voiceTexts.set(id, job);
   if (voiceTexts.size > 500) voiceTexts.delete(voiceTexts.keys().next().value);
   return job;
@@ -1192,7 +1220,7 @@ async function sync() {
   try {
     do {
       const batch = queue.slice(0, 200);
-      const out = await maai('POST', '/sync', { device: DEVICE, version: VERSION, messages: batch });
+      const out = await maai('POST', '/sync', { device: DEVICE, version: VERSION, messages: batch, voice: voiceReport });
       orderPhone = typeof out.orderPhone === 'string' ? out.orderPhone : '';
       newestIs(out.latest);
       queue = queue.slice(batch.length);

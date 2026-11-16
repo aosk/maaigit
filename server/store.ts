@@ -121,6 +121,8 @@ interface State {
     cardNo?: number;
     /** Until when questions and orders from the order number are taken (unlocked with the PIN, for an hour). */
     orderUnlockedUntil?: string;
+    /** Where voice notes stand on the bot's computer, as it last reported (its own words, cleaned). */
+    voice?: { state: string; detail: string; wrote: number; failed: number };
     /** When the \"locked\" notice was last sent on WhatsApp, so a run of messages gets it once. */
     orderLockNoticeAt?: string;
   };

@@ -416,3 +416,13 @@ describe('a stranger must say it is a delivery', () => {
     expect(to('966566666666')).toHaveLength(2);
   });
 });
+
+describe('a voice note that says why it has no words', () => {
+  it('is still a voice note to the courier flow', async () => {
+    vi.mocked(create).mockResolvedValue(verdict(true, 'location'));
+    const t = Date.now();
+    await hear(msg('966577777777', 'مندوب توصيل، وين الموقع؟'), t);
+    await hear(msg('966577777777', `${VOICE_NOTE} 🎤 رسالة صوتية ما تحوّلت لنص: البوت يجهّز تحويل الصوت لأول مرة.`), t + HOUR);
+    expect(to('966577777777')).toHaveLength(2); // counted as "arrived": the details went out
+  });
+});

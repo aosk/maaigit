@@ -154,6 +154,33 @@ interface Incoming {
   attachment?: InboxMessage['attachment'];
   /** A voice note the bot wrote out itself: the text is what was said. */
   voice: boolean;
+  /** A voice note the bot could not write out: why, in words for the user. */
+  voiceWhy?: string;
+}
+
+/** What the bot writes for a voice note it did not write out. */
+const VOICE_NOTE_MARK = '[A voice note]';
+
+/** Why a voice note has no words, for the user: the bot gives a short code and, sometimes, its own words. */
+const VOICE_WHY: Record<string, string> = {
+  installing: 'البوت يجهّز تحويل الصوت لأول مرة. جرّب بعد دقائق.',
+  loading: 'نموذج الصوت يتحمّل على جهاز البوت لأول مرة. جرّب بعد دقائق.',
+  off: 'تحويل الصوت متوقف على جهاز البوت.',
+  model: 'نموذج الصوت ما تحمّل على جهاز البوت.',
+  limit: 'وصل حد اليوم للرسائل الصوتية من هذا الشخص.',
+  old: 'رسالة قديمة، ما تُحوَّل.',
+  'no-file': 'البوت ما قدر ينزّل التسجيل من واتساب.',
+  'too-long': 'التسجيل أطول من 3 دقائق.',
+  empty: 'ما انفهم كلام في التسجيل.',
+  timeout: 'التحويل أخذ أكثر من دقيقتين.',
+  error: 'صار خطأ أثناء التحويل.',
+};
+
+/** "🎤 ما تحوّلت لنص: <why> (<the bot's own words>)". The bot's words are cleaned and kept short: information, never instructions. */
+function voiceWhyText(code: unknown, detail: unknown): string {
+  const known = typeof code === 'string' ? VOICE_WHY[code] : undefined;
+  const words = cleanText(detail, 100).replace(/[<>]/g, ' ').replace(/\s+/g, ' ').trim();
+  return `🎤 رسالة صوتية ما تحوّلت لنص: ${known ?? 'البوت ما ذكر السبب (حدّث البوت أو أعد تشغيله).'}${words ? ` (${words})` : ''}`;
 }
 
 /** One delivered message, checked field by field; null for something that cannot be used. */
@@ -192,6 +219,7 @@ function parse(raw: unknown, now: number, why?: (reason: Unusable) => void): Inc
     media,
     attachment: media && (m.mediaType === 'image' || m.mediaType === 'pdf' || m.mediaType === 'voice' || m.mediaType === 'other') ? m.mediaType : undefined,
     voice: media && m.voice === true && m.mediaType === 'voice',
+    voiceWhy: media && m.mediaType === 'voice' && m.voice !== true ? voiceWhyText(m.voiceWhy, m.voiceDetail) : undefined,
   };
 }
 
@@ -275,7 +303,8 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
       subject: m.subject,
       channel: m.channel,
       // A voice note written out by the bot is marked, so it is never mistaken for something the person typed.
-      text: m.voice ? `🎤 ${m.text}`.slice(0, 4000) : m.text,
+      // One that could not be written out keeps its marker (other parts go by it) and says why, so it is never just silence.
+      text: m.voice ? `🎤 ${m.text}`.slice(0, 4000) : m.voiceWhy && m.text === VOICE_NOTE_MARK ? `${VOICE_NOTE_MARK} ${m.voiceWhy}` : m.text,
       receivedAt: new Date(m.at).toISOString(),
       replied: answered,
       via: 'bot',
@@ -316,6 +345,11 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
   // Counts only (never names or text), so a delivery that keeps nothing can be explained from the server log.
   const version = str((body as { version?: unknown }).version, 40);
   if (version) state.bot.version = version;
+  // Where voice notes stand on the bot's computer (its own words, cleaned): for the log and the admin page.
+  const v = (body as { voice?: { state?: unknown; detail?: unknown; wrote?: unknown; failed?: unknown } }).voice;
+  const voice = v && typeof v === 'object' ? { state: str(v.state, 20) || 'unknown', detail: cleanText(v.detail, 160), wrote: Number(v.wrote) || 0, failed: Number(v.failed) || 0 } : undefined;
+  if (voice) state.bot.voice = voice;
+  if (voice && (voice.wrote || voice.failed || voice.state !== 'idle')) console.log(`Device bot voice notes: ${voice.state}; ${voice.wrote} written out, ${voice.failed} not${voice.detail ? `; ${voice.detail}` : ''}`);
   console.log(`Device bot${version ? ` ${version}` : ''} delivered ${list.length}: ${result.stored} new, ${result.repeats} repeats, ${result.own} own${result.orders ? `, ${result.orders} order(s)` : ''}, ${result.skipped} unusable${result.skipped ? ` (${Object.entries(reasons).map(([r, n]) => `${r}: ${n}`).join(', ')})` : ''}, ${result.noted} to answer${Object.keys(notAnswered).length ? ` (not answered: ${Object.entries(notAnswered).map(([r, n]) => `${r} ×${n}`).join('; ')})` : ''}`);
   save();
   return result;
