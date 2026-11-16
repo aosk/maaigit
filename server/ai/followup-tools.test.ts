@@ -31,6 +31,43 @@ beforeEach(() => {
   saveMember({ phone: '0503333333', name: 'سارة', teamIds: [team.id] });
 });
 
+describe('adding teams and people from the assistant', () => {
+  it('adds a team without an approval card, and refuses a duplicate', async () => {
+    const created: never[] = [];
+    const { result } = await runTool({ type: 'tool_use', id: 'a1', name: 'add_team', input: { name: 'التراخيص' } } as never, created);
+    expect(result.is_error).toBeUndefined();
+    expect(created).toEqual([]);
+    expect(state.teams.map((t) => t.name)).toContain('التراخيص');
+    expect((await call('add_team', { name: 'التراخيص' })).result.is_error).toBe(true);
+  });
+
+  it('adds a person to existing teams (the number made international), and adds teams to an existing person', async () => {
+    await call('add_team', { name: 'المحامون' });
+    const first = await call('add_team_member', { name: 'ليلى', phone: '0505555555', teams: ['ناجز'] });
+    expect(String(first.result.content)).toMatch(/ليلى \(…5555\) is now in: ناجز/);
+    expect(state.teamMembers.find((m) => m.phone === '966505555555')).toMatchObject({ name: 'ليلى', lang: 'ar' });
+    const second = await call('add_team_member', { name: 'ليلى', phone: '0505555555', teams: ['المحامون'] });
+    expect(String(second.result.content)).toMatch(/ناجز, المحامون/);
+    expect(state.teamMembers.filter((m) => m.phone === '966505555555')).toHaveLength(1);
+  });
+
+  it('refuses an unknown team, a bad number, and no team at all, adding nobody', async () => {
+    const before = state.teamMembers.length;
+    const unknown = await call('add_team_member', { name: 'ليلى', phone: '0505555555', teams: ['فريق غير موجود'] });
+    expect(unknown.result.is_error).toBe(true);
+    expect(String(unknown.result.content)).toContain('ناجز');
+    expect((await call('add_team_member', { name: 'ليلى', phone: '12', teams: ['ناجز'] })).result.is_error).toBe(true);
+    expect((await call('add_team_member', { name: 'ليلى', phone: '0505555555', teams: [] })).result.is_error).toBe(true);
+    expect(state.teamMembers).toHaveLength(before);
+  });
+
+  it('is marked as not allowed after the assistant has read other people\'s text', async () => {
+    const { NEEDS_CLEAN_TURN } = await import('./tools');
+    expect(NEEDS_CLEAN_TURN.has('add_team_member')).toBe(true);
+    expect(NEEDS_CLEAN_TURN.has('add_team')).toBe(false);
+  });
+});
+
 describe('my_teams', () => {
   it('lets the assistant see the teams and who is in each', async () => {
     const { result } = await call('my_teams', {});

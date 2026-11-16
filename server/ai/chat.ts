@@ -1,9 +1,9 @@
 import type { Lang, Proposal } from '../../shared/types.js';
 import { agentEnabled, audit, id, save, state, type Conversation } from '../store.js';
-import { apiErrorMessage, client, stream, textOf, type MessageParam, type OnEvent, type ServerTool, type ToolUse } from './claude.js';
+import { apiErrorMessage, client, stream, textOf, type MessageParam, type OnEvent, type ServerTool, type ToolResult, type ToolUse } from './claude.js';
 import { config } from '../config.js';
 import { dayTime, refreshContext, withContext } from './context.js';
-import { runTool, tools } from './tools.js';
+import { NEEDS_CLEAN_TURN, runTool, tools } from './tools.js';
 import type { Upload } from '../uploads.js';
 import { demoChat } from './demo.js';
 import { aboutTheUser } from '../profile.js';
@@ -40,7 +40,7 @@ How you act:
 /** Searches in one turn, across all its rounds. */
 const MAX_SEARCHES = 5;
 /** Tools whose results hold text other people wrote. */
-const OTHERS_TEXT = new Set(['read_email', 'search_email', 'read_whatsapp', 'read_asana_task', 'followups_status', 'my_teams']);
+const OTHERS_TEXT = new Set(['read_email', 'search_email', 'read_whatsapp', 'read_asana_task', 'followups_status']);
 const WEB_SEARCH: ServerTool = { type: 'web_search_20260209', name: 'web_search', max_uses: 5, user_location: { type: 'approximate', country: 'SA', timezone: config.timezone } };
 
 /** Most rounds of tool calls in one turn, so a confused turn can't loop forever. */
@@ -235,6 +235,11 @@ async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[]
     if (calls.some((c) => OTHERS_TEXT.has(c.name))) readOthers = true;
     const results = await Promise.all(
       calls.map(async (block) => {
+        if (readOthers && NEEDS_CLEAN_TURN.has(block.name)) {
+          const blocked: ToolResult = { type: 'tool_result', tool_use_id: block.id, content: 'Not done: an email, message or task was read in this turn, so MAAI will not add a person to a team now. Ask the user to say it again in a new message, or to add them in Settings → My teams.', is_error: true };
+          onEvent({ type: 'step', tool: `${block.name}:done`, detail: undefined });
+          return blocked;
+        }
         const { result, detail } = await runTool(block, created);
         onEvent({ type: 'step', tool: `${block.name}:done`, detail });
         return result;
