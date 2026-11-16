@@ -105,3 +105,63 @@ describe('the microphone waits for the phone\'s speaker', () => {
     expect(ready).toBe(true);
   });
 });
+
+describe('speaking to the assistant again, over its spoken answer', () => {
+  /** A phone that is (or is not) reading something aloud, and takes a moment to stop after being told to. */
+  function phone(speaking: boolean, stopsAfterMs = 200) {
+    const synth = {
+      speaking,
+      pending: false,
+      cancelled: 0,
+      speak: vi.fn(),
+      cancel() {
+        synth.cancelled += 1;
+        setTimeout(() => (synth.speaking = false), stopsAfterMs);
+      },
+      getVoices: () => [],
+      addEventListener: vi.fn(),
+    };
+    vi.stubGlobal('window', { speechSynthesis: synth });
+    vi.stubGlobal('SpeechSynthesisUtterance', class { volume = 1; onend?: () => void; onerror?: () => void; constructor(public text: string) { setTimeout(() => this.onend?.(), 0); } });
+    return synth;
+  }
+
+  it('stops the reading, and opens the microphone only once the phone has gone quiet and let go of the speaker', async () => {
+    vi.useFakeTimers();
+    try {
+      const synth = phone(true, 200);
+      const { speechQuiet } = await import('./speech');
+      let ready = false;
+      void speechQuiet().then(() => (ready = true));
+      await vi.advanceTimersByTimeAsync(10);
+      expect(synth.cancelled).toBe(1);
+      await vi.advanceTimersByTimeAsync(300); // it has stopped, but only just
+      expect(ready).toBe(false);
+      await vi.advanceTimersByTimeAsync(400);
+      expect(ready).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not keep the user waiting when nothing is being read, and never waits much more than two seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      phone(false);
+      const first = await import('./speech');
+      let ready = false;
+      void first.speechQuiet().then(() => (ready = true));
+      await vi.advanceTimersByTimeAsync(20);
+      expect(ready).toBe(true);
+      vi.resetModules();
+      phone(true, 60_000); // a phone that never says it stopped
+      const second = await import('./speech');
+      let late = false;
+      void second.speechQuiet().then(() => (late = true));
+      await vi.advanceTimersByTimeAsync(2700);
+      expect(late).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
