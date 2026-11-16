@@ -360,6 +360,7 @@ export type UsagePurpose =
   | 'email-digest'
   | 'email-draft'
   | 'whatsapp'
+  | 'courier'
   | 'news'
   /** Before the trading agents were counted one by one (kept for older rows). */
   | 'trading'
@@ -701,6 +702,8 @@ export interface BotCommand {
   phone?: string;
   toName?: string;
   text: string;
+  /** For a reply: a picture (path inside the bot's allowed folders) sent with the text as its caption. */
+  attachment?: string;
   /** Sent by MAAI by itself (the fixed note), not approved one by one. */
   automatic?: boolean;
   status: 'queued' | 'sent' | 'done' | 'failed' | 'expired';
