@@ -1,5 +1,5 @@
 import type { NewsRaw, NewsSection } from '../../shared/types.js';
-import { AI_WORDS, SAUDI_WEIGHTY } from './sources.js';
+import { AI_WORDS, MODEL_WORDS, SAUDI_WEIGHTY } from './sources.js';
 
 /** Deciding which stories matter most. Pure: the same headlines always rank the same way. */
 
@@ -45,7 +45,7 @@ export function rankStories(items: NewsRaw[], section: NewsSection, weightOf: (s
     if (home) home.members.push(item);
     else clusters.push({ lead: item, members: [item] });
   }
-  const topic = section === 'tech' ? AI_WORDS : SAUDI_WEIGHTY;
+  const topic = section === 'models' ? MODEL_WORDS : section === 'tech' ? AI_WORDS : SAUDI_WEIGHTY;
   return clusters
     .map(({ members }) => {
       const sources = [...new Set(members.map((m) => m.source))];

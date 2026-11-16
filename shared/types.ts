@@ -289,7 +289,10 @@ export interface Stress {
   week: { day: string; score: number }[];
 }
 
-export type NewsSection = 'tech' | 'saudi';
+/** What the sources are read for (stored). */
+export type NewsFeed = 'tech' | 'saudi';
+/** The tabs of the news screen: AI models is drawn from the technology stories. */
+export type NewsSection = NewsFeed | 'models';
 
 /** One story in the news section: a headline from a trusted source, with a short summary written by MAAI. */
 export interface NewsItem {
@@ -302,12 +305,14 @@ export interface NewsItem {
   publishedAt: string;
   /** Other trusted sources that reported the same story. */
   alsoBy: string[];
+  /** AI models tab only: one short line comparing it with its rivals or the version before (empty when the story does not say). */
+  compare?: string;
 }
 
 /** A headline as read from a feed, before MAAI ranks it. */
 export interface NewsRaw {
   id: string;
-  section: NewsSection;
+  section: NewsFeed;
   source: string;
   title: string;
   /** A short plain-text excerpt from the feed. */
@@ -321,8 +326,10 @@ export interface NewsDigest {
   fetchedAt?: string;
   source: 'claude' | 'ranked';
   sections: Record<NewsSection, NewsItem[]>;
+  /** The day's news in a few short lines (empty when MAAI could not write them). */
+  brief: string[];
   /** Each trusted source and whether it could be read last time, so a broken one is easy to see. */
-  sources: { name: string; section: NewsSection; ok: boolean; items: number; error?: string }[];
+  sources: { name: string; section: NewsFeed; ok: boolean; items: number; error?: string }[];
   /** Hours between automatic updates. */
   everyHours: number;
 }

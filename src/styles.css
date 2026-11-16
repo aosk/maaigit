@@ -40,6 +40,7 @@
   --c-chat: #067647; --c-chat-soft: #ecfdf3; --c-chat-bar: #079455;
   --c-tech: #0e7490; --c-tech-soft: #e0f6fa; --c-tech-bar: #0891b2;
   --c-saudi: #14573a; --c-saudi-soft: #f3fcf6; --c-saudi-bar: #1b8354;
+  --c-models: #6d28d9; --c-models-soft: #f3edff; --c-models-bar: #7c3aed;
   /* And one for the time of day of the briefing. */
   --p-morning: #fdb022; --p-morning-soft: #fffaeb;
   --p-noon: #84caff; --p-noon-soft: #eff8ff;
@@ -64,6 +65,7 @@
     --c-chat: #75e0a7; --c-chat-soft: #123222; --c-chat-bar: #47cd89;
     --c-tech: #67e8f9; --c-tech-soft: #0c2f38; --c-tech-bar: #22d3ee;
     --c-saudi: #75e0a7; --c-saudi-soft: #0d2f23; --c-saudi-bar: #47cd89;
+    --c-models: #c4b5fd; --c-models-soft: #231741; --c-models-bar: #a78bfa;
     --p-morning: #fdb022; --p-morning-soft: #3a2c0c;
     --p-noon: #84caff; --p-noon-soft: #0f2b3d;
     --p-night: #b4aaff; --p-night-soft: #231f4d;
@@ -84,6 +86,7 @@
   --c-chat: #75e0a7; --c-chat-soft: #123222; --c-chat-bar: #47cd89;
   --c-tech: #67e8f9; --c-tech-soft: #0c2f38; --c-tech-bar: #22d3ee;
   --c-saudi: #75e0a7; --c-saudi-soft: #0d2f23; --c-saudi-bar: #47cd89;
+  --c-models: #c4b5fd; --c-models-soft: #231741; --c-models-bar: #a78bfa;
   --p-morning: #fdb022; --p-morning-soft: #3a2c0c;
   --p-noon: #84caff; --p-noon-soft: #0f2b3d;
   --p-night: #b4aaff; --p-night-soft: #231f4d;
@@ -503,11 +506,15 @@ a.lv-vital:hover { border-color: var(--tint); }
 #today-tasks .check button { border-color: var(--c-task-bar); }
 
 /* ---------- News ---------- */
-.news-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.news-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .news-tab { min-height: 48px; border-radius: 8px; border: 2px solid transparent; background: var(--n-soft); color: var(--n); font-weight: 700; font-size: 0.9em; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 10px; }
 .news-tab[aria-selected='true'] { border-color: var(--n); }
 .news-tab.tech, .news-section.tech { --n: var(--c-tech); --n-soft: var(--c-tech-soft); --n-bar: var(--c-tech-bar); }
 .news-tab.saudi, .news-section.saudi { --n: var(--c-saudi); --n-soft: var(--c-saudi-soft); --n-bar: var(--c-saudi-bar); }
+.news-tab.models, .news-section.models { --n: var(--c-models); --n-soft: var(--c-models-soft); --n-bar: var(--c-models-bar); }
+.story .compare { margin-top: 4px; font-size: 0.86em; color: var(--n); }
+.news-brief { display: grid; gap: 6px; }
+.news-brief ul { margin: 0; padding-inline-start: 18px; }
 .story { display: block; text-decoration: none; color: var(--text); padding: 14px 16px 14px 14px; border-bottom: 1px solid var(--sep); border-inline-start: 4px solid var(--n-bar); }
 .story:last-child { border-bottom: none; }
 .story .story-title { font-weight: 650; line-height: 1.3; }
