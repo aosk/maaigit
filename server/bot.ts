@@ -7,6 +7,7 @@ import { phoneDigits } from '../shared/vcard.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
 import { cleanText } from './ai/untrusted.js';
 import { answer, answerLeftovers, replyWaitSeconds, tell, whyNot } from './intake.js';
+import { claimInbound } from './inbound.js';
 
 /**
  * The user's own device bot (for example a Grok bot on their computer or phone). It connects to MAAI,
@@ -285,9 +286,16 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
     if (reason) notAnswered[reason] = (notAnswered[reason] ?? 0) + 1;
     if (now - Date.parse(message.receivedAt) > ACK_RECENT_MS || message.replied) continue;
     void tell(message, {}, now);
+    const reply = (text: string) => queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text, automatic: true });
+    const general = () => void answer(message, reply).catch((error: Error) => console.error('First reply failed:', error.message));
+    // A person in one of the user's teams, or a delivery courier, is answered by that module instead (see server/inbound.ts).
+    if (claimInbound(message, general, now)) {
+      result.noted += 1;
+      continue;
+    }
     if (reason) continue;
     result.noted += 1;
-    void answer(message, (text) => queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text, automatic: true })).catch((error: Error) => console.error('First reply failed:', error.message));
+    general();
   }
 
   pruneBotMessages(now);
