@@ -31,14 +31,14 @@ const NOTICE = {
   ar: {
     first: (name: string) => `الله يحييك${name ? ` ${name}` : ''}، معك المساعد الذكي (ذكاء اصطناعي) الخاص بعبدالرحمن الشغدلي.`,
     next: '🤖 المساعد الذكي لعبدالرحمن (ذكاء اصطناعي):',
-    warn: '🔒 فضلاً لا تشارك أي بيانات حساسة (كلمات مرور، رموز تحقق، أرقام هوية أو بطاقات). ما أقدر أشوف الصور والملفات، فاكتب لي أو أرسل رسالة صوتية.',
+    warn: '🔒 فضلاً لا تشارك أي بيانات حساسة (كلمات مرور، رموز تحقق، أرقام هوية أو بطاقات). تقدر تكتب لي أو ترسل رسالة صوتية. الصور والملفات ما أقراها.',
     warnShort: '🔒 فضلاً لا تشارك أي بيانات حساسة.',
     signed: '🤖 مرسلة عبر المساعد الذكي لعبدالرحمن · 🔒 فضلاً لا تشارك بيانات حساسة',
   },
   en: {
     first: (name: string) => `Hello${name ? ` ${name}` : ''}, this is Abdulrahman Alshagdali's AI assistant.`,
     next: "🤖 Abdulrahman's AI assistant:",
-    warn: "🔒 Please don't share anything sensitive (passwords, verification codes, ID or card numbers). I can't see pictures or files, so please write or send a voice note.",
+    warn: "🔒 Please don't share anything sensitive (passwords, verification codes, ID or card numbers). You can write to me or send a voice note. I can't read pictures or files.",
     warnShort: "🔒 Please don't share anything sensitive.",
     signed: "🤖 Sent through Abdulrahman's AI assistant · 🔒 please don't share anything sensitive",
   },

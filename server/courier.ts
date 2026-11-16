@@ -3,6 +3,7 @@ import { client, create, textOf } from './ai/claude.js';
 import { cleanText, neutralize } from './ai/untrusted.js';
 import { queueCommand } from './bot.js';
 import { onInbound } from './inbound.js';
+import { knownName } from './intake.js';
 import { askForFile, fileBlock, type MediaFile } from './media.js';
 import { alertMessage } from './notify.js';
 import { agentEnabled, save, state } from './store.js';
@@ -76,7 +77,7 @@ const SCHEMA = {
 
 const SYSTEM = `You classify one WhatsApp message sent to a private person, to decide whether it comes from a delivery courier (food, parcel, grocery) who is delivering something to that person.
 Answer only with the JSON fields asked for:
-- isCourier: true only if the message plausibly comes from a delivery person about a delivery (asking where the address or location is, the order, that he is arriving or outside, cash on delivery or a payment, or a plain greeting about an order). Arabic, English or mixed. Anything else (a friend, a sale offer, a scam, a question about something else, a bare "hi" with no sign of a delivery) is false.
+- isCourier: true only if the message itself makes clear the sender is delivering something to this person: he says he is a courier or from a delivery company, or that he is carrying their order, parcel or shipment. Arabic, English or mixed. Never guess: a friend or relative talking about a request, a plan or an address ("your request is hard", "I got the address", "where are you"), a sale offer, a scam, a question about something else, or a bare "hi" is false.
 - stage: "location" if he asks where, the address, location or pin; "arrived" if he says he has arrived or is outside or at the door; "payment" if he asks for money, the amount, cash on delivery, a transfer or to pay; otherwise "other".
 - language: the language of the message.
 A message starting with 🎤 was a voice note, written out by a machine: read it for its meaning, mistakes and all.
@@ -117,13 +118,38 @@ function log(entry: Omit<CourierLogEntry, 'at'>, now: number): void {
 
 const isTeamMember = (phone: string) => state.teamMembers.some((m) => m.phone === phone);
 
+/** How long before now a message from the same number makes it "someone who wrote before", not a first-time courier. */
+const KNOWN_AFTER_MS = 6 * HOUR;
+
+/**
+ * Someone the owner knows is never a courier, whatever they write: a number saved in the contacts, one the owner
+ * has written to (a reply they approved or sent from the app), or one that wrote before today's delivery window.
+ * A brother writing "طلبك صعب" must never be sent the address.
+ */
+function knownNumber(phone: string, now: number): boolean {
+  if (knownName(phone)) return true;
+  if (state.bot.commands.some((c) => c.kind === 'reply' && c.phone === phone && !c.automatic)) return true;
+  return state.inbox.some((m) => m.phone === phone && m.channel === 'whatsapp' && now - Date.parse(m.receivedAt) > KNOWN_AFTER_MS);
+}
+
+/**
+ * The person must say they are delivering: the word for a courier or a delivery, an order or parcel they are
+ * carrying, or a delivery company. "طلبك" alone ("your request") is not enough. Checked in code, before and apart
+ * from what Claude thinks, for the first message from a number.
+ */
+const SAYS_COURIER =
+  /مندوب|المندوب|توصيل|التوصيل|اوصل\s*(?:لك|لكم)?\s*(?:ال)?طلب|أوصل\s*(?:لك|لكم)?\s*(?:ال)?طلب|مع(?:ي|اي|ايا)\s+(?:ال)?(?:طلب|طلبك|طلبية|طلبيتك|شحنة|شحنتك|طرد|طردك)|طلبيت?ك|الطلبية|شحنت?ك|الشحنة|طردك|الطرد|هنقرستيشن|هنقر|جاهز|مرسول|كيتا|نينجا|تويو|شقردي|سمسا|أرامكس|ارامكس|ناقل|زاجل|سبل|\b(?:delivery|deliver(?:ing)?|courier|driver|rider|parcel|package|shipment|your order|hungerstation|jahez|mrsool|keeta|ninja|smsa|aramex|dhl|fedex|naqel|noon|amazon)\b/i;
+
+/** Whether the words themselves say this is a delivery. */
+export const saysCourier = (text: string): boolean => SAYS_COURIER.test(text);
+
 /** Whether this module takes the message at all: courier replies on, a private fresh message from a stranger who is not the owner's order number or on a team. */
 function eligible(message: InboxMessage, now: number): message is InboxMessage & { phone: string } {
   if (!state.courier.enabled || !agentEnabled('messaging')) return false;
   if (message.channel !== 'whatsapp' || message.via !== 'bot' || message.group || !message.phone || message.replied) return false;
   if (now - Date.parse(message.receivedAt) > FRESH_MS) return false;
   // A number on the never-answer-automatically list is never answered here either.
-  return message.phone !== state.bot.orderPhone && !isTeamMember(message.phone) && !state.replyRules.quiet.includes(message.phone);
+  return message.phone !== state.bot.orderPhone && !isTeamMember(message.phone) && !state.replyRules.quiet.includes(message.phone) && !knownNumber(message.phone, now);
 }
 
 /** Queues a fixed text to one number; false if the bot cannot take it. */
@@ -239,6 +265,9 @@ export function courierHandler(message: InboxMessage, fallback: () => void, now:
   }
   // Other photos and files are not read; with no words in them there is nothing to classify.
   if (noWords) return false;
+  // Not yet answered as a courier: the message itself must say it is a delivery. Otherwise it is an ordinary
+  // message for the general reply, and Claude is not even asked.
+  if (!flags.get(phone) && !saysCourier(message.text)) return false;
   if (analyses.length >= ANALYSES_PER_HOUR || !client) return false;
   analyses.push(now);
   void analyse(message.text)
