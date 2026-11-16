@@ -332,7 +332,7 @@ const propose_meeting: ToolSpec<{ title: string; attendee: string; attendee_emai
 
 const propose_reminder: ToolSpec<{ title: string; when: string; at: string; after_prayer: PrayerName | 'none'; offset_minutes: number; repeat: 'once' | 'daily' | 'weekly' }> = {
   definition: {
-    description: 'Show the user an approval card for a new reminder. Nothing is saved until the user approves.',
+    description: "Show the user an approval card for a PERSONAL reminder: something the user themselves must remember (a prayer-time task, a call, an errand). Nothing is saved until the user approves. When the reminder is for someone on the user's team (\"remind Ahmed...\"), use create_followup instead: that one goes to the team member, not to the user.",
     input_schema: {
       type: 'object',
       properties: {
@@ -483,7 +483,7 @@ const propose_device_action: ToolSpec<{ title: string; action: DeviceAction; tar
 const create_followup: ToolSpec<{ person: string; title: string; due: string }> = {
   definition: {
     description:
-      "Set up a follow-up with someone in the user's teams (Najiz, estates, lawyers...). MAAI then reminds them on WhatsApp a day before it is due, again if they do not answer, reads what they answer, and tells the user if they have not answered two reminders. The person MUST already be in a team (Settings → My teams): only people the user put there can be messaged, with fixed texts, so no approval card is shown. Use it when the user says things like \"remind Ahmed to file the request before Thursday\". due is an ISO date (YYYY-MM-DD, taken as the end of that day, Riyadh time) or an ISO date-time.",
+      "WORK, not personal: set up a follow-up with someone in the user's teams (Najiz, estates, lawyers...). Something the user must remember themselves is a personal reminder (propose_reminder), never this. MAAI then reminds them on WhatsApp a day before it is due, again if they do not answer, reads what they answer, and tells the user if they have not answered two reminders. The person MUST already be in a team (Settings → My teams): only people the user put there can be messaged, with fixed texts, so no approval card is shown. Use it when the user says things like \"remind Ahmed to file the request before Thursday\". due is an ISO date (YYYY-MM-DD, taken as the end of that day, Riyadh time) or an ISO date-time.",
     input_schema: {
       type: 'object',
       properties: {
