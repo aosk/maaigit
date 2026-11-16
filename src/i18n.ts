@@ -577,6 +577,10 @@ const en = {
   snbStale: 'not heard from: start it on your computer (real orders wait for it)',
   snbLoggedOut: 'running, but logged out at Broker: log in again on the bot (OTP on your phone)',
   snbOff: 'Not connected. Needed only for real money: Stocks → Limits and settings → Connect the Broker bot. It gives a key and a signing secret, shown once, that go into the bot on your computer.',
+  replyWaitTitle: 'Wait before answering',
+  replyWaitNone: 'No wait',
+  replyWaitSeconds: (s: number) => `${s} s`,
+  replyWaitHint: 'When someone writes several messages in a row, MAAI waits until they stop for this long and answers them once. An urgent word (urgent, emergency) skips the wait, and you are told about every new message at once.',
   replyModeTitle: 'Automatic WhatsApp replies',
   replyModes: { smart: 'Smart', fixed: 'Fixed note', off: 'Off' } as Record<'smart' | 'fixed' | 'off', string>,
   replyModeHint: {
@@ -1408,6 +1412,10 @@ const ar: Strings = {
   snbStale: 'ما وصل منه شي: شغّله على جهازك (الأوامر الحقيقية تنتظره)',
   snbLoggedOut: 'يعمل لكنه خارج حساب Broker: سجّل دخول من البوت (الرمز يجيك على الجوال)',
   snbOff: 'غير متصل. تحتاجه فقط للفلوس الحقيقية: أسهمي ← الحدود والإعدادات ← اربط بوت Broker. يعطيك مفتاح وسر توقيع يظهران مرة وحدة، تحطهم في البوت على جهازك.',
+  replyWaitTitle: 'مدة الانتظار قبل الرد',
+  replyWaitNone: 'بدون انتظار',
+  replyWaitSeconds: (s) => `${s} ثانية`,
+  replyWaitHint: 'لما أحد يرسل عدة رسائل ورا بعض، ينتظر معي لين يسكت هالمدة ويرد عليهم مرة وحدة. الكلمة العاجلة (عاجل، طوارئ) تتخطى الانتظار، وأنت تنبَّه بكل رسالة جديدة فوراً.',
   replyModeTitle: 'الرد الآلي على الواتساب',
   replyModes: { smart: 'ذكي', fixed: 'رد ثابت', off: 'إيقاف' },
   replyModeHint: {

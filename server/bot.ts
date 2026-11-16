@@ -6,7 +6,7 @@ import { isEmail } from './mail.js';
 import { phoneDigits } from '../shared/vcard.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
 import { cleanText } from './ai/untrusted.js';
-import { answer, tell, whyNot } from './intake.js';
+import { answer, answerLeftovers, replyWaitSeconds, tell, whyNot } from './intake.js';
 
 /**
  * The user's own device bot (for example a Grok bot on their computer or phone). It connects to MAAI,
@@ -73,6 +73,7 @@ export function botStatus(now = Date.now()): BotStatus {
     waiting: state.bot.commands.filter((c) => c.status === 'queued').length,
     messages: state.inbox.filter((m) => m.via === 'bot').length,
     replyMode: state.replyMode,
+    replyWait: replyWaitSeconds(),
     contacts: state.contacts.length,
     orderPhone: state.bot.orderPhone,
     orderPin: Boolean(state.bot.orderPin),
@@ -459,4 +460,9 @@ export function receiveContacts(body: unknown): number {
   save();
   console.log(`Device bot sent ${contacts.length} contacts`);
   return contacts.length;
+}
+
+/** After a restart: answers, once, the recent messages that were still waiting for their answer when MAAI stopped. */
+export function answerLeftoverMessages(): number {
+  return answerLeftovers((phone, name, text) => queueCommand({ kind: 'reply', phone, toName: name, text, automatic: true }));
 }

@@ -155,11 +155,75 @@ const busy = new Set<string>();
 /** A newer message from someone being answered: answered as soon as the current reply is done. */
 const waiting = new Map<string, { message: InboxMessage; send: (text: string) => void }>();
 
+/** The quiet MAAI waits for after someone's message before answering (the user chooses; 0 answers each at once). */
+const DEFAULT_REPLY_WAIT = 45;
+export const replyWaitSeconds = (): number => state.replyWaitSeconds ?? DEFAULT_REPLY_WAIT;
+/** However much someone keeps writing, they are answered by this long after their first message of the run. */
+const MAX_WAIT_MS = 150_000;
+/** Words that mean it cannot wait: such a message is answered at once (the user is told at once whatever the wait). */
+const URGENT = /عاجل|ضروري\s*جد|طوارئ|مستعجل|حادث|urgent|emergency|asap/i;
+
+/** A run of messages from one person that is waiting for them to stop writing. */
+const grouped = new Map<string, { timer: ReturnType<typeof setTimeout>; firstAt: number; message: InboxMessage; send: (text: string) => void }>();
+
+/**
+ * A person who writes several messages in a row gets ONE answer, to all of them, after they have been quiet for
+ * the chosen time (or at most 2.5 minutes after the first). Urgent words skip the wait. Every other rule
+ * (limits, fresh messages, "you already answered") applies when the answer is made.
+ */
+export function answer(message: InboxMessage, send: (text: string) => void, now = Date.now()): Promise<void> {
+  const phone = message.phone!;
+  const wait = replyWaitSeconds() * 1000;
+  const waiting = grouped.get(phone);
+  if (waiting) clearTimeout(waiting.timer);
+  if (wait <= 0 || URGENT.test(message.text)) {
+    grouped.delete(phone);
+    return answerNow(message, send, now);
+  }
+  const firstAt = waiting?.firstAt ?? Date.now();
+  const delay = Math.max(0, Math.min(wait, MAX_WAIT_MS - (Date.now() - firstAt)));
+  const timer = setTimeout(() => {
+    grouped.delete(phone);
+    void answerNow(message, send).catch((error: Error) => console.error('First reply failed:', error.message));
+  }, delay);
+  timer.unref?.();
+  grouped.set(phone, { timer, firstAt, message, send });
+  return Promise.resolve();
+}
+
+/** For the tests: forget runs still waiting. */
+export function dropWaitingReplies(): void {
+  for (const w of grouped.values()) clearTimeout(w.timer);
+  grouped.clear();
+}
+
+/**
+ * After a restart: messages that arrived while MAAI was waiting (or being restarted) and were never answered are
+ * answered now, once. Only fresh ones (see FRESH_MS), and only those newer than MAAI's last reply to that person.
+ */
+export function answerLeftovers(send: (phone: string, name: string, text: string) => void, now = Date.now()): number {
+  const newest = new Map<string, InboxMessage>();
+  for (const m of state.inbox) {
+    if (m.channel !== 'whatsapp' || m.via !== 'bot' || m.group || !m.phone || m.replied) continue;
+    if (now - Date.parse(m.receivedAt) > FRESH_MS) continue;
+    const last = state.intake[m.phone]?.sent.at(-1)?.at;
+    if (last && last >= m.receivedAt) continue;
+    if (!newest.has(m.phone) || m.receivedAt > newest.get(m.phone)!.receivedAt) newest.set(m.phone, m);
+  }
+  let n = 0;
+  for (const m of newest.values()) {
+    if (whyNot(m, now)) continue;
+    n += 1;
+    void answerNow(m, (text) => send(m.phone!, m.from, text), now).catch((error: Error) => console.error('First reply failed:', error.message));
+  }
+  return n;
+}
+
 /**
  * Answers the newest message from this person (several messages close together get one answer), and tells
  * the user. `send` queues the WhatsApp message on the device bot.
  */
-export async function answer(message: InboxMessage, send: (text: string) => void, now = Date.now()): Promise<void> {
+async function answerNow(message: InboxMessage, send: (text: string) => void, now = Date.now()): Promise<void> {
   const phone = message.phone!;
   if (busy.has(phone)) {
     waiting.set(phone, { message, send });
@@ -211,7 +275,7 @@ export async function answer(message: InboxMessage, send: (text: string) => void
     // Something came in while this reply was being written: answer it now (with the whole conversation so far).
     const next = waiting.get(phone);
     waiting.delete(phone);
-    if (next) void answer(next.message, next.send).catch((error: Error) => console.error('First reply failed:', error.message));
+    if (next) void answerNow(next.message, next.send).catch((error: Error) => console.error('First reply failed:', error.message));
   }
 }
 

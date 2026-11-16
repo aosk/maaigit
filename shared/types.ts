@@ -730,6 +730,8 @@ export interface BotStatus {
   messages: number;
   /** How MAAI answers new WhatsApp messages by itself: an AI first reply that asks for details, the fixed note, or nothing. */
   replyMode: ReplyMode;
+  /** Seconds of quiet MAAI waits before answering a run of messages once (0 = each at once). */
+  replyWait: number;
   /** Contacts the bot shared from the phone (names and numbers), for finding someone by name. */
   contacts: number;
   /**

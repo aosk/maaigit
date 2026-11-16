@@ -28,7 +28,7 @@ import { botStatus, createKey, keyMatches, queueCommand, receiveFromBot, receive
 import { cleanName, fixedReply } from './whatsapp';
 import { state } from './store';
 import { create } from './ai/claude';
-import { PER_PERSON_HOUR, cleanReply } from './intake';
+import { PER_PERSON_HOUR, cleanReply, dropWaitingReplies } from './intake';
 
 const PASSWORD = 'correct-horse-battery';
 let site: Awaited<ReturnType<typeof listen>>;
@@ -50,6 +50,8 @@ beforeEach(() => {
   state.contacts = [];
   state.intake = {};
   state.replyMode = 'smart';
+  state.replyWaitSeconds = 0; // these tests are about each answer; the wait has its own tests (intake-group.test.ts)
+  dropWaitingReplies();
   state.notifyPrefs.messages = false;
   for (const agent of state.agents) agent.enabled = true;
   vi.mocked(create).mockReset();

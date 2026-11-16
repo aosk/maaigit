@@ -120,6 +120,8 @@ interface State {
   lockMinutes?: number;
   /** How MAAI answers new WhatsApp messages by itself (see server/intake.ts). */
   replyMode: ReplyMode;
+  /** How many seconds of quiet MAAI waits after someone's message before answering, so a run of messages gets one answer (0 = answer each at once). */
+  replyWaitSeconds?: number;
   /** Per number: MAAI's own first replies to that person in the last day, and what it found out. */
   intake: Record<string, IntakeState>;
   /** Reminders to renew API keys: names and expiry dates only, never a key (see server/keys.ts). */
@@ -288,6 +290,7 @@ function load(): State {
   saved.profile = { enabled: saved.profile?.enabled !== false, facts: saved.profile?.facts ?? [] };
   saved.bot = { ...saved.bot, commands: saved.bot?.commands ?? [] };
   saved.replyMode = saved.replyMode === 'fixed' || saved.replyMode === 'off' ? saved.replyMode : 'smart';
+  if (saved.replyWaitSeconds !== undefined && ![0, 30, 45, 60].includes(saved.replyWaitSeconds)) delete saved.replyWaitSeconds;
   saved.intake = saved.intake ?? {};
   // No longer kept: MAAI now answers every new message, even in a conversation the user is writing in.
   delete (saved as { youWrote?: unknown }).youWrote;

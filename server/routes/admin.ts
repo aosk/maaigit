@@ -104,6 +104,15 @@ admin.patch('/admin/bot/mode', (req, res) => {
   res.json(botOverview());
 });
 
+/** How long MAAI waits for someone to stop writing before it answers their messages once (0 = each at once). */
+admin.patch('/admin/bot/reply-wait', (req, res) => {
+  const seconds = req.body?.seconds;
+  if (![0, 30, 45, 60].includes(seconds)) throw new HttpError(400, 'Choose 0, 30, 45 or 60 seconds.');
+  state.replyWaitSeconds = seconds;
+  audit(`WhatsApp reply wait set to ${seconds} seconds`, 'User', 'done');
+  res.json(botOverview());
+});
+
 /** Starts the bot on the user's computer again (WhatsApp stays linked); it also takes the newest version then. */
 admin.post('/admin/bot/restart', (_req, res) => {
   try {

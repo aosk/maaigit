@@ -133,7 +133,7 @@ export function SettingsScreen() {
       </Group>
 
       <Group id="whatsapp" title={t.groupWhatsApp} hint={t.groupWhatsAppHint}>
-        {status?.bot?.connected && <ReplyModeCard mode={status.bot.replyMode} onChanged={() => void loadStatus()} />}
+        {status?.bot?.connected && <ReplyModeCard mode={status.bot.replyMode} wait={status.bot.replyWait} onChanged={() => void loadStatus()} />}
         <ContactsImport />
       </Group>
 
@@ -190,9 +190,10 @@ export function SettingsScreen() {
 }
 
 /** How MAAI answers new WhatsApp messages by itself, chosen here. */
-function ReplyModeCard({ mode, onChanged }: { mode: ReplyMode; onChanged: () => void }) {
+function ReplyModeCard({ mode, wait, onChanged }: { mode: ReplyMode; wait: number; onChanged: () => void }) {
   const { t } = useSettings();
   const [current, setCurrent] = useState(mode);
+  const [seconds, setSeconds] = useState(wait);
   const [error, setError] = useState('');
   const modes: ReplyMode[] = ['smart', 'fixed', 'off'];
   const pick = (next: ReplyMode) => {
@@ -212,6 +213,32 @@ function ReplyModeCard({ mode, onChanged }: { mode: ReplyMode; onChanged: () => 
         ))}
       </div>
       <p className="sub">{t.replyModeHint[current]}</p>
+      {current !== 'off' && (
+        <>
+          <span className="section-label" id="reply-wait-label" style={{ padding: 0 }}>{t.replyWaitTitle}</span>
+          <div className="seg" role="radiogroup" aria-labelledby="reply-wait-label">
+            {[0, 30, 45, 60].map((s) => (
+              <button
+                key={s}
+                role="radio"
+                aria-checked={seconds === s}
+                onClick={() => {
+                  const before = seconds;
+                  setSeconds(s);
+                  setError('');
+                  api.setReplyWait(s).then(onChanged).catch((e: Error) => {
+                    setSeconds(before);
+                    setError(e.message);
+                  });
+                }}
+              >
+                {s === 0 ? t.replyWaitNone : t.replyWaitSeconds(s)}
+              </button>
+            ))}
+          </div>
+          <p className="sub">{t.replyWaitHint}</p>
+        </>
+      )}
       {error && <div className="error" role="alert">{error}</div>}
     </section>
   );

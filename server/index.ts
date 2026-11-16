@@ -20,6 +20,7 @@ import { writePrivate } from './secure-fs.js';
 import { flushSave } from './store.js';
 import { dataIsPersistent } from './storage.js';
 import { devDeny, devOrigins } from './devserver.js';
+import { answerLeftoverMessages } from './bot.js';
 import { startTrading } from './trading/engine.js';
 import { startRenderWatch } from './render-usage.js';
 import { startKeyWatch } from './keys.js';
@@ -67,6 +68,11 @@ if (config.production) {
 
 // The briefing notification is written from freshly read calendars, Asana and mail.
 startHealthWatch();
+// Messages that were waiting to be answered when the server last stopped (a deploy, a restart) are answered now, once.
+setTimeout(() => {
+  const n = answerLeftoverMessages();
+  if (n) console.log(`Answering ${n} WhatsApp message(s) that were still waiting before the restart.`);
+}, 20_000).unref();
 startScheduler(async (lang) => {
   await syncAll();
   return (await briefing(lang)).text;

@@ -282,6 +282,7 @@ export const api = {
   botKey: () => call<BotOverview & { key: string }>('POST', '/admin/bot/key', {}),
   botDisconnect: () => call<BotOverview>('DELETE', '/admin/bot/key'),
   setReplyMode: (mode: ReplyMode) => call<BotOverview>('PATCH', '/admin/bot/mode', { mode }),
+  setReplyWait: (seconds: number) => call<BotOverview>('PATCH', '/admin/bot/reply-wait', { seconds }),
   restartBot: () => call<BotOverview>('POST', '/admin/bot/restart', {}),
   setOrderPhone: (phone: string) => call<BotOverview>('PUT', '/admin/bot/order-phone', { phone }),
   lockOrders: () => call<BotOverview>('POST', '/admin/bot/order-lock', {}),
