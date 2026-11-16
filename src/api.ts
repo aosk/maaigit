@@ -39,6 +39,13 @@ import type {
   StreamEvent,
   TodayData,
   Tone,
+  CourierLogEntry,
+  CourierSettings,
+  Duty,
+  Team,
+  TeamMember,
+  TeamSettings,
+  TeamsView,
 } from '../shared/types';
 
 /** A new Asana task, as typed in a form. */
@@ -221,6 +228,19 @@ export const api = {
     return (await res.json()) as ContactCount;
   },
   clearContacts: () => call<ContactCount>('DELETE', '/contacts'),
+  // Teams and follow-ups
+  teams: () => call<TeamsView>('GET', '/teams'),
+  addTeam: (name: string) => call<Team>('POST', '/teams', { name }),
+  updateTeam: (id: string, patch: { name?: string; offDays?: number[] }) => call<Team>('PATCH', `/teams/${encodeURIComponent(id)}`, patch),
+  deleteTeam: (id: string) => call<void>('DELETE', `/teams/${encodeURIComponent(id)}`),
+  saveMember: (member: { phone: string; name: string; teamIds: string[]; lang?: string }) => call<TeamMember>('PUT', '/team-members', member),
+  deleteMember: (phone: string) => call<void>('DELETE', `/team-members/${encodeURIComponent(phone)}`),
+  teamContacts: (q: string) => call<AddressCard[]>('GET', `/team-contacts?q=${encodeURIComponent(q)}`),
+  addDuty: (duty: { title: string; phone: string; due: string; teamId?: string }) => call<Duty>('POST', '/duties', duty),
+  updateDuty: (id: string, patch: { status?: 'done' | 'cancelled'; due?: string }) => call<Duty>('PATCH', `/duties/${encodeURIComponent(id)}`, patch),
+  saveTeamSettings: (patch: Partial<TeamSettings>) => call<TeamSettings>('PUT', '/team-settings', patch),
+  courier: () => call<{ settings: CourierSettings; log: CourierLogEntry[] }>('GET', '/courier'),
+  saveCourier: (patch: Partial<CourierSettings>) => call<CourierSettings>('PUT', '/courier', patch),
   profile: () => call<ProfileInfo>('GET', '/profile'),
   addFact: (text: string, category: ProfileCategory) => call<ProfileFact>('POST', '/profile/facts', { text, category }),
   updateFact: (id: string, change: { text?: string; category?: ProfileCategory; pinned?: boolean }) => call<ProfileFact>('PATCH', `/profile/facts/${id}`, change),

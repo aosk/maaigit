@@ -14,10 +14,11 @@ import type {
   AppAlert,
   AuditEntry,
   BotCommand,
-  ReplyMode,
   CalendarEvent,
-  UsageRow,
   ChatTurn,
+  CourierLogEntry,
+  CourierSettings,
+  Duty,
   InboxMessage,
   Lang,
   NewsDigest,
@@ -26,6 +27,11 @@ import type {
   ProfileFact,
   Proposal,
   Reminder,
+  ReplyMode,
+  Team,
+  TeamMember,
+  TeamSettings,
+  UsageRow,
 } from '../shared/types.js';
 
 export interface IntakeState {
@@ -112,6 +118,14 @@ interface State {
     /** Until when questions and orders from the order number are taken (unlocked with the PIN, for an hour). */
     orderUnlockedUntil?: string;
   };
+  /** The teams the user follows up with, who is in them, what they owe, and how MAAI reminds them (see server/teams.ts). */
+  teams: Team[];
+  teamMembers: TeamMember[];
+  duties: Duty[];
+  teamSettings: TeamSettings;
+  /** How MAAI answers delivery couriers (see server/courier.ts), and what it did. */
+  courier: CourierSettings;
+  courierLog: CourierLogEntry[];
   /** Names and numbers from the user's phone (saved contacts, as WhatsApp on the device sees them). */
   contacts: { name: string; phone: string }[];
   /** Contacts the user imported from a contacts file (iCloud, Google…): names, numbers, emails, companies. */
@@ -202,6 +216,12 @@ function seed(): State {
     bot: { commands: [] },
     replyMode: 'smart',
     intake: {},
+    teams: [],
+    teamMembers: [],
+    duties: [],
+    teamSettings: { enabled: true, fromHour: 8, toHour: 21, hoursBetween: 4 },
+    courier: { enabled: false, shortAddress: '', fullDetails: '', doorPhotoPath: '' },
+    courierLog: [],
     contacts: [],
     addressBook: { cards: [] },
     sessionEpoch: 0,
@@ -295,6 +315,12 @@ function load(): State {
   // No longer kept: MAAI now answers every new message, even in a conversation the user is writing in.
   delete (saved as { youWrote?: unknown }).youWrote;
   saved.contacts = saved.contacts ?? [];
+  saved.teams = Array.isArray(saved.teams) ? saved.teams : [];
+  saved.teamMembers = Array.isArray(saved.teamMembers) ? saved.teamMembers : [];
+  saved.duties = Array.isArray(saved.duties) ? saved.duties : [];
+  saved.teamSettings = { enabled: saved.teamSettings?.enabled !== false, alertPhone: saved.teamSettings?.alertPhone, fromHour: saved.teamSettings?.fromHour ?? 8, toHour: saved.teamSettings?.toHour ?? 21, hoursBetween: saved.teamSettings?.hoursBetween ?? 4 };
+  saved.courier = { enabled: saved.courier?.enabled === true, shortAddress: saved.courier?.shortAddress ?? '', fullDetails: saved.courier?.fullDetails ?? '', doorPhotoPath: saved.courier?.doorPhotoPath ?? '' };
+  saved.courierLog = Array.isArray(saved.courierLog) ? saved.courierLog.slice(-200) : [];
   saved.revokedSessions = saved.revokedSessions ?? {};
   saved.addressBook = { cards: saved.addressBook?.cards ?? [], importedAt: saved.addressBook?.importedAt };
   // Agents added after the file was saved appear in the admin list, switched on.

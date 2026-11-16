@@ -837,3 +837,85 @@ export interface HealthReport {
   startedAt: string;
   checks: HealthCheck[];
 }
+
+// ---------- Teams: reminders to the user's people, with their answers tracked ----------
+
+/** A group the user follows up with (Najiz, estates, lawyers…). */
+export interface Team {
+  id: string;
+  name: string;
+  /** Days it is never messaged, 0 = Sunday … 6 = Saturday (Friday and Saturday unless the user changes it). */
+  offDays: number[];
+}
+
+/** Someone in one or more teams: a contact card with the teams they follow. */
+export interface TeamMember {
+  /** International form, digits only (9665XXXXXXXX). */
+  phone: string;
+  name: string;
+  teamIds: string[];
+  /** The language they are written to: Arabic, or the one they last wrote in. */
+  lang: string;
+}
+
+type DutyStatus = 'open' | 'acknowledged' | 'done' | 'blocked' | 'cancelled';
+type DutyIntent = 'done' | 'need_time' | 'blocked' | 'question' | 'ack' | 'other';
+
+/** Something a person owes by a date, which MAAI reminds them of and follows up. */
+export interface Duty {
+  id: string;
+  title: string;
+  phone: string;
+  name: string;
+  teamId?: string;
+  /** When it is due (ISO). */
+  due: string;
+  status: DutyStatus;
+  createdAt: string;
+  /** What MAAI sent them, in order. */
+  reminders: { at: string; n: number; text: string }[];
+  /** What they answered, with what MAAI understood it to mean. */
+  replies: { at: string; text: string; intent: DutyIntent }[];
+  /** When the user was told they did not answer (after two reminders). */
+  escalatedAt?: string;
+  closedAt?: string;
+  source: 'manual' | 'assistant';
+}
+
+export interface TeamSettings {
+  /** The reminders are switched on. */
+  enabled: boolean;
+  /** The user's own WhatsApp number (digits) that is told when someone does not answer, or asks for a payment. */
+  alertPhone?: string;
+  /** Messages go out only between these hours (Riyadh), outside the teams' days off. */
+  fromHour: number;
+  toHour: number;
+  /** Hours to wait for an answer before the next reminder. */
+  hoursBetween: number;
+}
+
+export interface TeamsView {
+  teams: Team[];
+  members: TeamMember[];
+  duties: Duty[];
+  settings: TeamSettings;
+}
+
+/** Delivery couriers: what MAAI says to them, and when. */
+export interface CourierSettings {
+  enabled: boolean;
+  /** The short address sent first, to someone who looks like a courier. */
+  shortAddress: string;
+  /** The rest (floor, gate, landmark), sent once they say they have arrived. */
+  fullDetails: string;
+  /** Path of the photo of the door (inside the device bot's allowed folder), sent with the details. */
+  doorPhotoPath: string;
+}
+
+export interface CourierLogEntry {
+  at: string;
+  phone: string;
+  name: string;
+  stage: 'short' | 'details' | 'payment' | 'ignored';
+  note: string;
+}
