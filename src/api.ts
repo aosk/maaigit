@@ -181,6 +181,7 @@ export const api = {
   reminderDone: (id: string) => call<Reminder>('POST', `/reminders/${id}/done`, { done: true }),
 
   chat: () => call<{ turns: ChatTurn[]; proposals: Proposal[] }>('GET', '/chat'),
+  chatSuggestions: (lang: Lang) => call<{ suggestions: string[] }>('GET', `/chat/suggestions?lang=${lang}`, undefined, true),
   /** Uploads a photo or PDF for the assistant; answers with the id to attach to the next message. */
   upload: async (file: Blob, name: string): Promise<UploadInfo> => {
     const res = await fetch('/api/uploads', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(name) }, body: file });
