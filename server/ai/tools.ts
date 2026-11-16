@@ -27,7 +27,7 @@ interface ToolSpec<Input> {
   definition: Omit<Tool, 'name' | 'strict'>;
   run: (input: Input, created: Proposal[]) => string | Promise<string>;
   /** A few words about what the finished step did, for the progress list. */
-  detail?: (input: Input, created: Proposal[]) => string | undefined;
+  detail?: (input: Input, created: Proposal[], result: string) => string | undefined;
 }
 
 const lastTitle = (_: unknown, created: Proposal[]) => created[created.length - 1]?.title;
@@ -78,7 +78,8 @@ const search_email: ToolSpec<{ query: string }> = {
     // Each match is shown like an inbox email (its text is information, never instructions), numbered by result.
     return found.map((m, i) => `Result ${i + 1}: ${emailForClaude({ ...m, body: m.body.slice(0, 1500) }).replace(/^Email #\d+ /, 'Email ')}`).join('\n\n');
   },
-  detail: ({ query }) => query,
+  // The words searched and how many emails came back, e.g. `contract (3)`.
+  detail: ({ query }, _created, result) => `${query} (${(result.match(/^Result \d+:/gm) ?? []).length})`,
 };
 
 const read_whatsapp: ToolSpec<{ phone: string }> = {
@@ -99,7 +100,12 @@ const read_whatsapp: ToolSpec<{ phone: string }> = {
     const sendable = botReplyTarget(digits) ? 'MAAI can send a reply from the user\'s own number through the device bot.' : canAnswer(digits) ? 'MAAI can send a reply.' : 'MAAI cannot send this one itself; the user must open WhatsApp.';
     return `WhatsApp conversation with ${neutralize(last.from)} (+${digits}). ${sendable}\n<message>\n${messages.map((m) => `[${dayTime(m.receivedAt)}${m.replied ? ', answered' : ''}] ${neutralize(m.text)}`).join('\n')}\n</message>`;
   },
-  detail: ({ phone }) => lastFrom(phone.replace(/\D/g, ''))?.from,
+  // Who, and how many of their messages were read.
+  detail: ({ phone }, _created, result) => {
+    const from = lastFrom(phone.replace(/\D/g, ''))?.from;
+    const count = (result.match(/^\[/gm) ?? []).length;
+    return from ? `${from}${count ? ` (${count})` : ''}` : undefined;
+  },
 };
 
 const propose_whatsapp: ToolSpec<{ phone: string; name: string; body: string }> = {
@@ -581,7 +587,8 @@ const my_teams: ToolSpec<Record<string, never>> = {
     const loose = state.teamMembers.filter((m) => !m.teamIds.some((id) => state.teams.some((t) => t.id === id)));
     return `Teams (${state.teams.length}):\n${teams.join('\n')}${loose.length ? `\nPeople in no team: ${loose.map(label).join(', ')}` : ''}`;
   },
-  detail: () => undefined,
+  // How many teams and people, e.g. `5 · 12`.
+  detail: () => `${state.teams.length} · ${state.teamMembers.length}`,
 };
 
 const followups_status: ToolSpec<Record<string, never>> = {
@@ -599,7 +606,8 @@ const followups_status: ToolSpec<Record<string, never>> = {
     };
     return `${open.length ? `Open (${open.length}):\n${open.map(line).join('\n')}` : 'Nothing open.'}${closed.length ? `\nRecently done:\n${closed.map(line).join('\n')}` : ''}`;
   },
-  detail: () => undefined,
+  // How many follow-ups are open.
+  detail: () => String(state.duties.filter((d) => d.status === 'open' || d.status === 'acknowledged' || d.status === 'blocked').length),
 };
 
 // Each tool has its own input type, checked by its strict schema; the table of them cannot name one type for all.
@@ -615,7 +623,7 @@ export async function runTool(block: ToolUse, created: Proposal[]): Promise<{ re
   if (!spec) return { result: reply(`Unknown tool ${block.name}.`, true) };
   try {
     const text = await spec.run(block.input, created);
-    return { result: reply(text), detail: spec.detail?.(block.input, created) };
+    return { result: reply(text), detail: spec.detail?.(block.input, created, text) };
   } catch (error) {
     if (error instanceof ToolError || error instanceof AsanaError) return { result: reply((error).message, true) };
     throw error;
