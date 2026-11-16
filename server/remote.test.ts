@@ -255,6 +255,9 @@ describe('orders from the user\'s own WhatsApp number', () => {
       const [reply] = await repliesSoon();
       expect(reply).toMatchObject({ kind: 'reply', phone: ORDERS });
       expect(reply.text).toContain('اكتب الأمر');
+      // Voice notes are read now (by the device bot): the reply must not say they never are.
+      expect(reply.text).toContain('جرّب بعد دقائق');
+      expect(reply.text).not.toMatch(/ما أقرأ الرسائل الصوتية|do not read voice notes/);
       expect(answered).not.toHaveBeenCalled();
     });
 

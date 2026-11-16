@@ -267,9 +267,10 @@ async function carryOut(order: Order, now: number): Promise<void> {
   const lang: Lang = arabic(order.text) ? 'ar' : 'en';
   const reply = (text: string) => queueCommand({ kind: 'reply', phone, toName: 'MAAI', text: `🤖 MAAI\n${text}`.slice(0, 4000), automatic: true });
 
-  // Voice notes are not read (no outside transcription service is used): say so, and the order is typed instead.
+  // A recording that reaches here is one the device bot could not write out (it does that itself, on the user's
+  // computer; the first note only starts the set-up). Nothing outside is used to hear it: say so, and offer both ways on.
   if (order.audio) {
-    reply('ما أقرأ الرسائل الصوتية. اكتب الأمر نصاً.\nI do not read voice notes. Type the order.');
+    reply('ما قدرت أحوّل التسجيل لنص الآن. جرّب بعد دقائق، أو اكتب الأمر.\nI could not turn that voice note into text just now. Try again in a few minutes, or type the order.');
     return;
   }
 
@@ -286,7 +287,7 @@ async function carryOut(order: Order, now: number): Promise<void> {
 
   const text = order.text.trim();
   if (!text) {
-    reply(lang === 'ar' ? 'أقرأ الرسائل النصية فقط. اكتب الأمر.' : 'I read text messages only. Type the order.');
+    reply(lang === 'ar' ? 'ما قدرت أقرأ هذي الرسالة (صورة أو ملف). اكتب الأمر، أو أرسله تسجيلاً صوتياً.' : 'I could not read that message (a picture or a file). Type the order, or send it as a voice note.');
     return;
   }
 
