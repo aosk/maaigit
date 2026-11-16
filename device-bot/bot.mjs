@@ -61,7 +61,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-11-11b';
+const VERSION = '2026-11-16a';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -366,7 +366,8 @@ async function toItem(msg, knownChat) {
     channel: 'whatsapp',
     from: from || undefined,
     phone: phone || undefined,
-    text: body.slice(0, 4000),
+    // A voice note has no text: it is named, so MAAI can tell it from a photo or a file (it cannot hear it).
+    text: (body || (msg.type === 'ptt' || msg.type === 'audio' ? '[A voice note]' : '')).slice(0, 4000),
     media: media || undefined,
     at: new Date((msg.timestamp || Date.now() / 1000) * 1000).toISOString(),
     group: group || undefined,
@@ -765,6 +766,18 @@ function checkOpenUrl(target) {
 
 /** A phone number as WhatsApp wants it: 7 to 15 digits, nothing else. */
 const isPhone = (phone) => typeof phone === 'string' && /^\d{7,15}$/.test(phone);
+
+/** A picture sent with a reply (the courier's door photo): pictures only, small, and only from where the user allowed. */
+const ATTACHMENT_IMAGE = /\.(jpe?g|png|webp)$/i;
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+/** Why this file may not be attached, or '' when it may. `isAllowed` says whether its real (symlink-free) path is inside an allowed folder. */
+function attachmentProblem(file, size, isAllowed) {
+  if (typeof file !== 'string' || !file || file.length > 400 || /[\u0000-\u001f]/.test(file) || file.split(/[\\/]+/).includes('..')) return 'that is not a plain file path';
+  if (!ATTACHMENT_IMAGE.test(file)) return 'only jpg, jpeg, png or webp pictures are attached';
+  if (!isAllowed(file)) return 'the picture is outside the folders the bot may use';
+  if (!Number.isFinite(size) || size <= 0 || size > MAX_ATTACHMENT_BYTES) return 'the picture is empty or larger than 5 MB';
+  return '';
+}
 // GUARDS-END
 const MAX_FILE_MB = 60;
 
@@ -817,6 +830,23 @@ async function findTarget(target) {
   if (!found.length) throw new Error(`Found nothing named "${name}" in ${where}.`);
   if (found.length > 1) throw new Error(`Several match "${name}"; say which one:\n${found.slice(0, 5).map((f) => `- ${shown(f)}`).join('\n')}`);
   return found[0];
+}
+
+/** The picture to send with a reply, or the reason it is not sent (the text then goes alone). Never follows a link out of the allowed folders. */
+function loadAttachment(given) {
+  const first = attachmentProblem(given, 1, () => true);
+  if (first) throw new Error(first);
+  if (FAR_AWAY.test(given)) throw new Error('network and device paths are not used');
+  const tries = path.isAbsolute(given) ? [given] : ALLOWED.map((root) => path.join(root, given));
+  const candidate = tries.find((t) => fs.existsSync(t) && inside(fs.realpathSync(t)));
+  if (!candidate) throw new Error('the picture was not found in the allowed folders');
+  if (fs.lstatSync(candidate).isSymbolicLink()) throw new Error('the picture is a link, not a file');
+  const real = fs.realpathSync(candidate);
+  const stat = fs.statSync(real);
+  if (!stat.isFile()) throw new Error('the picture is not a file');
+  const problem = attachmentProblem(real, stat.size, inside);
+  if (problem) throw new Error(problem);
+  return MessageMedia.fromFilePath(real);
 }
 
 /** Hands a link or file to the computer's own default app (browser, viewer, Explorer). Nothing passes through a shell. */
@@ -898,9 +928,19 @@ async function handleAll(commands) {
         if (!chatOf[c.phone] && found === null) throw new Error(`+${c.phone} is not on WhatsApp`);
         const target = chatOf[c.phone] || idText(found) || `${c.phone}@c.us`;
         rememberSent(target, c.text);
-        await withTimeout(wa.sendMessage(target, c.text), 45_000, 'sending a reply');
-        log(`Sent to ${c.toName ?? `+${c.phone}`}`);
-        result = { ok: true };
+        // With a picture: the text is its caption. If the picture cannot be used, the text goes alone and the result says why.
+        let media = null;
+        let note = '';
+        if (c.attachment) {
+          try {
+            media = loadAttachment(c.attachment);
+          } catch (error) {
+            note = `Sent the text without the picture: ${String(error.message).slice(0, 200)}`;
+          }
+        }
+        await withTimeout(media ? wa.sendMessage(target, media, { caption: c.text }) : wa.sendMessage(target, c.text), 60_000, 'sending a reply');
+        log(`Sent to ${c.toName ?? `+${c.phone}`}${media ? ' (with a picture)' : ''}`);
+        result = note ? { ok: true, output: note } : { ok: true };
       } else if (c.kind === 'task' && c.action) {
         log(`Action ${c.action}: ${c.text.slice(0, 80)}`);
         result = await act(c.action, c.text);

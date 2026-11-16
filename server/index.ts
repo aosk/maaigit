@@ -26,6 +26,7 @@ import { answerLeftoverMessages } from './bot.js';
 import { startTrading } from './trading/engine.js';
 import { startRenderWatch } from './render-usage.js';
 import { startKeyWatch } from './keys.js';
+import { startCourier } from './courier.js';
 import { flushTrading } from './trading/store.js';
 
 // Render stops the server on every deploy: write what is still waiting to be saved first.
@@ -89,6 +90,8 @@ startNews();
 startTrading();
 startRenderWatch();
 startKeyWatch();
+// Delivery couriers are answered with fixed texts (after the team follow-ups, which take their own members first).
+startCourier();
 
 const ai = process.env.ANTHROPIC_API_KEY ? 'Claude connected' : 'demo mode (no ANTHROPIC_API_KEY in .env)';
 

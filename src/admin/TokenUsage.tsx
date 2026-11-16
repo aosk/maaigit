@@ -7,6 +7,7 @@ const LABELS: Record<UsagePurpose, string> = {
   'email-draft': 'Reply drafts',
   whatsapp: 'WhatsApp summary',
   'team-replies': 'Team follow-up replies',
+  courier: 'Courier replies',
   news: 'News picks',
   trading: 'maai Stocks agents (before the split)',
   'trading-news': 'Stocks · News agent',
