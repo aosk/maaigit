@@ -214,6 +214,8 @@ export interface Order {
   at: number;
   /** A voice note (its recording), written out before it is carried out. */
   audio?: Buffer;
+  /** A picture or a PDF came with it: fetched from the device bot when the order is carried out. */
+  attachment?: 'image' | 'pdf';
 }
 
 /** The user's order number (digits, international form), set in the admin page; empty to stop taking orders. */
@@ -256,7 +258,7 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
     // automatic replies; the assistant takes it (each message once, and only while fresh: see server/remote.ts).
     if (m.channel === 'whatsapp' && !m.group && m.phone && m.phone === state.bot.orderPhone) {
       result.orders += 1;
-      onOrder({ externalId: m.externalId, text: m.media && /^\[A (photo|voice note)/.test(m.text) ? '' : m.text, at: m.at });
+      onOrder({ externalId: m.externalId, text: m.media && /^\[A (photo|voice note)/.test(m.text) ? '' : m.text, at: m.at, ...(m.attachment === 'image' || m.attachment === 'pdf' ? { attachment: m.attachment } : {}) });
       continue;
     }
     if (known.has(m.externalId)) {

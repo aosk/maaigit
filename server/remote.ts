@@ -1,8 +1,9 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import type { Lang, Proposal } from '../shared/types.js';
+import type { InboxMessage, Lang, Proposal } from '../shared/types.js';
 import { answering, chat, currentConversation } from './ai/chat.js';
 import { approveCard, cancelCard } from './approve.js';
 import { BotInputError, queueCommand, type Order } from './bot.js';
+import { askForFile } from './media.js';
 import { alertOrderCards, alertWhatsAppApproval } from './notify.js';
 import { config } from './config.js';
 import { audit, save, state } from './store.js';
@@ -40,6 +41,13 @@ const LOCK_MS = 60 * 60_000;
 /** How long the PIN unlocks the number for questions and orders, and how long an order sent while locked is held. */
 const UNLOCK_MS = 60 * 60_000;
 const HOLD_MS = 5 * 60_000;
+/** Pictures and PDFs read from the user's own order number in a day. */
+const OWN_FILES_PER_DAY = { image: 20, pdf: 5 };
+/** What a picture or a PDF sent with no words is taken to ask. */
+const FILE_ALONE = { ar: 'لخّص لي هذا في أسطر قليلة، وقل لي وش أحتاج أسوي. إذا فيه تاريخ أو موعد نهائي جهّز تذكيراً.' };
+
+/** The order as the message it was, so the device bot can be asked for its file. */
+const asMessage = (order: Order, phone: string): InboxMessage => ({ id: order.externalId, externalId: order.externalId, from: 'You', phone, channel: 'whatsapp', via: 'bot', text: order.text, receivedAt: new Date(order.at).toISOString(), replied: false, attachment: order.attachment });
 /** While locked, the "send your PIN" notice goes out once in this long, however many messages arrive. */
 const LOCK_NOTICE_MS = 2 * 60_000;
 /** Most messages kept while locked (they run together, as one order, once unlocked). */
@@ -285,9 +293,11 @@ async function carryOut(order: Order, now: number): Promise<void> {
   }
   state.bot.orderTimes = [...recent, new Date(now).toISOString()];
 
-  const text = order.text.trim();
+  // A picture or a PDF with no words is an order too: "tell me what this is and what I need to do".
+  const text = order.text.trim() || (order.attachment ? FILE_ALONE.ar : '');
   if (!text) {
-    reply(lang === 'ar' ? 'ما قدرت أقرأ هذي الرسالة (صورة أو ملف). اكتب الأمر، أو أرسله تسجيلاً صوتياً.' : 'I could not read that message (a picture or a file). Type the order, or send it as a voice note.');
+    // No words to tell the language by: both.
+    reply('ما قدرت أقرأ هذي الرسالة (ملف من نوع ما أقراه). اكتب الأمر، أو أرسله تسجيلاً صوتياً أو صورة أو PDF.\nI could not read that message (a kind of file I do not read). Type the order, or send it as a voice note, a picture or a PDF.');
     return;
   }
 
@@ -319,7 +329,8 @@ async function carryOut(order: Order, now: number): Promise<void> {
     delete state.bot.orderLockNoticeAt;
     if (waiting && now - waiting.at < HOLD_MS && waiting.orders.length) {
       // Several messages are one request written in pieces: they run as one order, in the order they came.
-      const order: Order = { ...waiting.orders[waiting.orders.length - 1], text: waiting.orders.map((o) => o.text.trim()).filter(Boolean).join('\n') };
+      const withFile = [...waiting.orders].reverse().find((o) => o.attachment);
+      const order: Order = { ...(withFile ?? waiting.orders[waiting.orders.length - 1]), text: waiting.orders.map((o) => o.text.trim()).filter(Boolean).join('\n') };
       queue = queue.then(() => carryOut(order, Date.now())).catch((error: Error) => console.error('Order failed:', error.message));
     }
     return;
@@ -365,9 +376,15 @@ async function carryOut(order: Order, now: number): Promise<void> {
   answering.add(conversation.id);
   try {
     audit('Order from your WhatsApp number', 'You (WhatsApp)', 'done');
-    const answer = await chat(conversation, `(from my WhatsApp) ${text.slice(0, 4000)}`, lang);
+    // The picture or PDF is fetched only now: the number is unlocked and the order is about to run.
+    const file = order.attachment ? await askForFile(asMessage(order, phone), OWN_FILES_PER_DAY) : null;
+    if (order.attachment && !file) {
+      reply(ar ? 'ما قدرت أجيب الملف من الواتساب (أو وصلت حد اليوم). أرسله مرة ثانية بعد قليل، أو اكتب الأمر.' : 'I could not get the file from WhatsApp (or today\'s limit is reached). Send it again in a moment, or type the order.');
+      return;
+    }
+    const files = file ? [{ id: order.externalId, name: file.kind === 'pdf' ? 'whatsapp.pdf' : 'whatsapp-photo', kind: file.kind, mime: file.mime, bytes: file.data.length, data: file.data, at: now }] : [];
+    const answer = files.length ? await chat(conversation, `(from my WhatsApp) ${text.slice(0, 4000)}`, lang, undefined, files) : await chat(conversation, `(from my WhatsApp) ${text.slice(0, 4000)}`, lang);
     const cards = number(answer.proposals, lang, now);
-    const ar = lang === 'ar';
     const how = state.bot.orderPin
       ? ar ? 'للموافقة أرسل: موافق <الرقم> <رمزك> · للإلغاء: الغ <الرقم> · أو من التطبيق.' : 'To approve, send: approve <number> <your PIN> · to cancel: cancel <number> · or use the app.'
       : ar ? 'وافق من تطبيق MAAI (أو عيّن رمز PIN في الإدارة لتوافق من هنا).' : 'Approve in the MAAI app (or set a PIN in Admin to approve from here).';

@@ -18,6 +18,7 @@ vi.mock('./ai/claude.js', async (original) => ({ ...(await original<typeof impor
 import type { Proposal } from '../shared/types';
 import { chat } from './ai/chat';
 import { createKey, receiveFromBot, takeCommands } from './bot';
+import { resetMedia } from './media';
 import { createInnerApp, createOnlineSite } from './site';
 import { listen, raw } from './security/helpers';
 import { resetBotLimits } from './routes/bot';
@@ -274,6 +275,65 @@ describe('orders from the user\'s own WhatsApp number', () => {
     it('come only from the order number', async () => {
       expect((await voice('966500000002')).status).toBe(403);
       expect((await fetch(`http://127.0.0.1:${site.port}/bot/v1/voice?id=x&phone=${ORDERS}`, { method: 'POST', headers: { 'content-type': 'audio/ogg' }, body: 'x' })).status).toBe(401);
+    });
+  });
+
+  describe('pictures and PDFs from the order number', () => {
+    const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(40, 1)]);
+    const PDF = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(40, 1)]);
+    /** The bot hands over the file MAAI asked for (as it would through /bot/v1/media). */
+    const handOver = async (data: Buffer) => {
+      let asked: { text: string; status: string } | undefined;
+      await vi.waitFor(() => expect((asked = state.bot.commands.find((c) => c.kind === 'media' && c.status === 'queued'))).toBeDefined());
+      asked!.status = 'done';
+      return raw(site.port, 'POST', `/bot/v1/media?id=${encodeURIComponent(asked!.text)}`, { body: data as never, headers: { authorization: `Bearer ${key}`, 'content-type': 'application/octet-stream' } });
+    };
+    beforeEach(() => resetMedia());
+
+    it('a picture with a caption reaches the assistant as a file with the caption as the order', async () => {
+      await asBot({ messages: [wa({ id: 'pic1', text: 'وش المطلوب في هذا الخطاب؟', media: true, mediaType: 'image' })] });
+      expect((await handOver(JPEG)).status).toBe(200);
+      await vi.waitFor(() => expect(answered).toHaveBeenCalledTimes(1));
+      const [, text, , , files] = answered.mock.calls[0];
+      expect(text).toBe('(from my WhatsApp) وش المطلوب في هذا الخطاب؟');
+      expect(files).toMatchObject([{ kind: 'image', mime: 'image/jpeg' }]);
+    });
+
+    it('a PDF with no words is summarised: what it is and what to do', async () => {
+      await asBot({ messages: [wa({ id: 'pdf1', text: '', media: true, mediaType: 'pdf' })] });
+      expect((await handOver(PDF)).status).toBe(200);
+      await vi.waitFor(() => expect(answered).toHaveBeenCalledTimes(1));
+      const [, text, , , files] = answered.mock.calls[0];
+      expect(text).toMatch(/Summarise this for me|لخّص لي هذا/);
+      expect(files).toMatchObject([{ kind: 'pdf', mime: 'application/pdf' }]);
+    });
+
+    it('says so, and runs nothing, when the file does not come or is not really a picture', async () => {
+      await asBot({ messages: [wa({ id: 'pic2', text: 'شوف هذي', media: true, mediaType: 'image' })] });
+      expect((await handOver(Buffer.from('MZ a program renamed to .jpg'))).status).toBe(415);
+      const [reply] = await repliesSoon().then((all) => all.filter((c) => c.kind === 'reply'));
+      expect(reply.text).toContain('ما قدرت أجيب الملف');
+      expect(answered).not.toHaveBeenCalled();
+    });
+
+    it('is not fetched at all while the number is locked; after the unlock it is, and runs with what was written', async () => {
+      const PIN = '482913';
+      await asUser('PUT', '/admin/bot/order-pin', { pin: PIN });
+      await asUser('POST', '/admin/bot/order-lock', {});
+      await asBot({ messages: [wa({ id: 'pic3', text: 'وش هذا؟', media: true, mediaType: 'image' })] });
+      expect((await repliesSoon())[0].text).toContain('🔒');
+      expect(state.bot.commands.some((c) => c.kind === 'media')).toBe(false);
+      await asBot({ messages: [wa({ text: `فتح ${PIN}` })] });
+      expect((await handOver(JPEG)).status).toBe(200);
+      await vi.waitFor(() => expect(answered).toHaveBeenCalledTimes(1));
+      expect(answered.mock.calls[0][1]).toBe('(from my WhatsApp) وش هذا؟');
+      expect(answered.mock.calls[0][4]).toMatchObject([{ kind: 'image' }]);
+    });
+
+    it('another kind of file with no words is answered with what can be sent instead', async () => {
+      await asBot({ messages: [wa({ id: 'zip1', text: '', media: true, mediaType: 'other' })] });
+      expect((await repliesSoon())[0].text).toMatch(/صورة أو PDF/);
+      expect(answered).not.toHaveBeenCalled();
     });
   });
 
