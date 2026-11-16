@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import type { Lang, ReplyMode, StatusInfo } from '../../shared/types';
+import type { Lang, ReplyMode, ReplyRules, StatusInfo } from '../../shared/types';
 import type { TradingSummary } from '../../shared/trading';
 import { api } from '../api';
 import { forgetFeeds } from '../inboxCache';
@@ -135,7 +135,7 @@ export function SettingsScreen() {
       </Group>
 
       <Group id="whatsapp" title={t.groupWhatsApp} hint={t.groupWhatsAppHint}>
-        {status?.bot?.connected && <ReplyModeCard mode={status.bot.replyMode} wait={status.bot.replyWait} onChanged={() => void loadStatus()} />}
+        {status?.bot?.connected && <ReplyModeCard mode={status.bot.replyMode} wait={status.bot.replyWait} rules={status.bot.replyRules} onChanged={() => void loadStatus()} />}
         <ContactsImport />
       </Group>
 
@@ -200,12 +200,30 @@ export function SettingsScreen() {
 }
 
 /** How MAAI answers new WhatsApp messages by itself, chosen here. */
-function ReplyModeCard({ mode, wait, onChanged }: { mode: ReplyMode; wait: number; onChanged: () => void }) {
+function ReplyModeCard({ mode, wait, rules, onChanged }: { mode: ReplyMode; wait: number; rules: ReplyRules; onChanged: () => void }) {
   const { t } = useSettings();
   const [current, setCurrent] = useState(mode);
   const [seconds, setSeconds] = useState(wait);
   const [error, setError] = useState('');
+  const [mine, setMine] = useState(rules);
+  const [number, setNumber] = useState('');
   const modes: ReplyMode[] = ['smart', 'fixed', 'off'];
+  // Shown at once, saved behind it; a refusal puts the old rules back and says why.
+  const change = (next: ReplyRules) => {
+    const before = mine;
+    setMine(next);
+    setError('');
+    api.setReplyRules(next).then((o) => { setMine(o.status.replyRules); onChanged(); }).catch((e: Error) => {
+      setMine(before);
+      setError(e.message);
+    });
+  };
+  const addQuiet = () => {
+    const digits = number.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '');
+    if (digits.length < 8 || digits.length > 15) return setError(t.replyQuietBad);
+    setNumber('');
+    change({ ...mine, quiet: [...mine.quiet, digits] });
+  };
   const pick = (next: ReplyMode) => {
     setCurrent(next);
     setError('');
@@ -247,6 +265,33 @@ function ReplyModeCard({ mode, wait, onChanged }: { mode: ReplyMode; wait: numbe
             ))}
           </div>
           <p className="sub">{t.replyWaitHint}</p>
+          {current === 'smart' && (
+            <>
+              <span className="section-label" style={{ padding: 0 }}>{t.replyRulesTitle}</span>
+              <label className="row" style={{ gap: 8 }}>
+                <input type="checkbox" checked={mine.knowContacts} onChange={(e) => change({ ...mine, knowContacts: e.target.checked })} />
+                <span>{t.replyKnowContacts}<span className="sub" style={{ display: 'block' }}>{t.replyKnowContactsHint}</span></span>
+              </label>
+              <label className="row" style={{ gap: 8 }}>
+                <input type="checkbox" checked={mine.shareBusy} disabled={!mine.knowContacts} onChange={(e) => change({ ...mine, shareBusy: e.target.checked })} />
+                <span>{t.replyShareBusy}<span className="sub" style={{ display: 'block' }}>{t.replyShareBusyHint}</span></span>
+              </label>
+            </>
+          )}
+          <span className="section-label" id="reply-quiet-label" style={{ padding: 0 }}>{t.replyQuietTitle}</span>
+          <p className="sub">{t.replyQuietHint}</p>
+          <ul className="tm-list" aria-labelledby="reply-quiet-label">
+            {mine.quiet.map((n) => (
+              <li key={n} className="between">
+                <bdi dir="ltr">+{n}</bdi>
+                <button className="btn ghost" type="button" aria-label={t.replyQuietRemove(`+${n}`)} onClick={() => change({ ...mine, quiet: mine.quiet.filter((x) => x !== n) })}>✕</button>
+              </li>
+            ))}
+          </ul>
+          <form className="row" onSubmit={(e) => { e.preventDefault(); addQuiet(); }}>
+            <input className="grow" inputMode="tel" dir="ltr" value={number} placeholder={t.replyQuietPlaceholder} aria-labelledby="reply-quiet-label" onChange={(e) => setNumber(e.target.value)} />
+            <button className="btn secondary" type="submit">{t.replyQuietAdd}</button>
+          </form>
         </>
       )}
       {error && <div className="error" role="alert">{error}</div>}

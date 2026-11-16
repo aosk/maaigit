@@ -82,6 +82,7 @@ function fromMessages(digest: Pick<WhatsAppDigest, 'threads'>): FeedItem[] {
       options: ins?.options?.length ? ins.options : undefined,
       message: last,
       intake: thread.phone ? state.intake[thread.phone]?.summary : undefined,
+      readyDraft: thread.phone && thread.unanswered > 0 ? state.intake[thread.phone]?.draft : undefined,
       handled: thread.unanswered === 0,
       needsReply: needsReplyOf(ins?.category, thread.unanswered === 0, thread.unanswered > 0),
       urgentSaid: thread.unanswered > 0 && unanswered.some((m) => URGENT.test(`${m.subject ?? ''}\n${m.text}`)),

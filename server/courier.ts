@@ -122,7 +122,8 @@ function eligible(message: InboxMessage, now: number): message is InboxMessage &
   if (!state.courier.enabled || !agentEnabled('messaging')) return false;
   if (message.channel !== 'whatsapp' || message.via !== 'bot' || message.group || !message.phone || message.replied) return false;
   if (now - Date.parse(message.receivedAt) > FRESH_MS) return false;
-  return message.phone !== state.bot.orderPhone && !isTeamMember(message.phone);
+  // A number on the never-answer-automatically list is never answered here either.
+  return message.phone !== state.bot.orderPhone && !isTeamMember(message.phone) && !state.replyRules.quiet.includes(message.phone);
 }
 
 /** Queues a fixed text to one number; false if the bot cannot take it. */

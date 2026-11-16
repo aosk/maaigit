@@ -9,6 +9,7 @@ import { recentUsage } from '../usage.js';
 import { cloudUsage } from '../anthropic-usage.js';
 import { renderUsage } from '../render-usage.js';
 import { KeyInputError, addKey, keysView, removeKey, updateKey } from '../keys.js';
+import { normalizePhone } from '../teams.js';
 import { HttpError, find, wrap } from './http.js';
 
 export const admin = Router();
@@ -101,6 +102,23 @@ admin.patch('/admin/bot/mode', (req, res) => {
   if (mode !== 'smart' && mode !== 'fixed' && mode !== 'off') throw new HttpError(400, 'Choose smart, fixed or off.');
   state.replyMode = mode;
   audit(`Automatic WhatsApp replies set to ${mode}`, 'User', 'done');
+  res.json(botOverview());
+});
+
+/** How the automatic replies treat people the user knows, and the numbers never answered automatically. */
+admin.patch('/admin/bot/reply-rules', (req, res) => {
+  const body = (req.body ?? {}) as { knowContacts?: unknown; shareBusy?: unknown; quiet?: unknown };
+  const rules = { ...state.replyRules };
+  if (typeof body.knowContacts === 'boolean') rules.knowContacts = body.knowContacts;
+  if (typeof body.shareBusy === 'boolean') rules.shareBusy = body.shareBusy;
+  if (body.quiet !== undefined) {
+    if (!Array.isArray(body.quiet) || body.quiet.length > 200) throw new HttpError(400, 'Send the numbers as a list (200 at most).');
+    const numbers = body.quiet.map((x) => normalizePhone(x));
+    if (numbers.some((x) => !x)) throw new HttpError(400, 'One of the numbers does not look right.');
+    rules.quiet = [...new Set(numbers as string[])];
+  }
+  state.replyRules = rules;
+  audit(`Automatic reply rules changed (${rules.quiet.length} number(s) never answered automatically)`, 'User', 'done');
   res.json(botOverview());
 });
 
