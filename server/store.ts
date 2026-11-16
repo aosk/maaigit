@@ -129,6 +129,8 @@ interface State {
   courierLog: CourierLogEntry[];
   /** By phone number: what each courier was last sent (kept a day), so a restart does not reset the limits. */
   courierFlags: Record<string, CourierFlag>;
+  /** By phone number: how many pictures and PDFs were read from them today (the daily limits). */
+  mediaUse: Record<string, { day: string; image: number; pdf: number }>;
   /** Names and numbers from the user's phone (saved contacts, as WhatsApp on the device sees them). */
   contacts: { name: string; phone: string }[];
   /** Contacts the user imported from a contacts file (iCloud, Google…): names, numbers, emails, companies. */
@@ -226,6 +228,7 @@ function seed(): State {
     courier: { enabled: false, shortAddress: '', fullDetails: '', doorPhotoPath: '' },
     courierLog: [],
     courierFlags: {},
+    mediaUse: {},
     contacts: [],
     addressBook: { cards: [] },
     sessionEpoch: 0,
@@ -325,6 +328,7 @@ function load(): State {
   saved.teamSettings = { enabled: saved.teamSettings?.enabled !== false, alertPhone: saved.teamSettings?.alertPhone, fromHour: saved.teamSettings?.fromHour ?? 8, toHour: saved.teamSettings?.toHour ?? 21, hoursBetween: saved.teamSettings?.hoursBetween ?? 4 };
   saved.courier = { enabled: saved.courier?.enabled === true, shortAddress: saved.courier?.shortAddress ?? '', fullDetails: saved.courier?.fullDetails ?? '', doorPhotoPath: saved.courier?.doorPhotoPath ?? '' };
   saved.courierLog = Array.isArray(saved.courierLog) ? saved.courierLog.slice(-200) : [];
+  saved.mediaUse = saved.mediaUse && typeof saved.mediaUse === 'object' && !Array.isArray(saved.mediaUse) ? saved.mediaUse : {};
   saved.courierFlags = saved.courierFlags && typeof saved.courierFlags === 'object' && !Array.isArray(saved.courierFlags) ? saved.courierFlags : {};
   saved.revokedSessions = saved.revokedSessions ?? {};
   saved.addressBook = { cards: saved.addressBook?.cards ?? [], importedAt: saved.addressBook?.importedAt };

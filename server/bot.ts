@@ -6,7 +6,7 @@ import { isEmail } from './mail.js';
 import { phoneDigits } from '../shared/vcard.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
 import { cleanText } from './ai/untrusted.js';
-import { answer, answerLeftovers, replyWaitSeconds, tell, whyNot } from './intake.js';
+import { answer, answerLeftovers, replyWaitSeconds, summaryComes, tell, whyNot } from './intake.js';
 import { claimInbound } from './inbound.js';
 
 /**
@@ -149,6 +149,10 @@ interface Incoming {
   byMaai: boolean;
   /** A photo, voice note or file (its text is only a caption, if any). */
   media: boolean;
+  /** What kind of attachment, when the bot says. */
+  attachment?: InboxMessage['attachment'];
+  /** A voice note the bot wrote out itself: the text is what was said. */
+  voice: boolean;
 }
 
 /** One delivered message, checked field by field; null for something that cannot be used. */
@@ -185,6 +189,8 @@ function parse(raw: unknown, now: number, why?: (reason: Unusable) => void): Inc
     fromMe: m.fromMe === true,
     byMaai: m.byMaai === true,
     media,
+    attachment: media && (m.mediaType === 'image' || m.mediaType === 'pdf' || m.mediaType === 'voice' || m.mediaType === 'other') ? m.mediaType : undefined,
+    voice: media && m.voice === true && m.mediaType === 'voice',
   };
 }
 
@@ -265,10 +271,12 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
       email: m.email,
       subject: m.subject,
       channel: m.channel,
-      text: m.text,
+      // A voice note written out by the bot is marked, so it is never mistaken for something the person typed.
+      text: m.voice ? `🎤 ${m.text}`.slice(0, 4000) : m.text,
       receivedAt: new Date(m.at).toISOString(),
       replied: answered,
       via: 'bot',
+      attachment: m.attachment,
       group: m.group || undefined,
       externalId: m.externalId,
     };
@@ -285,7 +293,9 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
     const reason = whyNot(message, now);
     if (reason) notAnswered[reason] = (notAnswered[reason] ?? 0) + 1;
     if (now - Date.parse(message.receivedAt) > ACK_RECENT_MS || message.replied) continue;
-    void tell(message, {}, now);
+    // Told at once, in their own words, only when no reviewed summary is coming (no AI reply for this message).
+    // Otherwise the user is told a moment later, with what Claude understood from it (see server/intake.ts).
+    if (reason || !summaryComes()) void tell(message, {}, now);
     const reply = (text: string) => queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text, automatic: true });
     const general = () => void answer(message, reply).catch((error: Error) => console.error('First reply failed:', error.message));
     // A person in one of the user's teams, or a delivery courier, is answered by that module instead (see server/inbound.ts).

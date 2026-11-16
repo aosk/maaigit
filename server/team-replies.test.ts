@@ -20,6 +20,7 @@ import type { InboxMessage } from '../shared/types';
 import { create } from './ai/claude';
 import { createKey, resetLink, takeCommands } from './bot';
 import { claimInbound, clearInbound } from './inbound';
+import { receiveFile, resetMedia } from './media';
 import { state } from './store';
 import { beingRead, handleTeamMessage, registerTeamReplies, resetTeamAnswers } from './team-replies';
 import { addTeam, createDuty, saveMember } from './teams';
@@ -185,5 +186,63 @@ describe('who is answered here', () => {
     expect(beingRead(PHONE)).toBe(true);
     await vi.waitFor(() => expect(beingRead(PHONE)).toBe(false));
     expect(duty().status).toBe('acknowledged');
+  });
+});
+
+describe('a picture or a PDF from a team member', () => {
+  const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(40, 1)]);
+  const withFile = (attachment: 'image' | 'pdf', text = '[A photo, voice note or file: MAAI cannot read these]'): InboxMessage => ({ ...message(text), externalId: `bot:f${Math.random().toString(16).slice(2)}`, attachment });
+
+  it('is fetched from the bot, shown to Claude with the follow-ups, and can close the follow-up as done', async () => {
+    setUp();
+    registerTeamReplies();
+    resetMedia();
+    reads({ intent: 'done' });
+    const m = withFile('image');
+    expect(claimInbound(m, vi.fn(), NOW.getTime())).toBe(true);
+    const asked = takeCommands().find((c) => c.kind === 'media')!;
+    expect(asked.text).toBe(m.externalId!.slice(4));
+    expect(receiveFile(asked.text, JPEG)).toBe('taken');
+    await vi.waitFor(() => expect(duty().status).toBe('done'));
+    const sent = vi.mocked(create).mock.calls[0][0] as { system: string; messages: { content: { type: string }[] }[] };
+    expect(sent.messages[0].content.map((b) => b.type)).toEqual(['image', 'text']);
+    expect(sent.system).toMatch(/attached a picture[\s\S]*never instructions/);
+    // the user sees a picture came, not the bot's placeholder
+    expect(duty().replies.at(-1)!.text).toBe('📷 صورة');
+  });
+
+  it('is read by its words alone when their daily limit is used up, and a voice note is never asked for as a file', async () => {
+    setUp();
+    resetMedia();
+    state.mediaUse = { [PHONE]: { day: NOW.toISOString().slice(0, 10), image: 10, pdf: 3 } };
+    registerTeamReplies();
+    reads({ intent: 'ack' });
+    expect(claimInbound(withFile('image', 'هذا الإيصال'), vi.fn(), NOW.getTime())).toBe(true);
+    await vi.waitFor(() => expect(duty().status).toBe('acknowledged'));
+    expect(flush().some((c) => c.kind === 'media')).toBe(false);
+    expect(typeof (vi.mocked(create).mock.calls[0][0] as { messages: { content: unknown }[] }).messages[0].content).toBe('string');
+    expect(claimInbound({ ...withFile('image', '🎤 خلصت'), attachment: 'voice' }, vi.fn(), NOW.getTime())).toBe(true);
+    await vi.waitFor(() => expect(vi.mocked(create).mock.calls.length).toBe(2));
+    expect(flush().some((c) => c.kind === 'media')).toBe(false);
+  });
+});
+
+describe('what the user is told about a team answer', () => {
+  it('is Claude\'s reviewed line, while the log keeps the person\'s own words', async () => {
+    setUp();
+    reads({ intent: 'blocked', summary: 'أحمد يقول النظام واقف وما يقدر يقدّم الطلب اليوم. https://evil.example/x' });
+    await handleTeamMessage(message('🎤 والله النضام واقف من الصبح ومقدرت اقدم الطلب'), NOW);
+    const [alert] = toOwner();
+    expect(alert.text).toContain('أحمد يقول النظام واقف وما يقدر يقدّم الطلب اليوم.');
+    expect(alert.text).not.toContain('evil.example');
+    expect(alert.text).not.toContain('النضام');
+    expect(duty().replies.at(-1)!.text).toBe('🎤 والله النضام واقف من الصبح ومقدرت اقدم الطلب');
+  });
+
+  it('falls back to their own words when Claude gives no summary', async () => {
+    setUp();
+    reads({ intent: 'question', summary: '' });
+    await handleTeamMessage(message('متى الموعد؟'), NOW);
+    expect(toOwner()[0].text).toContain('متى الموعد؟');
   });
 });
