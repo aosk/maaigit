@@ -371,6 +371,7 @@ export type UsagePurpose =
   | 'whatsapp'
   | 'team-replies'
   | 'courier'
+  | 'voice-fix'
   | 'news'
   /** Before the trading agents were counted one by one (kept for older rows). */
   | 'trading'

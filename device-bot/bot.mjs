@@ -61,7 +61,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-11-17b';
+const VERSION = '2026-11-17c';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -362,8 +362,10 @@ async function toItem(msg, knownChat) {
   }
   const isVoice = msg.type === 'ptt' || msg.type === 'audio';
   // A voice note from one person is written out here, on this computer (see "Voice notes" below); null when it cannot be.
-  const heard = isVoice && !msg.fromMe && !group && phone ? await voiceText(msg, messageId, phone) : null;
-  const heardText = heard?.text ?? null;
+  // What this person types tells which language their voice notes are in (see voiceLanguage).
+  if (!msg.fromMe && !group && phone && body && !media) noteLanguage(typedIn, phone, body);
+  const spoken = isVoice && !msg.fromMe && !group && phone ? await voiceText(msg, messageId, phone) : null;
+  const heardText = spoken?.text ?? null;
   return {
     id: messageId,
     byMaai: (msg.fromMe && isOurs(chatId, body)) || undefined,
@@ -374,8 +376,8 @@ async function toItem(msg, knownChat) {
     text: (heardText || body || (isVoice ? '[A voice note]' : '')).slice(0, 4000),
     voice: heardText ? true : undefined,
     // Why a voice note could not be written out (a short code and the bot's own words), so MAAI can say so.
-    voiceWhy: heard && !heardText ? heard.why : undefined,
-    voiceDetail: heard && !heardText && heard.detail ? String(heard.detail).slice(0, 120) : undefined,
+    voiceWhy: spoken && !heardText ? spoken.why : undefined,
+    voiceDetail: spoken && !heardText && spoken.detail ? String(spoken.detail).slice(0, 120) : undefined,
     media: media || undefined,
     // What kind, so MAAI can ask for the ones it is allowed to read (a picture, a PDF).
     mediaType: media ? mediaKind(msg) : undefined,
@@ -523,6 +525,20 @@ function voiceAllowed(used, phone, day) {
   used.by[phone] = (used.by[phone] ?? 0) + 1;
   return true;
 }
+
+/**
+ * Remembers which language a person types in. The speech model otherwise guesses one language from the first
+ * seconds of each note, and a short or mixed note is often guessed wrong (Arabic written as English nonsense).
+ */
+function noteLanguage(typed, phone, text) {
+  if (/[\u0600-\u06FF]/.test(text)) typed[phone] = 'arabic';
+  else if (/[A-Za-z]{3,}/.test(text)) typed[phone] = 'english';
+}
+
+/** The language a person's voice note is written out in: the one they type in, else English if MAAI says so, else Arabic. */
+function voiceLanguage(typed, english, phone) {
+  return typed[phone] ?? (english.has(phone) ? 'english' : 'arabic');
+}
 // VOICE-END
 
 const STT_PACKAGES = ['@huggingface/transformers@4.3.2', 'ogg-opus-decoder@1.7.5'];
@@ -615,6 +631,9 @@ async function fetchMedia(msg, msgId, maxBytes) {
 }
 
 const voiceUsed = { day: '', total: 0, by: {} };
+/** phone → the language they last typed in; and the numbers MAAI knows write English (team members set so). */
+const typedIn = {};
+let englishPhones = new Set();
 /** Each voice note is written out once, however many times WhatsApp reports it: id → the text (or null). */
 const voiceTexts = new Map();
 /** One at a time: the model uses the whole processor. */
@@ -642,7 +661,8 @@ function voiceText(msg, id, phone) {
       const sound = await ready.decode(got.data);
       const samples = to16k(sound.channelData, sound.sampleRate);
       if (!samples.length) return { why: 'empty', detail: 'no sound decoded' };
-      const out = await withTimeout(ready.hear(samples, { chunk_length_s: 30, return_timestamps: false }), 180_000, 'writing out a voice note');
+      // One language is given, not guessed. English words inside Arabic speech are put right by MAAI afterwards.
+      const out = await withTimeout(ready.hear(samples, { chunk_length_s: 30, return_timestamps: false, language: voiceLanguage(typedIn, englishPhones, phone), task: 'transcribe' }), 180_000, 'writing out a voice note');
       const text = String(out?.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 4000);
       if (!text) return { why: 'empty' };
       log(`Wrote out a voice note from +${phone} (${Math.round(samples.length / 16000)} s).`);
@@ -1222,6 +1242,7 @@ async function sync() {
       const batch = queue.slice(0, 200);
       const out = await maai('POST', '/sync', { device: DEVICE, version: VERSION, messages: batch, voice: voiceReport });
       orderPhone = typeof out.orderPhone === 'string' ? out.orderPhone : '';
+      if (Array.isArray(out.english)) englishPhones = new Set(out.english.filter((x) => typeof x === 'string').slice(0, 500));
       newestIs(out.latest);
       queue = queue.slice(batch.length);
       for (const m of batch) queued.delete(m.id);

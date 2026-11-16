@@ -180,7 +180,9 @@ describe('what the bot says about attachments', () => {
 describe('the bot\'s own voice helpers (run from its file)', () => {
   const source = fs.readFileSync(new URL('../device-bot/bot.mjs', import.meta.url), 'utf8');
   const block = /\/\/ VOICE-START[^\n]*\n([\s\S]*?)\/\/ VOICE-END/.exec(source)?.[1] ?? '';
-  const voice = vm.runInNewContext(`${block}\n({ to16k, voiceAllowed, mediaKind, VOICE_PER_PERSON_DAY, VOICE_PER_DAY });`, { Float32Array, Math, Object, String }) as {
+  const voice = vm.runInNewContext(`${block}\n({ to16k, voiceAllowed, mediaKind, noteLanguage, voiceLanguage, VOICE_PER_PERSON_DAY, VOICE_PER_DAY });`, { Float32Array, Math, Object, String }) as {
+    noteLanguage: (typed: Record<string, string>, phone: string, text: string) => void;
+    voiceLanguage: (typed: Record<string, string>, english: Set<string>, phone: string) => string;
     to16k: (channels: Float32Array[], rate: number) => Float32Array;
     voiceAllowed: (used: { day: string; total: number; by: Record<string, number> }, phone: string, day: string) => boolean;
     mediaKind: (msg: { type: string; _data?: { mimetype?: string } }) => string;
@@ -210,6 +212,21 @@ describe('the bot\'s own voice helpers (run from its file)', () => {
     expect(used.total).toBe(voice.VOICE_PER_DAY);
     expect(voice.voiceAllowed(used, '9665', '2026-11-18')).toBe(true);
     expect(used.total).toBe(1);
+  });
+
+  it('writes a voice note out in the language the person types in: Arabic unless they type English or MAAI says so', () => {
+    const typed: Record<string, string> = {};
+    const english = new Set(['9665000']);
+    expect(voice.voiceLanguage(typed, english, '9661')).toBe('arabic'); // nobody known: Arabic
+    expect(voice.voiceLanguage(typed, english, '9665000')).toBe('english'); // a team member set to English
+    voice.noteLanguage(typed, '9661', 'Hello, are you available tomorrow?');
+    expect(voice.voiceLanguage(typed, english, '9661')).toBe('english');
+    voice.noteLanguage(typed, '9661', 'تمام meeting بكره');
+    expect(voice.voiceLanguage(typed, english, '9661')).toBe('arabic'); // any Arabic makes it Arabic
+    voice.noteLanguage(typed, '9661', '👍 ok 12');
+    expect(voice.voiceLanguage(typed, english, '9661')).toBe('arabic'); // too little to change it
+    voice.noteLanguage(typed, '9665000', 'السلام عليكم');
+    expect(voice.voiceLanguage(typed, english, '9665000')).toBe('arabic'); // what they type wins over the setting
   });
 
   it('tells a picture, a PDF and a voice note from other files', () => {

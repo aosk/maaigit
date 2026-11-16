@@ -4,6 +4,7 @@ import express, { Router, type NextFunction, type Request, type Response } from 
 import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, receiveLink, seen, takeCommands, waitForCommands } from '../bot.js';
 import { receiveFile } from '../media.js';
 import { alertLink } from '../notify.js';
+import { fixVoiceNotes } from '../voice-fix.js';
 import { takeOrder, voiceFailed } from '../remote.js';
 import { state } from '../store.js';
 
@@ -62,11 +63,19 @@ const deviceName = (value: unknown) => (typeof value === 'string' ? value.replac
 deviceApi.use(deviceKey);
 
 /** Delivers messages (hourly) and gets any waiting commands back in the same answer. */
-deviceApi.post('/sync', (req, res) => {
-  seen(deviceName(req.body?.device));
-  const delivered = receiveFromBot(req.body, Date.now(), (order) => takeOrder(order));
-  // The order number goes back to the bot, which then sends its voice notes as audio (to /voice).
-  res.json({ ...delivered, commands: takeCommands(), orderPhone: state.bot.orderPhone ?? '', latest: latest() });
+deviceApi.post('/sync', async (req, res, next) => {
+  try {
+    seen(deviceName(req.body?.device));
+    // Voice notes the bot wrote out are put right first (English words spelled in Arabic letters, mis-heard words),
+    // so the Inbox, the replies and the orders all read the corrected text. A failure leaves them as they came.
+    await fixVoiceNotes(req.body).catch((error: Error) => console.error('Voice notes left as they came:', error.message));
+    const delivered = receiveFromBot(req.body, Date.now(), (order) => takeOrder(order));
+    // The order number goes back to the bot (its voice notes are orders); so do the numbers known to write English,
+    // which the bot uses to choose the language a voice note is written out in.
+    res.json({ ...delivered, commands: takeCommands(), orderPhone: state.bot.orderPhone ?? '', english: state.teamMembers.filter((m) => m.lang === 'en').map((m) => m.phone), latest: latest() });
+  } catch (error) {
+    next(error);
+  }
 });
 
 /**
