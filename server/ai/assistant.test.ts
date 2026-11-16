@@ -31,7 +31,7 @@ import { mirrorToGoogle } from '../gwrite';
 import { createTask, updateTask } from '../asana';
 import { state, type Conversation } from '../store';
 import { stream } from './claude';
-import { chat } from './chat';
+import { chat, isQuickOrder } from './chat';
 
 const scripted = vi.mocked(stream);
 const sentMail = vi.mocked(sendMail);
@@ -155,6 +155,54 @@ describe('the assistant never acts on its own', () => {
     const result = await chat(conversation(), 'hello', 'en');
     expect(result.text).toMatch(/switched off/);
     expect(scripted).not.toHaveBeenCalled();
+  });
+});
+
+describe('getting to the order faster', () => {
+  it('answers a short plain order with less deliberation, and keeps the deeper reasoning for analysis, long messages and files', () => {
+    expect(isQuickOrder('ذكرني أتصل بأحمد الساعة 5', 0)).toBe(true);
+    expect(isQuickOrder('add Layla 0505555555 to Najiz', 0)).toBe(true);
+    expect(isQuickOrder('حلل لي محفظتي', 0)).toBe(false);
+    expect(isQuickOrder('وش رايك أبيع أرامكو؟', 0)).toBe(false);
+    expect(isQuickOrder('why is the order late?', 0)).toBe(false);
+    expect(isQuickOrder('what is in this photo?', 1)).toBe(false);
+    expect(isQuickOrder('x'.repeat(200), 0)).toBe(false);
+  });
+
+  it('asks Claude with low effort for a short order and medium for a question that needs thought', async () => {
+    const efforts: string[] = [];
+    scripted.mockImplementation((async (req: { effort: string }) => {
+      efforts.push(req.effort);
+      return reply([say('ok')], 'end_turn');
+    }) as never);
+    await chat(conversation(), 'remind me to call Ahmed at 5', 'en');
+    await chat(conversation(), 'compare my two offers and explain which is better', 'en');
+    expect(efforts).toEqual(['low', 'medium']);
+  });
+
+  it('cuts what tools returned in older exchanges, keeps the last two whole, and never touches the tool ids', async () => {
+    const long = 'A'.repeat(5000);
+    const c = conversation();
+    const exchange = (n: number) => [
+      { role: 'user', content: `<context>\nsnapshot ${n}\n</context>\n\nquestion ${n}` },
+      { role: 'assistant', content: [tool('read_email', { uid: n }, `t${n}`)] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: `t${n}`, content: long }] },
+      { role: 'assistant', content: [say(`answer ${n}`)] },
+    ];
+    c.apiMessages = [1, 2, 3, 4].flatMap(exchange) as never;
+    script(reply([say('ok')], 'end_turn'));
+    await chat(c, 'hello', 'en');
+    const results = (seen[0] as { content: unknown }[]).flatMap((m) => (Array.isArray(m.content) ? m.content.filter((b: { type: string }) => b.type === 'tool_result') : [])) as { tool_use_id: string; content: string }[];
+    expect(results.map((r) => r.tool_use_id)).toEqual(['t1', 't2', 't3', 't4']);
+    expect(results.map((r) => r.content.length > 1000)).toEqual([false, false, true, true]);
+    expect(results[0].content).toMatch(/older result shortened/);
+    // already short: left alone on the next message (the history above it stays the same, so it is served from cache)
+    const first = results[0].content;
+    script(reply([say('ok')], 'end_turn'));
+    seen = [];
+    await chat(c, 'again', 'en');
+    const again = (seen[0] as { content: unknown }[]).flatMap((m) => (Array.isArray(m.content) ? m.content.filter((b: { type: string }) => b.type === 'tool_result') : [])) as { content: string }[];
+    expect(again[0].content).toBe(first);
   });
 });
 

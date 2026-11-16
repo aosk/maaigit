@@ -92,6 +92,32 @@ const KEEP_MESSAGES = 40;
 const STALE_CONTEXT = '<context>(an earlier snapshot of the day, no longer current)</context>';
 const CONTEXT = /<context>[\s\S]*?<\/context>/;
 
+/** A tool result (an email, a list of tasks) older than the last few exchanges is cut to this: it was already answered from. */
+const OLD_RESULT_CHARS = 300;
+/** Exchanges whose tool results are kept whole. */
+const KEEP_RESULTS_EXCHANGES = 2;
+const SHORTENED = ' […older result shortened]';
+
+/** One old tool result, cut short. Returns the same block when there is nothing to cut. */
+function shortenResult<B extends { type: string }>(block: B): B {
+  if (block.type !== 'tool_result') return block;
+  const result = block as unknown as { content?: string | { type: string; text?: string }[] };
+  const cut = (text: string) => (text.length > OLD_RESULT_CHARS + SHORTENED.length && !text.endsWith(SHORTENED) ? `${text.slice(0, OLD_RESULT_CHARS)}${SHORTENED}` : text);
+  if (typeof result.content === 'string') {
+    const short = cut(result.content);
+    return short === result.content ? block : ({ ...block, content: short });
+  }
+  if (!Array.isArray(result.content)) return block;
+  let touched = false;
+  const content = result.content.map((part) => {
+    if (part.type !== 'text' || typeof part.text !== 'string') return part;
+    const short = cut(part.text);
+    if (short !== part.text) touched = true;
+    return short === part.text ? part : { ...part, text: short };
+  });
+  return touched ? ({ ...block, content }) : block;
+}
+
 const startsExchange = (m: MessageParam) => m.role === 'user' && (typeof m.content === 'string' || m.content.some((b) => b.type !== 'tool_result'));
 
 /**
@@ -106,6 +132,19 @@ function compact(messages: MessageParam[]) {
     if (next < 0) break;
     messages.splice(0, next);
     changed = true;
+  }
+  // What tools returned in older exchanges (whole emails, task lists) is resent with every message and is the bulk of a
+  // long chat: the last few exchanges keep theirs whole, older ones keep the start.
+  const starts = messages.flatMap((m, i) => (startsExchange(m) ? [i] : []));
+  const keepFrom = starts.length > KEEP_RESULTS_EXCHANGES ? starts[starts.length - KEEP_RESULTS_EXCHANGES] : 0;
+  for (let i = 0; i < keepFrom; i++) {
+    const m = messages[i];
+    if (m.role !== 'user' || typeof m.content === 'string') continue;
+    const next = m.content.map(shortenResult);
+    if (next.some((b, j) => b !== (m.content as typeof next)[j])) {
+      m.content = next;
+      changed = true;
+    }
   }
   for (const m of messages) {
     if (m.role !== 'user') continue;
@@ -149,6 +188,14 @@ export async function chat(conversation: Conversation, userText: string, lang: L
   return reply;
 }
 
+/** Words that ask for thought, not for an action: these keep the deeper reasoning however short the message. */
+const WANTS_DEPTH = /حلّ?ل|تحليل|قارن|مقارنة|خط[ّ]?ة|استراتيج|اشرح|فسّ?ر|ليش|لماذا|وش رايك|رأيك|تنصح|راجع|لخّ?ص|analy[sz]|compar|plan\b|strateg|explain|why\b|review|summar|advice|advis|recommend|should i/i;
+/** A message this short, with none of those words, is an order ("remind me…", "add Layla to Najiz"). */
+const QUICK_CHARS = 160;
+
+/** A short, plain order is answered with less deliberation, so it is done sooner. Exported for tests. */
+export const isQuickOrder = (text: string, files: number) => !files && text.trim().length <= QUICK_CHARS && !WANTS_DEPTH.test(text);
+
 async function answer(conversation: Conversation, userText: string, lang: Lang, onEvent: OnEvent, files: Upload[], voice: Lang | undefined, spoken: boolean): Promise<{ text: string; proposals: Proposal[] }> {
   if (!agentEnabled('assistant')) {
     return { text: lang === 'ar' ? 'المساعد متوقف حالياً من قبل المشرف.' : 'The assistant is switched off by the admin right now.', proposals: [] };
@@ -168,17 +215,18 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
   const prompt = withContext(userText, [decisions.note, voice ? voiceNote(voice) : '', aboutTheUser(userText)].filter(Boolean).join('\n\n'));
   messages.push({ role: 'user', content: files.length ? [...fileBlocks(files), { type: 'text', text: prompt }] : prompt });
   const created: Proposal[] = [];
+  const quick = spoken || isQuickOrder(userText, files.length);
   try {
     let text: string;
     try {
-      text = await runLoop(lang, messages, created, onEvent, spoken);
+      text = await runLoop(lang, messages, created, onEvent, quick);
     } catch (error) {
       // A saved conversation whose reasoning no longer matches its history heals itself: drop the reasoning, ask once more.
       if (!/signature/i.test((error as Error).message ?? '')) throw error;
       messages.length = before + 1;
       created.length = 0;
       dropThinking(messages);
-      text = await runLoop(lang, messages, created, onEvent, spoken);
+      text = await runLoop(lang, messages, created, onEvent, quick);
     }
     // The files were for this turn only: what is kept is the question and the answer, not the pixels.
     if (files.length) {
@@ -195,10 +243,10 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
 }
 
 /**
- * A spoken question wants a spoken answer quickly: Claude thinks less (low effort) and keeps it short. Typed questions,
- * and anything with a file, keep the deeper reasoning.
+ * A spoken question, or a short plain order, wants its answer quickly: Claude thinks less (low effort). Longer typed
+ * questions, anything that asks for analysis, and anything with a file keep the deeper reasoning.
  */
-async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[], onEvent: OnEvent, spoken: boolean): Promise<string> {
+async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[], onEvent: OnEvent, quick: boolean): Promise<string> {
   const system = `${SYSTEM}\n\nThe app is currently set to ${lang === 'ar' ? 'Arabic' : 'English'}.`;
   let reply = '';
   // Searching is the one thing done without the user's approval, so it is bounded: five searches a turn in all (not
@@ -208,7 +256,7 @@ async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[]
   let readOthers = false;
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const search = !readOthers && searches < MAX_SEARCHES ? [{ ...WEB_SEARCH, max_uses: MAX_SEARCHES - searches }] : [];
-    const ask = () => stream({ purpose: 'chat', system, messages, tools: [...tools, ...search], effort: spoken ? 'low' : 'medium', maxTokens: 16000 }, onEvent);
+    const ask = () => stream({ purpose: 'chat', system, messages, tools: [...tools, ...search], effort: quick ? 'low' : 'medium', maxTokens: 16000 }, onEvent);
     let response: Awaited<ReturnType<typeof ask>>;
     try {
       response = await ask();
