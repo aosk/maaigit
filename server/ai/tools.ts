@@ -513,6 +513,24 @@ const create_followup: ToolSpec<{ person: string; title: string; due: string }> 
   detail: ({ title }) => title,
 };
 
+const my_teams: ToolSpec<Record<string, never>> = {
+  definition: {
+    description: "List the user's teams (Najiz, estates, lawyers...) and the people in each, with the last four digits of their number to tell two apart. Use it when the user asks who is in a team, what teams they have, or before setting up a follow-up for someone you are not sure is in a team. If it is empty, the user has not added anyone yet (Settings → My teams).",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  run() {
+    if (!state.teams.length && !state.teamMembers.length) return 'No teams yet. The user adds teams and people in Settings → My teams.';
+    const label = (m: (typeof state.teamMembers)[number]) => `${neutralize(cleanText(m.name, 40))} (…${m.phone.slice(-4)})`;
+    const teams = state.teams.map((team) => {
+      const people = state.teamMembers.filter((m) => m.teamIds.includes(team.id));
+      return `- ${neutralize(cleanText(team.name, 40))}: ${people.length ? people.map(label).join(', ') : 'nobody yet'}`;
+    });
+    const loose = state.teamMembers.filter((m) => !m.teamIds.some((id) => state.teams.some((t) => t.id === id)));
+    return `Teams (${state.teams.length}):\n${teams.join('\n')}${loose.length ? `\nPeople in no team: ${loose.map(label).join(', ')}` : ''}`;
+  },
+  detail: () => undefined,
+};
+
 const followups_status: ToolSpec<Record<string, never>> = {
   definition: {
     description: "List the user's follow-ups with their teams: what is open, who owes it, when it is due, how many reminders went out and what they answered. Use it when the user asks how a follow-up or a team is doing.",
@@ -521,7 +539,7 @@ const followups_status: ToolSpec<Record<string, never>> = {
   run() {
     const open = state.duties.filter((d) => d.status === 'open' || d.status === 'acknowledged' || d.status === 'blocked');
     const closed = state.duties.filter((d) => d.status === 'done').slice(-5);
-    if (!open.length && !closed.length) return 'No follow-ups yet.';
+    if (!open.length && !closed.length) return `No follow-ups yet.${state.teamMembers.length ? ` (${state.teamMembers.length} people are in the user's teams: use my_teams to see them.)` : ''}`;
     const line = (d: (typeof state.duties)[number]) => {
       const answer = d.replies.at(-1);
       return `- ${neutralize(cleanText(d.name, 40))}: ${neutralize(cleanText(d.title, 100))} · due ${dueText(d.due, 'en')} · ${d.status} · ${d.reminders.length} reminder(s)${d.escalatedAt ? ' · you were told they did not answer' : ''}${answer ? ` · last answer (${answer.intent}): ${neutralize(cleanText(answer.text, 120))}` : ''}`;
@@ -533,7 +551,7 @@ const followups_status: ToolSpec<Record<string, never>> = {
 
 // Each tool has its own input type, checked by its strict schema; the table of them cannot name one type for all.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SPECS: Record<string, ToolSpec<any>> = { read_email, search_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder, propose_remember, propose_device_task, propose_device_action, find_contact, create_followup, followups_status };
+const SPECS: Record<string, ToolSpec<any>> = { read_email, search_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder, propose_remember, propose_device_task, propose_device_action, find_contact, create_followup, followups_status, my_teams };
 
 export const tools: Tool[] = Object.entries(SPECS).map(([name, spec]) => ({ name, strict: true, ...spec.definition }));
 

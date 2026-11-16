@@ -31,6 +31,32 @@ beforeEach(() => {
   saveMember({ phone: '0503333333', name: 'سارة', teamIds: [team.id] });
 });
 
+describe('my_teams', () => {
+  it('lets the assistant see the teams and who is in each', async () => {
+    const { result } = await call('my_teams', {});
+    expect(result.is_error).toBeUndefined();
+    const text = String(result.content);
+    expect(text).toMatch(/Teams \(1\)/);
+    expect(text).toContain('ناجز');
+    expect(text).toContain('سارة (…3333)');
+    expect(text).not.toContain('0503333333');
+    expect(text).not.toContain('966503333333');
+  });
+
+  it('says so when nothing is set up, and names people whose team is gone', async () => {
+    state.teams = [];
+    state.teamMembers = [];
+    expect(String((await call('my_teams', {})).result.content)).toMatch(/No teams yet/);
+    // a person whose team was removed behind the assistant's back is still named, not hidden
+    state.teamMembers = [{ phone: '966504444444', name: 'خالد', teamIds: ['gone'], lang: 'ar' }];
+    expect(String((await call('my_teams', {})).result.content)).toMatch(/People in no team: خالد/);
+  });
+
+  it('is pointed to when there are no follow-ups yet but there are people', async () => {
+    expect(String((await call('followups_status', {})).result.content)).toMatch(/3 people are in the user's teams/);
+  });
+});
+
 describe('the follow-up tools', () => {
   it('are offered to the assistant', () => {
     expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['create_followup', 'followups_status']));

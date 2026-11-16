@@ -40,7 +40,7 @@ How you act:
 /** Searches in one turn, across all its rounds. */
 const MAX_SEARCHES = 5;
 /** Tools whose results hold text other people wrote. */
-const OTHERS_TEXT = new Set(['read_email', 'search_email', 'read_whatsapp', 'read_asana_task', 'followups_status']);
+const OTHERS_TEXT = new Set(['read_email', 'search_email', 'read_whatsapp', 'read_asana_task', 'followups_status', 'my_teams']);
 const WEB_SEARCH: ServerTool = { type: 'web_search_20260209', name: 'web_search', max_uses: 5, user_location: { type: 'approximate', country: 'SA', timezone: config.timezone } };
 
 /** Most rounds of tool calls in one turn, so a confused turn can't loop forever. */
