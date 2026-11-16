@@ -144,11 +144,19 @@ describe('speaking to the assistant again, over its spoken answer', () => {
     }
   });
 
-  it('does not keep the user waiting when nothing is being read, and never waits much more than two seconds', async () => {
+  it('waits a moment the first time only, not at all afterwards when nothing is being read, and never much more than two seconds', async () => {
     vi.useFakeTimers();
     try {
       phone(false);
       const first = await import('./speech');
+      // The very first time the silent unlock phrase is said, so there is one short wait…
+      let opened = false;
+      void first.speechQuiet().then(() => (opened = true));
+      await vi.advanceTimersByTimeAsync(200);
+      expect(opened).toBe(false);
+      await vi.advanceTimersByTimeAsync(400);
+      expect(opened).toBe(true);
+      // …and after that, with nothing being read, none at all.
       let ready = false;
       void first.speechQuiet().then(() => (ready = true));
       await vi.advanceTimersByTimeAsync(20);

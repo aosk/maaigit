@@ -82,13 +82,16 @@ const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * Stops whatever is being read. Never waits more than about two seconds.
  */
 export async function speechQuiet(): Promise<void> {
-  await unlockSpeech();
   if (!('speechSynthesis' in window)) return;
   const synth = window.speechSynthesis;
   const wasSpeaking = synth.speaking || synth.pending || (lastSpokeAt > 0 && Date.now() - lastSpokeAt < 1500);
+  // Whatever is being read stops at once (the user is about to speak).
   session++;
   synth.cancel();
-  if (!wasSpeaking) return;
+  // The very first time, the silent unlock phrase is said: the phone needs the same moment to let go after it.
+  const firstTime = !unlocked;
+  await unlockSpeech();
+  if (!wasSpeaking && !firstTime) return;
   for (let waited = 0; waited < 1500 && (synth.speaking || synth.pending); waited += 50) await pause(50);
   // The phone lets go of the speaker a moment after it says it has stopped.
   await pause(400);
