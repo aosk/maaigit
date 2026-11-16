@@ -174,7 +174,7 @@ describe('getting to the order faster', () => {
     scripted.mockImplementation((async (req: { effort: string }) => {
       efforts.push(req.effort);
       return reply([say('ok')], 'end_turn');
-    }) as never);
+    }));
     await chat(conversation(), 'remind me to call Ahmed at 5', 'en');
     await chat(conversation(), 'compare my two offers and explain which is better', 'en');
     expect(efforts).toEqual(['low', 'medium']);
