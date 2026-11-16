@@ -159,6 +159,20 @@ describe('the assistant never acts on its own', () => {
 });
 
 describe('getting to the order faster', () => {
+  it('logs how long an answer took and where the time went, without a word of what was said', async () => {
+    const lines: string[] = [];
+    const log = vi.spyOn(console, 'log').mockImplementation((line: string) => void lines.push(line));
+    script(reply([tool('search_email', { query: 'contract' })], 'tool_use'), reply([say('The secret answer.')], 'end_turn'));
+    const steps: string[] = [];
+    await chat(conversation(), 'find the secret contract', 'en', (e) => { if (e.type === 'step' && e.detail) steps.push(e.detail); });
+    log.mockRestore();
+    const line = lines.find((l) => l.startsWith('Assistant:'))!;
+    expect(line).toMatch(/Assistant: \d+ ms in all \(low effort\); first sign after \d+ ms, first word after (\d+|no) ms; 2 round\(s\): \d+, \d+ ms; tools: search_email; \d+ messages kept\./);
+    expect(line).not.toMatch(/secret|contract/);
+    // the finished step says what it found
+    expect(steps).toEqual(['contract (1)']);
+  });
+
   it('answers a short plain order with less deliberation, and keeps the deeper reasoning for analysis, long messages and files', () => {
     expect(isQuickOrder('ذكرني أتصل بأحمد الساعة 5', 0)).toBe(true);
     expect(isQuickOrder('add Layla 0505555555 to Najiz', 0)).toBe(true);

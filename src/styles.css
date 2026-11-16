@@ -398,6 +398,7 @@ a.lv-vital:hover { border-color: var(--tint); }
 .steps li.done > span:first-child { color: var(--success); }
 .link-btn { background: none; border: none; padding: 0; color: var(--tint-text); font-size: 0.8em; font-weight: 600; text-decoration: underline; }
 .thinking-text { margin-top: 6px; font-size: 0.8em; color: var(--text2); white-space: pre-wrap; max-height: 180px; overflow-y: auto; border-inline-start: 3px solid var(--tint-soft); padding-inline-start: 10px; }
+.thinking-live { margin-top: 6px; font-size: 0.8em; color: var(--text2); border-inline-start: 3px solid var(--tint-soft); padding-inline-start: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .working-text { white-space: pre-wrap; }
 
 /* ---------- Today refinements ---------- */

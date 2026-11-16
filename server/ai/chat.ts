@@ -216,23 +216,37 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
   messages.push({ role: 'user', content: files.length ? [...fileBlocks(files), { type: 'text', text: prompt }] : prompt });
   const created: Proposal[] = [];
   const quick = spoken || isQuickOrder(userText, files.length);
+  // When the first sign of life (thinking or a step) and the first word of the answer reached the app.
+  const started = Date.now();
+  const timing: Timing = { rounds: [], tools: [] };
+  let firstSign = 0;
+  let firstText = 0;
+  const outer = onEvent;
+  onEvent = (event) => {
+    firstSign ||= Date.now() - started;
+    if (event.type === 'text') firstText ||= Date.now() - started;
+    outer(event);
+  };
   try {
     let text: string;
     try {
-      text = await runLoop(lang, messages, created, onEvent, quick);
+      text = await runLoop(lang, messages, created, onEvent, quick, timing);
     } catch (error) {
       // A saved conversation whose reasoning no longer matches its history heals itself: drop the reasoning, ask once more.
       if (!/signature/i.test((error as Error).message ?? '')) throw error;
       messages.length = before + 1;
       created.length = 0;
       dropThinking(messages);
-      text = await runLoop(lang, messages, created, onEvent, quick);
+      timing.rounds.length = 0;
+      timing.tools.length = 0;
+      text = await runLoop(lang, messages, created, onEvent, quick, timing);
     }
     // The files were for this turn only: what is kept is the question and the answer, not the pixels.
     if (files.length) {
       forgetFiles(messages[before]);
       dropThinking(messages, before + 1);
     }
+    console.log(`Assistant: ${Date.now() - started} ms in all (${quick ? 'low' : 'medium'} effort); first sign after ${firstSign} ms, first word after ${firstText || 'no'} ms; ${timing.rounds.length} round(s): ${timing.rounds.join(', ')} ms; tools: ${timing.tools.join(', ') || 'none'}; ${messages.length} messages kept.`);
     conversation.announced = [...(conversation.announced ?? []), ...decisions.ids].slice(-200);
     return { text: text || (lang === 'ar' ? 'تم.' : 'Done.'), proposals: created };
   } catch (error) {
@@ -246,7 +260,13 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
  * A spoken question, or a short plain order, wants its answer quickly: Claude thinks less (low effort). Longer typed
  * questions, anything that asks for analysis, and anything with a file keep the deeper reasoning.
  */
-async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[], onEvent: OnEvent, quick: boolean): Promise<string> {
+/** How long one answer took and where the time went. Times and tool names only: never what was asked or answered. */
+interface Timing {
+  rounds: number[];
+  tools: string[];
+}
+
+async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[], onEvent: OnEvent, quick: boolean, timing: Timing = { rounds: [], tools: [] }): Promise<string> {
   const system = `${SYSTEM}\n\nThe app is currently set to ${lang === 'ar' ? 'Arabic' : 'English'}.`;
   let reply = '';
   // Searching is the one thing done without the user's approval, so it is bounded: five searches a turn in all (not
@@ -258,6 +278,7 @@ async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[]
     const search = !readOthers && searches < MAX_SEARCHES ? [{ ...WEB_SEARCH, max_uses: MAX_SEARCHES - searches }] : [];
     const ask = () => stream({ purpose: 'chat', system, messages, tools: [...tools, ...search], effort: quick ? 'low' : 'medium', maxTokens: 16000 }, onEvent);
     let response: Awaited<ReturnType<typeof ask>>;
+    const roundStarted = Date.now();
     try {
       response = await ask();
     } catch (error) {
@@ -266,6 +287,7 @@ async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[]
       dropThinking(messages);
       response = await ask();
     }
+    timing.rounds.push(Date.now() - roundStarted);
     searches += response.content.filter((b) => b.type === 'server_tool_use' && b.name === 'web_search').length;
     messages.push({ role: 'assistant', content: response.content });
     reply = textOf(response.content) || reply;
@@ -280,6 +302,7 @@ async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[]
     if (response.stop_reason !== 'tool_use') break;
 
     const calls = response.content.filter((b): b is ToolUse => b.type === 'tool_use');
+    timing.tools.push(...calls.map((c) => c.name));
     if (calls.some((c) => OTHERS_TEXT.has(c.name))) readOthers = true;
     const results = await Promise.all(
       calls.map(async (block) => {

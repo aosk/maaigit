@@ -9,7 +9,8 @@ import { AttachError, prepare, type AttachKind } from '../attach';
 import { takeArrival } from '../nav';
 import { Logo } from '../components/Logo';
 import { ProposalCard } from '../components/ProposalCard';
-import { WorkingBubble, addEvent, emptyProgress, type Progress } from '../components/WorkingBubble';
+import { WorkingBubble } from '../components/WorkingBubble';
+import { addEvent, emptyProgress, type Progress } from '../progress';
 
 interface Pending {
   key: number;

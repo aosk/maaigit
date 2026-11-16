@@ -573,7 +573,7 @@ const en = {
   working: 'Working…',
   thinkingNow: 'Thinking it through…',
   writingReply: 'Writing the reply…',
-  showThinking: 'Show what MAAI is thinking',
+  showThinking: 'Show all the thinking',
   hideThinking: 'Hide thinking',
   stepLabels: {
     read_email: 'Reading an email',
@@ -1515,7 +1515,7 @@ const ar: Strings = {
   working: 'أعمل…',
   thinkingNow: 'أفكر في الطلب…',
   writingReply: 'أكتب الرد…',
-  showThinking: 'أظهر تفكير «معي»',
+  showThinking: 'أظهر التفكير كامل',
   hideThinking: 'إخفاء التفكير',
   stepLabels: {
     read_email: 'أقرأ رسالة',
