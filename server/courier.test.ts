@@ -23,6 +23,7 @@ import { create } from './ai/claude';
 import { BotInputError, createKey, queueCommand, receiveFromBot, resetLink } from './bot';
 import { COURIERS_PER_DAY, courierHandler, resetCourier, startCourier, VOICE_NOTE } from './courier';
 import { clearInbound } from './inbound';
+import { receiveFile, resetMedia } from './media';
 import { alertMessage } from './notify';
 import { state } from './store';
 
@@ -308,5 +309,55 @@ describe('the limits outlive a restart', () => {
     expect(to('966511111111')).toHaveLength(1);
     const bot = fs.readFileSync(new URL('../device-bot/bot.mjs', import.meta.url), 'utf8');
     expect(bot).toContain(`'${VOICE_NOTE}'`);
+  });
+});
+
+describe('a picture from a courier', () => {
+  const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(40, 1)]);
+  const PLACEHOLDER = '[A photo, voice note or file: MAAI cannot read these]';
+  const photo = (phone: string, extra: Partial<InboxMessage> = {}) => msg(phone, PLACEHOLDER, { externalId: `bot:p${++n}`, attachment: 'image', ...extra });
+  const handOver = () => {
+    const asked = queued().find((c) => c.kind === 'media');
+    if (asked) {
+      asked.status = 'done';
+      receiveFile(asked.text, JPEG);
+    }
+    return Boolean(asked);
+  };
+
+  it('is never fetched from a stranger who was not answered as a courier', async () => {
+    resetMedia();
+    expect((await hear(photo('966522222222')))[0]).toBe(false);
+    expect(queued().some((c) => c.kind === 'media')).toBe(false);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('from a courier who has the address counts as "arrived": the details and the door photo go out', async () => {
+    resetMedia();
+    vi.mocked(create).mockResolvedValue(verdict(true, 'location'));
+    await hear(msg('966511111111', 'وين الموقع؟ معي طلبك'));
+    vi.mocked(create).mockResolvedValue(verdict(true, 'arrived'));
+    const claimed = courierHandler(photo('966511111111'), () => {}, Date.now());
+    expect(claimed).toBe(true);
+    expect(handOver()).toBe(true);
+    await vi.waitFor(() => expect(to('966511111111')).toHaveLength(2));
+    expect(to('966511111111')[1]).toMatchObject({ attachment: PHOTO });
+    const sent = vi.mocked(create).mock.calls.at(-1)![0] as { messages: { content: { type: string }[] }[] };
+    expect(sent.messages[0].content.map((b) => b.type)).toEqual(['image', 'text']);
+  });
+
+  it('is read at most twice a day from one courier, and a PDF from a courier never', async () => {
+    resetMedia();
+    vi.mocked(create).mockResolvedValue(verdict(true, 'location'));
+    await hear(msg('966511111111', 'وين الموقع؟'));
+    vi.mocked(create).mockResolvedValue(verdict(true, 'other'));
+    const fetched: boolean[] = [];
+    for (let i = 0; i < 3; i++) {
+      courierHandler(photo('966511111111'), () => {}, Date.now());
+      fetched.push(handOver());
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(fetched).toEqual([true, true, false]);
+    expect(courierHandler(photo('966511111111', { attachment: 'pdf' }), () => {}, Date.now())).toBe(false);
   });
 });

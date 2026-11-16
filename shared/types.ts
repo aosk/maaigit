@@ -59,6 +59,8 @@ export interface InboxMessage {
   replied: boolean;
   /** Where it came from: the WhatsApp Business number (Twilio) or the user's own device bot. Unset when pasted in by hand. */
   via?: 'twilio' | 'bot';
+  /** What came with it (from the device bot). A voice note written out by the bot has its words as the text. */
+  attachment?: 'image' | 'pdf' | 'voice' | 'other';
   /** Written in a group chat (from the device bot): never answered automatically. */
   group?: boolean;
   /** The email subject, for email the device bot collected. */
@@ -702,8 +704,8 @@ export type DeviceAction = 'open_url' | 'open_path' | 'send_file';
 
 export interface BotCommand {
   id: string;
-  /** reply: send a WhatsApp message from the user's own number; task: an instruction the user approved; restart: start the bot again (asked in Admin). */
-  kind: 'reply' | 'task' | 'restart';
+  /** reply: send a WhatsApp message from the user's own number; task: an instruction the user approved; restart: start the bot again (asked in Admin); media: hand over the picture or PDF of the message whose id is in `text`. */
+  kind: 'reply' | 'task' | 'restart' | 'media';
   /** A task the bot does itself; text is then the link (open_url) or the file or folder (open_path, send_file). */
   action?: DeviceAction;
   /** For a reply: the number, digits only, and who it is. */

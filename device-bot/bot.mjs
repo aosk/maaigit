@@ -61,7 +61,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-11-16a';
+const VERSION = '2026-11-17a';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -360,15 +360,21 @@ async function toItem(msg, knownChat) {
       keepChats();
     }
   }
+  const isVoice = msg.type === 'ptt' || msg.type === 'audio';
+  // A voice note from one person is written out here, on this computer (see "Voice notes" below); null when it cannot be.
+  const heardText = isVoice && !msg.fromMe && !group && phone ? await voiceText(msg, messageId, phone) : null;
   return {
     id: messageId,
     byMaai: (msg.fromMe && isOurs(chatId, body)) || undefined,
     channel: 'whatsapp',
     from: from || undefined,
     phone: phone || undefined,
-    // A voice note has no text: it is named, so MAAI can tell it from a photo or a file (it cannot hear it).
-    text: (body || (msg.type === 'ptt' || msg.type === 'audio' ? '[A voice note]' : '')).slice(0, 4000),
+    // A voice note that could not be written out is named, so MAAI can tell it from a photo or a file.
+    text: (heardText || body || (isVoice ? '[A voice note]' : '')).slice(0, 4000),
+    voice: heardText ? true : undefined,
     media: media || undefined,
+    // What kind, so MAAI can ask for the ones it is allowed to read (a picture, a PDF).
+    mediaType: media ? mediaKind(msg) : undefined,
     at: new Date((msg.timestamp || Date.now() / 1000) * 1000).toISOString(),
     group: group || undefined,
     fromMe: msg.fromMe || undefined,
@@ -467,6 +473,188 @@ async function downloadDirect(m) {
   return Buffer.concat([decipher.update(body), decipher.final()]);
 }
 
+// ---------- Voice notes, written out on this computer ----------
+// Free and private: the recording never leaves this computer. A small speech model (Whisper) is downloaded once
+// (about 250 MB) and run here. The two packages it needs are installed the first time a voice note arrives.
+
+// VOICE-START (pure helpers, run by MAAI's tests)
+const VOICE_PER_PERSON_DAY = 10;
+const VOICE_PER_DAY = 60;
+/** Only a voice note that just arrived is written out (not the day of history read at start-up). */
+const VOICE_FRESH_MS = 15 * 60_000;
+
+/** What kind of attachment a WhatsApp message carries. */
+function mediaKind(msg) {
+  if (msg.type === 'ptt' || msg.type === 'audio') return 'voice';
+  if (msg.type === 'image') return 'image';
+  const mime = String(msg._data?.mimetype ?? msg.mimetype ?? '').toLowerCase();
+  if (msg.type === 'document' && mime === 'application/pdf') return 'pdf';
+  return 'other';
+}
+
+/** One channel at 16,000 samples a second, which is what the speech model reads. */
+function to16k(channels, rate) {
+  const n = channels[0]?.length ?? 0;
+  const mono = new Float32Array(n);
+  for (const c of channels) for (let i = 0; i < n; i++) mono[i] += c[i] / channels.length;
+  if (rate === 16000) return mono;
+  const out = new Float32Array(Math.floor((n * 16000) / rate));
+  const step = rate / 16000;
+  for (let i = 0; i < out.length; i++) {
+    // The mean of the samples each new one stands for (a plain low-pass, enough for speech).
+    const from = Math.floor(i * step);
+    const to = Math.min(n, Math.max(from + 1, Math.floor((i + 1) * step)));
+    let sum = 0;
+    for (let j = from; j < to; j++) sum += mono[j];
+    out[i] = sum / (to - from);
+  }
+  return out;
+}
+
+/** Whether one more voice note from this person may be written out today. `used` is { day, total, by: {phone: n} }. */
+function voiceAllowed(used, phone, day) {
+  if (used.day !== day) Object.assign(used, { day, total: 0, by: {} });
+  if (used.total >= VOICE_PER_DAY || (used.by[phone] ?? 0) >= VOICE_PER_PERSON_DAY) return false;
+  used.total += 1;
+  used.by[phone] = (used.by[phone] ?? 0) + 1;
+  return true;
+}
+// VOICE-END
+
+const STT_PACKAGES = ['@huggingface/transformers@4.3.2', 'ogg-opus-decoder@1.7.5'];
+const STT_MODEL = process.env.VOICE_MODEL || 'onnx-community/whisper-small';
+/** 'off' (VOICE_TEXT=off in .env, or it could not be set up), 'installing', or the loaded { decode, hear }. */
+let stt = /^(off|0|no)$/i.test(process.env.VOICE_TEXT ?? '') ? 'off' : null;
+let sttLoading = null;
+
+async function loadStt() {
+  if (stt) return stt;
+  sttLoading ??= (async () => {
+    let parts;
+    try {
+      parts = [await import('@huggingface/transformers'), await import('ogg-opus-decoder')];
+    } catch {
+      // First time: install the two packages beside the bot (a few minutes), then use them from the next voice note on.
+      if (stt !== 'installing') {
+        stt = 'installing';
+        log('Setting up voice notes (installing two packages, a few minutes; voice notes are passed on unread until then)…');
+        const npm = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '--no-save', '--no-audit', '--no-fund', ...STT_PACKAGES], { cwd: HERE, stdio: 'ignore', shell: process.platform === 'win32' });
+        npm.on('error', () => {
+          stt = 'off';
+          log('⚠ Could not install the voice packages (is npm installed?). Voice notes stay unread.');
+        });
+        npm.on('exit', (code) => {
+          stt = code === 0 ? null : 'off';
+          log(code === 0 ? 'Voice packages installed. The next voice note will be written out.' : '⚠ Installing the voice packages failed. Voice notes stay unread.');
+        });
+      }
+      return stt;
+    }
+    try {
+      const [{ pipeline }, { OggOpusDecoder }] = parts;
+      log('Loading the speech model (the first time it is downloaded, about 250 MB)…');
+      const hear = await pipeline('automatic-speech-recognition', STT_MODEL, { dtype: 'q8' });
+      const decode = async (bytes) => {
+        const decoder = new OggOpusDecoder();
+        await decoder.ready;
+        try {
+          return await decoder.decodeFile(new Uint8Array(bytes));
+        } finally {
+          decoder.free();
+        }
+      };
+      stt = { decode, hear };
+      log('Voice notes will be written out on this computer.');
+    } catch (error) {
+      // No internet for the model right now, or too little memory: try again at the next voice note, not for ever.
+      log(`⚠ The speech model could not be loaded (${why(error)}).`);
+    }
+    return stt;
+  })().finally(() => {
+    sttLoading = null;
+  });
+  return sttLoading;
+}
+
+/** The bytes of a message's attachment, straight from WhatsApp's media servers first, the library's way second. */
+async function fetchMedia(msg, msgId, maxBytes) {
+  let reason = 'download';
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (attempt > 1) await pause(attempt * 2000);
+    const fresh = (msgId && (await tryGet(() => wa.getMessageById(msgId)))) || msg;
+    if (!fresh?.hasMedia) {
+      reason = 'no-media-yet';
+      continue;
+    }
+    const direct = await downloadDirect(fresh).catch((error) => error);
+    if (Buffer.isBuffer(direct) && direct.length) return direct.length > maxBytes ? { reason: 'too-big' } : { data: direct };
+    const media = await Promise.race([fresh.downloadMedia().catch((error) => ({ error })), pause(30_000).then(() => ({ error: new Error('timeout') }))]);
+    if (media?.data) {
+      const data = Buffer.from(media.data, 'base64');
+      return data.length > maxBytes ? { reason: 'too-big' } : { data };
+    }
+    reason = `no-data-${why(direct).replace(/[^\w-]+/g, '-').slice(0, 30)}`;
+  }
+  return { reason };
+}
+
+const voiceUsed = { day: '', total: 0, by: {} };
+/** Each voice note is written out once, however many times WhatsApp reports it: id → the text (or null). */
+const voiceTexts = new Map();
+/** One at a time: the model uses the whole processor. */
+let voiceLine = Promise.resolve();
+
+function voiceText(msg, id, phone) {
+  if (voiceTexts.has(id)) return voiceTexts.get(id);
+  const age = Date.now() - (msg.timestamp || 0) * 1000;
+  if (stt === 'off' || age > VOICE_FRESH_MS) return Promise.resolve(null);
+  const job = (voiceLine = voiceLine.then(async () => {
+    try {
+      const ready = await loadStt();
+      if (!ready || typeof ready === 'string') return null;
+      if (!voiceAllowed(voiceUsed, phone, new Date().toISOString().slice(0, 10))) {
+        log(`A voice note from +${phone} is passed on unread (today's limit is reached).`);
+        return null;
+      }
+      const got = await fetchMedia(msg, idText(msg.id), MAX_VOICE_BYTES);
+      if (!got.data) return log(`⚠ A voice note could not be read (${got.reason}).`), null;
+      const sound = await ready.decode(got.data);
+      const samples = to16k(sound.channelData, sound.sampleRate);
+      if (!samples.length) return null;
+      const out = await withTimeout(ready.hear(samples, { chunk_length_s: 30, return_timestamps: false }), 180_000, 'writing out a voice note');
+      const text = String(out?.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 4000);
+      if (text) log(`Wrote out a voice note from +${phone} (${Math.round(samples.length / 16000)} s).`);
+      return text || null;
+    } catch (error) {
+      log(`⚠ A voice note could not be written out (${why(error)}).`);
+      return null;
+    }
+  }));
+  voiceTexts.set(id, job);
+  if (voiceTexts.size > 500) voiceTexts.delete(voiceTexts.keys().next().value);
+  return job;
+}
+
+/** MAAI asked for a picture or a PDF it is allowed to read: the file goes to it as raw bytes. */
+const MAX_MEDIA_BYTES = 4 * 1024 * 1024 - 4096;
+async function sendMedia(messageId) {
+  const msg = await tryGet(() => wa.getMessageById(messageId));
+  if (!msg) throw new Error('That message is no longer on this device.');
+  const kind = mediaKind(msg);
+  if (kind !== 'image' && kind !== 'pdf') throw new Error('Only a picture or a PDF can be passed on.');
+  if (msg.fromMe || String(idText(msg.from)).endsWith('@g.us')) throw new Error('Only a private message from someone else.');
+  const got = await fetchMedia(msg, messageId, MAX_MEDIA_BYTES);
+  if (!got.data) throw new Error(`Could not get the file (${got.reason}).`);
+  const res = await fetch(`${BASE}/media?${new URLSearchParams({ id: messageId, kind })}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/octet-stream' },
+    body: got.data,
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) throw new Error(`MAAI answered ${res.status}`);
+  return { ok: true, output: `Passed on a ${kind} (${Math.round(got.data.length / 1024)} KB).` };
+}
+
 async function sendVoice(msg, item) {
   if (voiceSent.has(item.id)) return;
   voiceSent.add(item.id); // the same note arrives through two events: claim it now, give it back if it fails
@@ -529,7 +717,8 @@ async function onMessage(msg) {
   try {
     const item = await toItem(msg);
     if (item) heard(item.id);
-    if (item && orderPhone && item.phone === orderPhone && !item.fromMe && !item.group && (msg.type === 'ptt' || msg.type === 'audio')) {
+    // A voice order that was written out here goes on like a typed one; otherwise the recording goes to MAAI as before.
+    if (item && !item.voice && orderPhone && item.phone === orderPhone && !item.fromMe && !item.group && (msg.type === 'ptt' || msg.type === 'audio')) {
       await sendVoice(msg, item);
       return;
     }
@@ -941,6 +1130,10 @@ async function handleAll(commands) {
         await withTimeout(media ? wa.sendMessage(target, media, { caption: c.text }) : wa.sendMessage(target, c.text), 60_000, 'sending a reply');
         log(`Sent to ${c.toName ?? `+${c.phone}`}${media ? ' (with a picture)' : ''}`);
         result = note ? { ok: true, output: note } : { ok: true };
+      } else if (c.kind === 'media') {
+        // MAAI asks for a picture or a PDF by the message's id (only ones it is allowed to read: see server/media.ts).
+        result = await sendMedia(String(c.text));
+        log(result.output);
       } else if (c.kind === 'task' && c.action) {
         log(`Action ${c.action}: ${c.text.slice(0, 80)}`);
         result = await act(c.action, c.text);

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, receiveLink, seen, takeCommands, waitForCommands } from '../bot.js';
+import { receiveFile } from '../media.js';
 import { alertLink } from '../notify.js';
 import { takeOrder, voiceFailed } from '../remote.js';
 import { state } from '../store.js';
@@ -87,6 +88,16 @@ deviceApi.post('/voice', express.raw({ type: ['audio/*', 'application/octet-stre
   }
   if (!id || !Buffer.isBuffer(req.body) || !req.body.length) throw new BotInputError('Send the recording with ?id=…&at=…&phone=…');
   takeOrder({ externalId: `bot:${id}`, text: '', at: Number.isFinite(at) ? Math.min(at, Date.now()) : Date.now(), audio: req.body });
+  res.json({ ok: true });
+});
+
+/** A picture or PDF MAAI asked the bot for (see server/media.ts). Anything it did not ask for is refused. */
+deviceApi.post('/media', express.raw({ type: '*/*', limit: '4mb' }), (req, res) => {
+  seen();
+  const id = typeof req.query.id === 'string' ? req.query.id.slice(0, 128) : '';
+  if (!id || !Buffer.isBuffer(req.body) || !req.body.length) throw new BotInputError('Send the file with ?id=…');
+  const outcome = receiveFile(id, req.body);
+  if (outcome !== 'taken') return res.status(outcome === 'not asked for' ? 404 : 415).json({ error: `MAAI did not take this file: ${outcome}.` });
   res.json({ ok: true });
 });
 

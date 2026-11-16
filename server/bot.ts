@@ -149,6 +149,10 @@ interface Incoming {
   byMaai: boolean;
   /** A photo, voice note or file (its text is only a caption, if any). */
   media: boolean;
+  /** What kind of attachment, when the bot says. */
+  attachment?: InboxMessage['attachment'];
+  /** A voice note the bot wrote out itself: the text is what was said. */
+  voice: boolean;
 }
 
 /** One delivered message, checked field by field; null for something that cannot be used. */
@@ -185,6 +189,8 @@ function parse(raw: unknown, now: number, why?: (reason: Unusable) => void): Inc
     fromMe: m.fromMe === true,
     byMaai: m.byMaai === true,
     media,
+    attachment: media && (m.mediaType === 'image' || m.mediaType === 'pdf' || m.mediaType === 'voice' || m.mediaType === 'other') ? m.mediaType : undefined,
+    voice: media && m.voice === true && m.mediaType === 'voice',
   };
 }
 
@@ -265,10 +271,12 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
       email: m.email,
       subject: m.subject,
       channel: m.channel,
-      text: m.text,
+      // A voice note written out by the bot is marked, so it is never mistaken for something the person typed.
+      text: m.voice ? `🎤 ${m.text}`.slice(0, 4000) : m.text,
       receivedAt: new Date(m.at).toISOString(),
       replied: answered,
       via: 'bot',
+      attachment: m.attachment,
       group: m.group || undefined,
       externalId: m.externalId,
     };
