@@ -15,6 +15,7 @@ import { startGoogleWrite } from './gwrite.js';
 import { startBackgroundSync, syncAll } from './sync.js';
 import { startLiveCalendar } from './livecal.js';
 import { startNews } from './news/index.js';
+import { warmNews } from './ai/news.js';
 import { briefing } from './ai/briefing.js';
 import { createApp, createInnerApp, createOnlineSite } from './site.js';
 import { localHostOnly, sameOriginOnly } from './security.js';
@@ -86,7 +87,7 @@ startScheduler(async (lang) => {
 startGoogleWrite();
 startBackgroundSync();
 startLiveCalendar();
-startNews();
+startNews(warmNews);
 startTrading();
 startRenderWatch();
 startKeyWatch();

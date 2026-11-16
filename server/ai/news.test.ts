@@ -7,7 +7,7 @@ const PORT = vi.hoisted(() => {
 });
 
 import type { NewsRaw } from '../../shared/types';
-import { newsDigest } from './news';
+import { newsDigest, warmNews } from './news';
 vi.mock('../news/index.js', async (original) => ({ ...(await original<typeof import('../news/index')>()), refreshNews: vi.fn(async () => {}) }));
 
 import { createInnerApp, createOnlineSite } from '../site';
@@ -116,10 +116,39 @@ describe('the news picks', () => {
     expect(digest.sections.tech[0].summary).toBe('An excerpt of the story.');
   });
 
+  it('has an AI models tab with a short comparison, and a short brief, from the same single call', async () => {
+    state.news.items.push(item('t5', 'tech', 'Gemini 3 beats GPT-5 on coding benchmarks', 'The Verge', 2, 'Google says Gemini 3 is faster and cheaper than GPT-5.'));
+    reply = () => ({
+      tech: [{ id: 't1', summary: 'x' }],
+      saudi: [{ id: 's1', summary: 'y' }],
+      models: [{ id: 't5', summary: 'Google released Gemini 3.', compare: 'Faster and cheaper than GPT-5 on coding.' }, { id: 't3', summary: 'A phone review, not a model.', compare: 'Nothing.' }, { id: 't1', summary: 'OpenAI model.', compare: '' }],
+      brief: ['Gemini 3 is out.', 'New investment rules in the Kingdom.', ''],
+    });
+    const digest = await newsDigest('en');
+    expect(calls).toBe(1);
+    const models = digest.sections.models;
+    expect(models[0]).toMatchObject({ id: 't5', compare: 'Faster and cheaper than GPT-5 on coding.' });
+    // only stories about a model can be on that tab, even if Claude names another
+    expect(models.some((i) => i.id === 't3')).toBe(false);
+    expect(models.find((i) => i.id === 't1')?.compare).toBeUndefined();
+    expect(digest.brief).toEqual(['Gemini 3 is out.', 'New investment rules in the Kingdom.']);
+  });
+
+  it('writes the digest ahead after a read, so opening the app finds it ready', async () => {
+    reply = () => ({ tech: [{ id: 't1', summary: 'x' }], saudi: [{ id: 's1', summary: 'y' }], models: [], brief: ['One line.'] });
+    await warmNews();
+    // every language the app has asked for (Arabic always, English once it was asked) is written ahead
+    const written = calls;
+    expect(written).toBeGreaterThanOrEqual(1);
+    const digest = await newsDigest('ar');
+    expect(calls).toBe(written);
+    expect(digest.brief).toEqual(['One line.']);
+  });
+
   it('says what could and could not be read', async () => {
     const digest = await newsDigest('en');
     expect(digest.sources).toEqual([{ name: 'OpenAI', section: 'tech', ok: true, items: 1 }]);
-    expect(digest.everyHours).toBe(6);
+    expect(digest.everyHours).toBe(12);
   });
 });
 
@@ -135,7 +164,7 @@ describe('the news section is protected like the rest of MAAI', () => {
       const jar = (unlock.headers['set-cookie'] as unknown as string[]).map((c) => c.split(';')[0]).join('; ');
       const res = await raw(site.port, 'GET', '/api/news?lang=en', { headers: { cookie: jar } });
       expect(res.status).toBe(200);
-      expect(Object.keys((res.json() as { sections: object }).sections)).toEqual(['tech', 'saudi']);
+      expect(Object.keys((res.json() as { sections: object }).sections)).toEqual(['tech', 'saudi', 'models']);
       // the refresh has no address to give: nothing a caller sends changes where news is read from
       const body = JSON.stringify({ url: 'http://169.254.169.254/', sources: ['https://evil.example/feed'] });
       const refresh = await raw(site.port, 'POST', '/api/news/refresh', { body, headers: { cookie: jar } });

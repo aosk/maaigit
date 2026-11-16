@@ -3,10 +3,12 @@ import type { NewsDigest, NewsItem, NewsSection } from '../../shared/types';
 import { api } from '../api';
 import { ago, time } from '../format';
 import { useSettings } from '../settings';
+import { readNews, saveNews } from '../newsCache';
 import { useOnRefresh } from '../refresh';
 import { useAction } from '../useAction';
 
-const SECTIONS: NewsSection[] = ['tech', 'saudi'];
+const SECTIONS: NewsSection[] = ['tech', 'saudi', 'models'];
+const isSection = (v: string | null): v is NewsSection => SECTIONS.includes(v as NewsSection);
 const KEY = 'maai.newsSection';
 
 function Story({ item, top }: { item: NewsItem; top: boolean }) {
@@ -21,29 +23,49 @@ function Story({ item, top }: { item: NewsItem; top: boolean }) {
         <span>{ago(item.publishedAt, settings.lang)}</span>
         {item.alsoBy.length > 0 && <span>{t.newsAlsoBy(item.alsoBy)}</span>}
       </div>
+      {item.compare && <div className="compare" dir="auto"><strong>{t.newsCompare}: </strong>{item.compare}</div>}
     </a>
   );
 }
 
-/** The News tab: the most important stories from trusted sources, in two sections, refreshed every few hours. */
+/**
+ * The News tab: the most important stories from trusted sources, in three sections. It opens with the last copy
+ * at once; the server updates it on its own every few hours, and a pull of the screen (or the button) asks for
+ * an update again while the old stories stay on screen to read.
+ */
 export function News() {
   const { t, settings } = useSettings();
   const lang = settings.lang;
-  const [digest, setDigest] = useState<NewsDigest | null>(null);
+  // What was last received, with its language: after a language change the saved copy for the new one shows until the server answers.
+  const [received, setReceived] = useState<{ lang: typeof lang; digest: NewsDigest } | null>(null);
+  const digest = received?.lang === lang ? received.digest : readNews(lang);
   const [section, setSection] = useState<NewsSection>(() => {
     try {
-      return sessionStorage.getItem(KEY) === 'saudi' ? 'saudi' : 'tech';
+      const saved = sessionStorage.getItem(KEY);
+      return isSection(saved) ? saved : 'tech';
     } catch {
       return 'tech';
     }
   });
   const { busy, error, run, setError } = useAction();
 
+  const show = useCallback((next: NewsDigest) => {
+    setReceived({ lang, digest: next });
+    saveNews(lang, next);
+  }, [lang]);
+
+  // The saved copy is already on screen; the server's current one replaces it quietly (a failure leaves the old stories).
   const load = useCallback(() => {
-    api.news(lang).then(setDigest).catch((e: Error) => setError(e.message));
-  }, [lang, setError]);
+    api.news(lang).then(show).catch((e: Error) => { if (!readNews(lang)) setError(e.message); });
+  }, [lang, show, setError]);
   useEffect(load, [load]);
-  useOnRefresh(load);
+
+  // Asks for an update. The stories already shown stay until the new ones arrive.
+  const refresh = () =>
+    run(async () => {
+      show(await api.refreshNews(lang));
+    });
+  useOnRefresh(() => void refresh());
 
   const pick = (next: NewsSection) => {
     setSection(next);
@@ -53,11 +75,6 @@ export function News() {
       // the section is simply not remembered
     }
   };
-
-  const refresh = () =>
-    run(async () => {
-      setDigest(await api.refreshNews(lang));
-    });
 
   const items = digest?.sections[section] ?? [];
   const sources = (digest?.sources ?? []).filter((s) => s.section === section);
@@ -72,12 +89,20 @@ export function News() {
       <div className="news-tabs" role="tablist" aria-label={t.news}>
         {SECTIONS.map((s) => (
           <button key={s} role="tab" id={`news-tab-${s}`} aria-selected={section === s} aria-controls="news-panel" className={`news-tab ${s}`} onClick={() => pick(s)}>
-            {s === 'tech' ? t.newsTech : t.newsSaudi}
+            {s === 'tech' ? t.newsTech : s === 'saudi' ? t.newsSaudi : t.newsModels}
           </button>
         ))}
       </div>
 
+      {busy && digest && <div className="sub" role="status">{t.newsKeepsOld}</div>}
       {error && <div className="error" role="alert">{error}</div>}
+
+      {digest && digest.brief.length > 0 && (
+        <section className="card news-brief" aria-label={t.newsBrief}>
+          <strong>{t.newsBrief}</strong>
+          <ul>{digest.brief.map((line, i) => <li key={i}>{line}</li>)}</ul>
+        </section>
+      )}
 
       <section id="news-panel" role="tabpanel" aria-labelledby={`news-tab-${section}`} className={`news-section ${section}`}>
         {!digest && !error && <div className="skeleton" aria-label={t.newsLoading}><span /><span /><span /></div>}

@@ -1,4 +1,4 @@
-import type { NewsSection } from '../../shared/types.js';
+import type { NewsFeed } from '../../shared/types.js';
 
 /**
  * The only places MAAI reads news from. Every source is a well-known outlet, a news agency, or the
@@ -8,7 +8,7 @@ import type { NewsSection } from '../../shared/types.js';
 export interface NewsSource {
   id: string;
   name: string;
-  section: NewsSection;
+  section: NewsFeed;
   /** The site's front page: used to find the feed's address if the usual one has moved. */
   home: string;
   /** Feed addresses to try, in order. */
@@ -47,3 +47,6 @@ export const AI_WORDS = /\bAI\b|artificial intelligence|machine learning|OpenAI|
 
 /** Words that mark a weighty Saudi story (government, economy, major projects). */
 export const SAUDI_WEIGHTY = /vision 2030|council of ministers|royal (decree|order)|crown prince|PIF|aramco|NEOM|investment|economy|GDP|budget|expo|world cup|رؤية 2030|مجلس الوزراء|أمر ملكي|ولي العهد|الاستثمار|الاقتصاد|الميزانية/i;
+
+/** Words that mark a story about an AI model itself: a release, a version, or how models compare. */
+export const MODEL_WORDS = /\b(GPT[- ]?\d|ChatGPT|Claude|Opus|Sonnet|Haiku|Gemini|Gemma|Llama|Grok|DeepSeek|Mistral|Qwen|Kimi|Sora|Veo|Midjourney|Stable Diffusion|benchmarks?|open[- ]weights?|(language|reasoning|foundation|frontier|new AI|new) models?|LLMs?)\b/i;

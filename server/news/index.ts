@@ -2,7 +2,7 @@ import type { NewsDigest, NewsRaw, NewsSection } from '../../shared/types.js';
 import { config } from '../config.js';
 import { audit, save, state } from '../store.js';
 import { discoverFeeds, parseFeed, safeLink, storyId } from './parse.js';
-import { NEWS_SOURCES, SAUDI_WORDS, type NewsSource } from './sources.js';
+import { MODEL_WORDS, NEWS_SOURCES, SAUDI_WORDS, type NewsSource } from './sources.js';
 
 /** Reads the trusted news sources (and only those) and keeps the latest headlines. */
 
@@ -130,21 +130,24 @@ export function newsStatus() {
   return { updatedAt: state.news.fetchedAt, sourcesOk: sources.filter((s) => s.ok).length, sources: sources.length || NEWS_SOURCES.length };
 }
 
-export const itemsFor = (section: NewsSection): NewsRaw[] => state.news.items.filter((i) => i.section === section);
+/** The stories for a tab. AI models are the technology stories that are about a model. */
+export const itemsFor = (section: NewsSection): NewsRaw[] =>
+  section === 'models' ? state.news.items.filter((i) => i.section === 'tech' && MODEL_WORDS.test(`${i.title} ${i.snippet}`)) : state.news.items.filter((i) => i.section === section);
 export const weightOf = (name: string): number => NEWS_SOURCES.find((s) => s.name === name)?.weight ?? 5;
 
-/** Reads the news soon after start-up if it is out of date, then every few hours. */
-export function startNews() {
+/** Reads the news soon after start-up if it is out of date, then every few hours; `after` runs once each read is done (the digest is written ahead of the next time the app opens). */
+export function startNews(after: () => Promise<void> = async () => {}) {
   if (!newsEnabled) return;
   const every = config.newsHours * 3_600_000;
   const stale = !state.news.fetchedAt || Date.now() - Date.parse(state.news.fetchedAt) > every;
-  if (stale) setTimeout(() => void refreshNews().catch((e) => console.error('News refresh failed:', e)), 15_000);
+  if (stale) setTimeout(() => void refreshNews().then(after).catch((e) => console.error('News refresh failed:', e)), 15_000);
   setInterval(() => {
     void refreshNews()
       .then(() => {
         const down = state.news.sources.filter((s) => !s.ok).map((s) => s.name);
         audit(down.length ? `News updated; could not read: ${down.join(', ')}` : 'News updated from all trusted sources', 'MAAI', down.length ? 'error' : 'done');
       })
+      .then(after)
       .catch((e) => console.error('News refresh failed:', e));
   }, every);
 }
