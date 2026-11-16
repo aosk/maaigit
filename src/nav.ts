@@ -54,7 +54,7 @@ export function askAssistant(prompt: string) {
 
 /** Opens the assistant with the microphone already listening. */
 export function talkToAssistant() {
-  unlockSpeech();
+  void unlockSpeech();
   put(LISTEN_KEY, '1');
   go('assistant');
 }

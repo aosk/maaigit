@@ -49,3 +49,59 @@ describe('reading a reply aloud while it arrives', () => {
     expect(s.current).toBe(false);
   });
 });
+
+describe('the microphone waits for the phone\'s speaker', () => {
+  /** A speech stand-in whose silent phrase ends only when the test says so. */
+  function slowSpeech() {
+    const said: { onend?: () => void; onerror?: () => void; text: string }[] = [];
+    vi.stubGlobal('window', { speechSynthesis: { speak: (u: (typeof said)[number]) => said.push(u), cancel: vi.fn(), getVoices: () => [], addEventListener: vi.fn() } });
+    vi.stubGlobal('SpeechSynthesisUtterance', class { volume = 1; onend?: () => void; onerror?: () => void; constructor(public text: string) {} });
+    return said;
+  }
+
+  it('is not opened until the silent unlock phrase is over, and a second ask shares the same wait', async () => {
+    const said = slowSpeech();
+    const { unlockSpeech } = await import('./speech');
+    let first = false;
+    let second = false;
+    void unlockSpeech().then(() => (first = true));
+    void unlockSpeech().then(() => (second = true)); // the "talk" shortcut, then the microphone button
+    await flush();
+    expect(said).toHaveLength(1); // said once
+    expect([first, second]).toEqual([false, false]);
+    said[0].onend!();
+    await flush();
+    expect([first, second]).toEqual([true, true]);
+    // Later taps do not wait, and say nothing more.
+    let later = false;
+    void unlockSpeech().then(() => (later = true));
+    await flush();
+    expect(later).toBe(true);
+    expect(said).toHaveLength(1);
+  });
+
+  it('never waits for ever when the phone does not say the phrase ended', async () => {
+    vi.useFakeTimers();
+    try {
+      slowSpeech();
+      const { unlockSpeech } = await import('./speech');
+      let ready = false;
+      void unlockSpeech().then(() => (ready = true));
+      await vi.advanceTimersByTimeAsync(699);
+      expect(ready).toBe(false);
+      await vi.advanceTimersByTimeAsync(2);
+      expect(ready).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not wait at all where nothing can be read aloud', async () => {
+    vi.stubGlobal('window', {});
+    const { unlockSpeech } = await import('./speech');
+    let ready = false;
+    void unlockSpeech().then(() => (ready = true));
+    await flush();
+    expect(ready).toBe(true);
+  });
+});
