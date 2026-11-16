@@ -282,7 +282,8 @@ describe('orders from the user\'s own WhatsApp number', () => {
     };
     beforeEach(async () => {
       await asUser('PUT', '/admin/bot/order-pin', { pin: PIN });
-      delete state.bot.orderUnlockedUntil;
+      // Locked the way the app does it, which also drops anything an earlier test left waiting.
+      await asUser('POST', '/admin/bot/order-lock', {});
     });
 
     it('answers nothing while locked, and runs the held question once unlocked, without the PIN reaching the assistant', async () => {
@@ -295,11 +296,37 @@ describe('orders from the user\'s own WhatsApp number', () => {
       expect(state.audit.some((a) => a.event.includes('unlocked'))).toBe(true);
     });
 
+    it('says it is locked once for a run of messages, and runs them together, in order, as one request once unlocked', async () => {
+      expect(await send('وش تعرف عن أحمد')).toContain('🔒');
+      for (const text of ['رقم جواله', 'كم عمره', 'من اخوانه']) await asBot({ messages: [wa({ text })] });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(state.bot.commands.filter((c) => c.status === 'queued')).toEqual([]); // no second, third, fourth notice
+      expect(answered).not.toHaveBeenCalled();
+      expect(await send(`فتح ${PIN}`)).toContain('🔓');
+      await vi.waitFor(() => expect(answered).toHaveBeenCalledTimes(1));
+      expect(answered.mock.calls[0][1]).toBe('(from my WhatsApp) وش تعرف عن أحمد\nرقم جواله\nكم عمره\nمن اخوانه');
+      // locked again later: the notice is said again
+      await asUser('POST', '/admin/bot/order-lock', {});
+      expect(await send('سؤال جديد')).toContain('🔒');
+    });
+
+    it('says it again after two minutes of the number still being locked', async () => {
+      expect(await send('one')).toContain('🔒');
+      state.bot.orderLockNoticeAt = new Date(Date.now() - 121_000).toISOString();
+      expect(await send('two')).toContain('🔒');
+    });
+
     it('gives the same answer while locked whether or not a number in the message is the PIN, and never runs it', async () => {
       const wrong = await send('note 111111 222222');
-      const right = await send(`note 111111 ${PIN}`);
-      expect(right).toBe(wrong);
-      expect(right).toContain('🔒');
+      expect(wrong).toContain('🔒');
+      // The notice was just sent: the next message gets none, whether or not it holds the PIN.
+      await asBot({ messages: [wa({ text: `note 111111 ${PIN}` })] });
+      await asBot({ messages: [wa({ text: 'note 333333 444444' })] });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(state.bot.commands.filter((c) => c.status === 'queued')).toEqual([]);
+      // A fresh notice reads the same whether or not the message holds the PIN.
+      delete state.bot.orderLockNoticeAt;
+      expect(await send(`note 111111 ${PIN}`)).toBe(wrong);
       // Unlocking then runs the held message without the PIN, not the one that carried it.
       expect(await send(`unlock ${PIN}`)).toContain('🔓');
       await vi.waitFor(() => expect(answered).toHaveBeenCalled());

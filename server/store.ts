@@ -118,6 +118,8 @@ interface State {
     cardNo?: number;
     /** Until when questions and orders from the order number are taken (unlocked with the PIN, for an hour). */
     orderUnlockedUntil?: string;
+    /** When the \"locked\" notice was last sent on WhatsApp, so a run of messages gets it once. */
+    orderLockNoticeAt?: string;
   };
   /** The teams the user follows up with, who is in them, what they owe, and how MAAI reminds them (see server/teams.ts). */
   teams: Team[];

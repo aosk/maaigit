@@ -40,6 +40,10 @@ const LOCK_MS = 60 * 60_000;
 /** How long the PIN unlocks the number for questions and orders, and how long an order sent while locked is held. */
 const UNLOCK_MS = 60 * 60_000;
 const HOLD_MS = 5 * 60_000;
+/** While locked, the "send your PIN" notice goes out once in this long, however many messages arrive. */
+const LOCK_NOTICE_MS = 2 * 60_000;
+/** Most messages kept while locked (they run together, as one order, once unlocked). */
+const HELD_MAX = 10;
 /**
  * Cards that can only be approved in the app: they act on the user's work computer. Opening a web link is the
  * exception (it only shows a page, and the card shows the exact address); files and other tasks stay in the app.
@@ -108,6 +112,7 @@ const unlocked = (now: number) => Boolean(state.bot.orderUnlockedUntil && Date.p
 /** Locks the order number now (also from the admin page). */
 export function lockOrders(): void {
   delete state.bot.orderUnlockedUntil;
+  delete state.bot.orderLockNoticeAt;
   held = null;
   save();
 }
@@ -115,8 +120,8 @@ export function lockOrders(): void {
 const UNLOCK = /^(?:unlock|فتح|افتح)\s+(\S+)\s*$/i;
 const LOCK = /^(?:lock|قفل|اقفل)\s*$/i;
 
-/** An order sent while the number was locked, run once it is unlocked (if that is soon). */
-let held: { order: Order; at: number } | null = null;
+/** What was sent while the number was locked (often one request written over several messages): run together, as one order, once it is unlocked (if that is soon). */
+let held: { orders: Order[]; at: number } | null = null;
 
 // ---------- Numbered cards ----------
 
@@ -310,7 +315,12 @@ async function carryOut(order: Order, now: number): Promise<void> {
     reply(ar ? '🔓 مفتوح لمدة ساعة. للقفل الآن أرسل: قفل' : '🔓 Unlocked for an hour. To lock now, send: lock');
     const waiting = held;
     held = null;
-    if (waiting && now - waiting.at < HOLD_MS) queue = queue.then(() => carryOut(waiting.order, Date.now())).catch((error: Error) => console.error('Order failed:', error.message));
+    delete state.bot.orderLockNoticeAt;
+    if (waiting && now - waiting.at < HOLD_MS && waiting.orders.length) {
+      // Several messages are one request written in pieces: they run as one order, in the order they came.
+      const order: Order = { ...waiting.orders[waiting.orders.length - 1], text: waiting.orders.map((o) => o.text.trim()).filter(Boolean).join('\n') };
+      queue = queue.then(() => carryOut(order, Date.now())).catch((error: Error) => console.error('Order failed:', error.message));
+    }
     return;
   }
 
@@ -332,8 +342,16 @@ async function carryOut(order: Order, now: number): Promise<void> {
   // Questions and orders need the number unlocked: a phone in someone else's hand learns nothing.
   if (!unlocked(now)) {
     // Kept to run after unlocking, unless it holds the PIN (which never reaches the assistant). The reply is the same.
-    if (!withPin) held = { order, at: now };
-    reply(ar ? '🔒 رقم الأوامر مقفل. أرسل: فتح ثم رمزك (مثال: فتح 123456)، وأنفّذ طلبك بعدها.' : '🔒 Locked. Send: unlock <your PIN> (e.g. unlock 123456), and your order runs then.');
+    if (!withPin) {
+      if (!held || now - held.at >= HOLD_MS) held = { orders: [], at: now };
+      held.orders = [...held.orders, order].slice(-HELD_MAX);
+    }
+    // Said once for a run of messages (with or without the PIN in them, so the silence tells nothing either).
+    const last = Date.parse(state.bot.orderLockNoticeAt ?? '');
+    if (Number.isFinite(last) && now - last < LOCK_NOTICE_MS) return;
+    state.bot.orderLockNoticeAt = new Date(now).toISOString();
+    save();
+    reply(ar ? '🔒 رقم الأوامر مقفل. أرسل: فتح ثم رمزك (مثال: فتح 123456)، وأنفّذ اللي أرسلته بعدها.' : '🔒 Locked. Send: unlock <your PIN> (e.g. unlock 123456), and what you sent runs then.');
     return;
   }
 
