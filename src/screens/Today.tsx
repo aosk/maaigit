@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Briefing, BriefingFacts, CalendarEvent, TodayData } from '../../shared/types';
+import type { Briefing, BriefingFacts, CalendarEvent, Duty, TodayData } from '../../shared/types';
 import { PRAYER_BUFFER_MINUTES } from '../../shared/prayer';
 import { OWNER_FIRST_NAME } from '../../shared/owner';
 import { dayPeriod, eventEnd, leaveTime } from '../../shared/schedule';
@@ -17,6 +17,7 @@ import { AsanaTasks } from '../components/AsanaTasks';
 import { EventSheet } from '../components/EventSheet';
 import { StockStrip } from '../components/StockStrip';
 import { useOnRefresh } from '../refresh';
+import { dueText, splitDuties } from '../teamsLogic';
 
 type Row =
   | { kind: 'event'; at: string; end: number; event: CalendarEvent }
@@ -54,6 +55,7 @@ export function Today() {
   const [now, setNow] = useState(() => new Date());
   const [showPast, setShowPast] = useState(false);
   const [selected, setSelected] = useState<CalendarEvent | null>(null);
+  const [work, setWork] = useState<Duty[] | null>(null);
   const closeSheet = useCallback(() => setSelected(null), []);
 
   const load = useCallback((background = false) => {
@@ -97,7 +99,13 @@ export function Today() {
     setBrief(null);
     loadBrief();
   }, [loadBrief, period]);
+  const loadWork = useCallback(() => {
+    api.teams().then((v) => setWork(v.teams.length ? splitDuties(v.duties).open : null), () => setWork(null));
+  }, []);
+  useEffect(loadWork, [loadWork]);
+
   useOnRefresh(() => {
+    loadWork();
     load();
     loadBrief();
     loadFacts();
@@ -265,6 +273,24 @@ export function Today() {
           </div>
         ))}
       </section>
+
+      {work && (
+        <>
+          <h2 className="h2 sec sec-reminder" id="today-work">{t.workFollowups}<CountBadge kind="reminder" n={work.length} /></h2>
+          <section className="card flush" aria-label={t.workFollowups}>
+            {work.length === 0 && <div className="check empty"><span className="sub">{t.noWorkFollowups}</span></div>}
+            {work.map((d) => (
+              <div key={d.id} className="check">
+                <div style={{ flex: 1 }}>
+                  <div dir="auto">{d.title}</div>
+                  <div className="sub"><bdi>{d.name}</bdi> · {t.tm.status[d.status]} · {dueText(d.due, lang, { today: t.tm.today, tomorrow: t.tm.tomorrow })}</div>
+                </div>
+              </div>
+            ))}
+          </section>
+          <p className="sub">{t.workFollowupsNote}</p>
+        </>
+      )}
 
       {upcoming.length > 0 && (
         <>

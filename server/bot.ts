@@ -7,6 +7,7 @@ import { phoneDigits } from '../shared/vcard.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
 import { cleanText } from './ai/untrusted.js';
 import { answer, answerLeftovers, replyWaitSeconds, tell, whyNot } from './intake.js';
+import { claimInbound } from './inbound.js';
 
 /**
  * The user's own device bot (for example a Grok bot on their computer or phone). It connects to MAAI,
@@ -248,7 +249,7 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
     // automatic replies; the assistant takes it (each message once, and only while fresh: see server/remote.ts).
     if (m.channel === 'whatsapp' && !m.group && m.phone && m.phone === state.bot.orderPhone) {
       result.orders += 1;
-      onOrder({ externalId: m.externalId, text: m.media && m.text.startsWith('[A photo') ? '' : m.text, at: m.at });
+      onOrder({ externalId: m.externalId, text: m.media && /^\[A (photo|voice note)/.test(m.text) ? '' : m.text, at: m.at });
       continue;
     }
     if (known.has(m.externalId)) {
@@ -285,9 +286,16 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
     if (reason) notAnswered[reason] = (notAnswered[reason] ?? 0) + 1;
     if (now - Date.parse(message.receivedAt) > ACK_RECENT_MS || message.replied) continue;
     void tell(message, {}, now);
+    const reply = (text: string) => queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text, automatic: true });
+    const general = () => void answer(message, reply).catch((error: Error) => console.error('First reply failed:', error.message));
+    // A person in one of the user's teams, or a delivery courier, is answered by that module instead (see server/inbound.ts).
+    if (claimInbound(message, general, now)) {
+      result.noted += 1;
+      continue;
+    }
     if (reason) continue;
     result.noted += 1;
-    void answer(message, (text) => queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text, automatic: true })).catch((error: Error) => console.error('First reply failed:', error.message));
+    general();
   }
 
   pruneBotMessages(now);
@@ -376,8 +384,13 @@ export function deviceTarget(action: DeviceAction, value: unknown): string {
   return target;
 }
 
-export function queueCommand(command: Pick<BotCommand, 'kind' | 'text' | 'phone' | 'toName' | 'automatic' | 'action'>, now = Date.now()): BotCommand {
+/** A picture path for a reply: a plain string, no "..", at most 400 characters, a picture extension. The bot checks the rest. */
+const validAttachment = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= 400 && !/\p{Cc}/u.test(value) && !value.includes('..') && /\.(jpe?g|png|webp)$/i.test(value);
+
+export function queueCommand(command: Pick<BotCommand, 'kind' | 'text' | 'phone' | 'toName' | 'automatic' | 'action' | 'attachment'>, now = Date.now()): BotCommand {
   if (!botConnected()) throw new BotInputError('The device bot is not connected. Make a device key in the admin page first.');
+  if (command.attachment !== undefined && !validAttachment(command.attachment)) throw new BotInputError('The attachment must be a plain picture path (jpg, jpeg, png or webp, no "..").');
   const queued: BotCommand = { id: id(), ...command, status: 'queued', createdAt: new Date(now).toISOString() };
   state.bot.commands.push(queued);
   queuedSignal.emit('queued');
@@ -391,8 +404,8 @@ export function queueCommand(command: Pick<BotCommand, 'kind' | 'text' | 'phone'
 }
 
 /** What the bot gets: each waiting command, once. A command handed over is never handed over again, so nothing is sent twice. */
-export function takeCommands(now = Date.now()): Pick<BotCommand, 'id' | 'kind' | 'phone' | 'toName' | 'text' | 'action'>[] {
-  const out: Pick<BotCommand, 'id' | 'kind' | 'phone' | 'toName' | 'text' | 'action'>[] = [];
+export function takeCommands(now = Date.now()): Pick<BotCommand, 'id' | 'kind' | 'phone' | 'toName' | 'text' | 'action' | 'attachment'>[] {
+  const out: Pick<BotCommand, 'id' | 'kind' | 'phone' | 'toName' | 'text' | 'action' | 'attachment'>[] = [];
   for (const c of state.bot.commands) {
     if (c.status !== 'queued') continue;
     if (now - Date.parse(c.createdAt) > COMMAND_TTL_MS) {
@@ -406,7 +419,7 @@ export function takeCommands(now = Date.now()): Pick<BotCommand, 'id' | 'kind' |
     }
     c.status = 'sent';
     c.sentAt = new Date(now).toISOString();
-    out.push({ id: c.id, kind: c.kind, phone: c.phone, toName: c.toName, text: c.text, ...(c.action ? { action: c.action } : {}) });
+    out.push({ id: c.id, kind: c.kind, phone: c.phone, toName: c.toName, text: c.text, ...(c.action ? { action: c.action } : {}), ...(c.attachment ? { attachment: c.attachment } : {}) });
   }
   if (out.length) save();
   return out;

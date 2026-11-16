@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 // This runs just the block between the GUARDS markers.
 const source = fs.readFileSync(new URL('../device-bot/bot.mjs', import.meta.url), 'utf8');
 const block = /\/\/ GUARDS-START[^\n]*\n([\s\S]*?)\/\/ GUARDS-END/.exec(source)?.[1] ?? '';
-const guards = vm.runInNewContext(`${block}\n({ OPENABLE, RUNNABLE, FAR_AWAY, isProgramPath, isPrivateHost, checkOpenUrl, isPhone });`, { URL }) as {
+const guards = vm.runInNewContext(`${block}\n({ OPENABLE, RUNNABLE, FAR_AWAY, isProgramPath, isPrivateHost, checkOpenUrl, isPhone, attachmentProblem, MAX_ATTACHMENT_BYTES });`, { URL }) as {
   OPENABLE: RegExp;
   RUNNABLE: RegExp;
   FAR_AWAY: RegExp;
@@ -14,6 +14,8 @@ const guards = vm.runInNewContext(`${block}\n({ OPENABLE, RUNNABLE, FAR_AWAY, is
   isPrivateHost: (host: string) => boolean;
   checkOpenUrl: (target: string) => string;
   isPhone: (phone: unknown) => boolean;
+  attachmentProblem: (file: unknown, size: number, isAllowed: (file: string) => boolean) => string;
+  MAX_ATTACHMENT_BYTES: number;
 };
 
 describe('device bot: open a link', () => {
@@ -80,5 +82,31 @@ describe('device bot: open a file', () => {
   it('still refuses network and device paths', () => {
     for (const bad of ['\\\\server\\share\\a.pdf', '//server/share', '\\\\?\\C:\\a.pdf', '\\\\.\\COM1']) expect(guards.FAR_AWAY.test(bad), bad).toBe(true);
     expect(guards.FAR_AWAY.test('C:\\Users\\a\\a.pdf')).toBe(false);
+  });
+});
+
+describe('device bot: a picture sent with a reply', () => {
+  const yes = () => true;
+  it('accepts a small jpg, jpeg, png or webp inside the allowed folders', () => {
+    for (const ok of ['door.jpg', 'Pictures/door.JPEG', 'C:\\Users\\me\\Documents\\door.png', 'a/b.webp']) expect(guards.attachmentProblem(ok, 1000, yes), ok).toBe('');
+    expect(guards.attachmentProblem('door.jpg', guards.MAX_ATTACHMENT_BYTES, yes)).toBe('');
+  });
+
+  it('refuses anything but pictures', () => {
+    for (const bad of ['door.gif', 'door.pdf', 'door.exe', 'door.jpg.exe', 'door', 'door.svg', 'door.heic']) expect(guards.attachmentProblem(bad, 1000, yes), bad).not.toBe('');
+  });
+
+  it('refuses a file over 5 MB, an empty one, or a size that is not a number', () => {
+    expect(guards.MAX_ATTACHMENT_BYTES).toBe(5 * 1024 * 1024);
+    for (const size of [guards.MAX_ATTACHMENT_BYTES + 1, 0, -1, Number.NaN]) expect(guards.attachmentProblem('door.jpg', size, yes), String(size)).not.toBe('');
+  });
+
+  it('refuses paths that climb out, control characters, long or non-text values', () => {
+    for (const bad of ['../door.jpg', 'a/../../door.jpg', 'a\\..\\door.png', 'a\nb.jpg', `${'a'.repeat(400)}.jpg`, '', null, undefined, 5, {}]) expect(guards.attachmentProblem(bad, 1000, yes), String(bad)).not.toBe('');
+  });
+
+  it('refuses a file the folder check does not allow (a symlink that leads outside is judged by its real path)', () => {
+    expect(guards.attachmentProblem('/etc/door.jpg', 1000, (file) => file.startsWith('/home/me/Documents'))).toMatch(/outside/);
+    expect(guards.attachmentProblem('/home/me/Documents/door.jpg', 1000, (file) => file.startsWith('/home/me/Documents'))).toBe('');
   });
 });

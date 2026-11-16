@@ -8,6 +8,8 @@ import { config } from './config.js';
 import { pinGuard, phoneSetup } from './phone.js';
 import { startScheduler } from './notify.js';
 import { startHealthWatch } from './health.js';
+import { startTeamReminders } from './team-reminders.js';
+import { registerTeamReplies } from './team-replies.js';
 import { feedRoutes } from './feed.js';
 import { startGoogleWrite } from './gwrite.js';
 import { startBackgroundSync, syncAll } from './sync.js';
@@ -24,6 +26,7 @@ import { answerLeftoverMessages } from './bot.js';
 import { startTrading } from './trading/engine.js';
 import { startRenderWatch } from './render-usage.js';
 import { startKeyWatch } from './keys.js';
+import { startCourier } from './courier.js';
 import { flushTrading } from './trading/store.js';
 
 // Render stops the server on every deploy: write what is still waiting to be saved first.
@@ -68,6 +71,9 @@ if (config.production) {
 
 // The briefing notification is written from freshly read calendars, Asana and mail.
 startHealthWatch();
+// The user's teams: reminders to them, and their answers read.
+registerTeamReplies();
+startTeamReminders();
 // Messages that were waiting to be answered when the server last stopped (a deploy, a restart) are answered now, once.
 setTimeout(() => {
   const n = answerLeftoverMessages();
@@ -84,6 +90,8 @@ startNews();
 startTrading();
 startRenderWatch();
 startKeyWatch();
+// Delivery couriers are answered with fixed texts (after the team follow-ups, which take their own members first).
+startCourier();
 
 const ai = process.env.ANTHROPIC_API_KEY ? 'Claude connected' : 'demo mode (no ANTHROPIC_API_KEY in .env)';
 

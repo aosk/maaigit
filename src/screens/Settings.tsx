@@ -15,6 +15,8 @@ import { VoiceSettings } from '../components/VoiceSettings';
 import { ContactsImport } from '../components/ContactsImport';
 import { Chevron } from '../components/Icons';
 import { Group } from '../components/Group';
+import { TeamsSettings } from '../components/TeamsSettings';
+import { CourierSettings } from '../components/CourierSettings';
 
 export function SettingsScreen() {
   const { t, settings, update, toggle, detected, width } = useSettings();
@@ -135,6 +137,14 @@ export function SettingsScreen() {
       <Group id="whatsapp" title={t.groupWhatsApp} hint={t.groupWhatsAppHint}>
         {status?.bot?.connected && <ReplyModeCard mode={status.bot.replyMode} wait={status.bot.replyWait} onChanged={() => void loadStatus()} />}
         <ContactsImport />
+      </Group>
+
+      <Group id="teams" title={t.groupTeams} hint={t.groupTeamsHint}>
+        <TeamsSettings />
+      </Group>
+
+      <Group id="courier" title={t.groupCourier} hint={t.groupCourierHint}>
+        <CourierSettings />
       </Group>
 
       <Group id="calendar" title={t.groupCalendar}>
