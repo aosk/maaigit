@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ChatTurn, Lang, Proposal, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
-import { canListen, listen, speak, speechStream, stopSpeaking, unlockSpeech, type ListenProblem } from '../speech';
+import { canListen, listen, speak, speechQuiet, speechStream, stopSpeaking, unlockSpeech, type ListenProblem } from '../speech';
 import { FileText, Mic, Paperclip, Person, Plus, Send, Stop } from '../components/Icons';
 import { canPickContacts, pickContacts } from '../contacts';
 import { AttachError, prepare, type AttachKind } from '../attach';
@@ -214,9 +214,11 @@ export function Assistant() {
       stopRef.current?.();
       return;
     }
-    stopSpeaking();
     setVoiceNote('');
-    if (!canListen) return typeInstead('unsupported');
+    if (!canListen) {
+      stopSpeaking();
+      return typeInstead('unsupported');
+    }
     // Shown as listening at once (the red button), then the microphone opens once the phone's speaker is free.
     setLive(true);
     let heard = '';
@@ -225,7 +227,8 @@ export function Assistant() {
       cancelled = true;
       setLive(false);
     };
-    void unlockSpeech().then(() => {
+    // The microphone opens once nothing is being read aloud and the phone's speaker is free (see speechQuiet).
+    void speechQuiet().then(() => {
       if (cancelled || !alive.current) return;
       stopRef.current = listen(
         dictLang,

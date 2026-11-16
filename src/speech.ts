@@ -71,6 +71,32 @@ export function unlockSpeech(): Promise<void> {
   return unlocking;
 }
 
+/** When something was last being read aloud (0 = never). */
+let lastSpokeAt = 0;
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Resolves when the microphone can hear: nothing is being read aloud, and the phone has had a moment to hand the
+ * sound channel back. On the iPhone a microphone opened while a reply is still being read (or in the instant after it
+ * is cut off) hears nothing, which is why speaking to the assistant a second time, over its spoken answer, went deaf.
+ * Stops whatever is being read. Never waits more than about two seconds.
+ */
+export async function speechQuiet(): Promise<void> {
+  if (!('speechSynthesis' in window)) return;
+  const synth = window.speechSynthesis;
+  const wasSpeaking = synth.speaking || synth.pending || (lastSpokeAt > 0 && Date.now() - lastSpokeAt < 1500);
+  // Whatever is being read stops at once (the user is about to speak).
+  session++;
+  synth.cancel();
+  // The very first time, the silent unlock phrase is said: the phone needs the same moment to let go after it.
+  const firstTime = !unlocked;
+  await unlockSpeech();
+  if (!wasSpeaking && !firstTime) return;
+  for (let waited = 0; waited < 1500 && (synth.speaking || synth.pending); waited += 50) await pause(50);
+  // The phone lets go of the speaker a moment after it says it has stopped.
+  await pause(400);
+}
+
 /** Queues sentences to be read aloud in this session, each in the voice of its own language. */
 function say(parts: string[], mine: number, onEnd?: () => void) {
   if (!parts.length) return onEnd?.();
@@ -93,6 +119,13 @@ function say(parts: string[], mine: number, onEnd?: () => void) {
         // Stopping on purpose is not an error to report twice.
         if (mine === session && e.error !== 'canceled' && e.error !== 'interrupted') onEnd?.();
       };
+      utterance.onstart = () => (lastSpokeAt = Date.now());
+      const ended = utterance.onend;
+      utterance.onend = (e) => {
+        lastSpokeAt = Date.now();
+        ended?.call(utterance, e);
+      };
+      lastSpokeAt = Date.now();
       window.speechSynthesis.speak(utterance);
     });
   });
