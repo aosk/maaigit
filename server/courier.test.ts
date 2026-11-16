@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
@@ -291,5 +292,21 @@ describe('attachments on bot commands', () => {
     for (const bad of ['../x.jpg', 'a/../../x.png', 'door.gif', 'door.pdf', 'door', `${'a'.repeat(400)}.jpg`, 'a\nb.jpg', '']) {
       expect(() => queueCommand({ ...base, attachment: bad }), bad).toThrow(BotInputError);
     }
+  });
+});
+
+describe('the limits outlive a restart', () => {
+  it('keeps what each courier was sent with the saved data, and has the bot and the server agree on what a voice note looks like', async () => {
+    vi.mocked(create).mockResolvedValue(verdict(true, 'location'));
+    await hear(msg('966511111111', 'وين الموقع؟ معي طلبك'));
+    expect(to('966511111111')).toHaveLength(1);
+    // What a restart reads back from disk: the same record, so the address is not sent again inside 6 hours.
+    const saved = JSON.parse(JSON.stringify(state.courierFlags)) as typeof state.courierFlags;
+    expect(saved['966511111111']?.shortAt).toBeGreaterThan(0);
+    state.courierFlags = saved;
+    await hear(msg('966511111111', 'وين الموقع؟'));
+    expect(to('966511111111')).toHaveLength(1);
+    const bot = fs.readFileSync(new URL('../device-bot/bot.mjs', import.meta.url), 'utf8');
+    expect(bot).toContain(`'${VOICE_NOTE}'`);
   });
 });

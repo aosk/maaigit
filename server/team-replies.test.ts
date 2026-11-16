@@ -21,7 +21,7 @@ import { create } from './ai/claude';
 import { createKey, resetLink, takeCommands } from './bot';
 import { claimInbound, clearInbound } from './inbound';
 import { state } from './store';
-import { handleTeamMessage, registerTeamReplies, resetTeamAnswers } from './team-replies';
+import { beingRead, handleTeamMessage, registerTeamReplies, resetTeamAnswers } from './team-replies';
 import { addTeam, createDuty, saveMember } from './teams';
 
 const PHONE = '966501111111';
@@ -167,5 +167,23 @@ describe('who is answered here', () => {
     expect(claimInbound(message('ok'), fallback, NOW.getTime())).toBe(true);
     await vi.waitFor(() => expect(duty().status).toBe('acknowledged'));
     expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it('leaves a member to the general reply while the reminders are switched off', () => {
+    setUp();
+    registerTeamReplies();
+    state.teamSettings.enabled = false;
+    expect(claimInbound(message('السلام عليكم'), vi.fn(), NOW.getTime())).toBe(false);
+  });
+
+  it('says an answer is being read until it is understood, so no reminder crosses it', async () => {
+    setUp();
+    registerTeamReplies();
+    reads({ intent: 'ack' });
+    expect(beingRead(PHONE)).toBe(false);
+    expect(claimInbound(message('ok'), vi.fn(), NOW.getTime())).toBe(true);
+    expect(beingRead(PHONE)).toBe(true);
+    await vi.waitFor(() => expect(beingRead(PHONE)).toBe(false));
+    expect(duty().status).toBe('acknowledged');
   });
 });

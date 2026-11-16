@@ -1,9 +1,9 @@
 import type { Lang, Proposal } from '../../shared/types.js';
 import { agentEnabled, audit, id, save, state, type Conversation } from '../store.js';
-import { apiErrorMessage, client, stream, textOf, type MessageParam, type OnEvent, type ServerTool, type ToolResult, type ToolUse } from './claude.js';
+import { apiErrorMessage, client, stream, textOf, type MessageParam, type OnEvent, type ServerTool, type ToolUse } from './claude.js';
 import { config } from '../config.js';
 import { dayTime, refreshContext, withContext } from './context.js';
-import { NEEDS_CLEAN_TURN, runTool, tools } from './tools.js';
+import { runTool, tools } from './tools.js';
 import type { Upload } from '../uploads.js';
 import { demoChat } from './demo.js';
 import { aboutTheUser } from '../profile.js';
@@ -188,6 +188,9 @@ export async function chat(conversation: Conversation, userText: string, lang: L
   return reply;
 }
 
+/** How many of the user's earlier messages count as "what the user said" when a tool checks who was named. */
+const SAID_TURNS = 3;
+
 /** Words that ask for thought, not for an action: these keep the deeper reasoning however short the message. */
 const WANTS_DEPTH = /حلّ?ل|تحليل|قارن|مقارنة|خط[ّ]?ة|استراتيج|اشرح|فسّ?ر|ليش|لماذا|وش رايك|رأيك|تنصح|راجع|لخّ?ص|analy[sz]|compar|plan\b|strateg|explain|why\b|review|summar|advice|advis|recommend|should i/i;
 /** A message this short, with none of those words, is an order ("remind me…", "add Layla to Najiz"). */
@@ -216,6 +219,8 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
   messages.push({ role: 'user', content: files.length ? [...fileBlocks(files), { type: 'text', text: prompt }] : prompt });
   const created: Proposal[] = [];
   const quick = spoken || isQuickOrder(userText, files.length);
+  // The user's own words: this message and their last few (an answer to "which Ahmed?" comes a message later).
+  const said = [...conversation.turns.filter((t) => t.role === 'user').slice(-SAID_TURNS).map((t) => t.text), userText].join('\n');
   // When the first sign of life (thinking or a step) and the first word of the answer reached the app.
   const started = Date.now();
   const timing: Timing = { rounds: [], tools: [] };
@@ -230,7 +235,7 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
   try {
     let text: string;
     try {
-      text = await runLoop(lang, messages, created, onEvent, quick, timing);
+      text = await runLoop(lang, messages, created, onEvent, quick, timing, said);
     } catch (error) {
       // A saved conversation whose reasoning no longer matches its history heals itself: drop the reasoning, ask once more.
       if (!/signature/i.test((error as Error).message ?? '')) throw error;
@@ -239,7 +244,7 @@ async function answer(conversation: Conversation, userText: string, lang: Lang, 
       dropThinking(messages);
       timing.rounds.length = 0;
       timing.tools.length = 0;
-      text = await runLoop(lang, messages, created, onEvent, quick, timing);
+      text = await runLoop(lang, messages, created, onEvent, quick, timing, said);
     }
     // The files were for this turn only: what is kept is the question and the answer, not the pixels.
     if (files.length) {
@@ -266,7 +271,7 @@ interface Timing {
   tools: string[];
 }
 
-async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[], onEvent: OnEvent, quick: boolean, timing: Timing = { rounds: [], tools: [] }): Promise<string> {
+async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[], onEvent: OnEvent, quick: boolean, timing: Timing = { rounds: [], tools: [] }, said = ''): Promise<string> {
   const system = `${SYSTEM}\n\nThe app is currently set to ${lang === 'ar' ? 'Arabic' : 'English'}.`;
   let reply = '';
   // Searching is the one thing done without the user's approval, so it is bounded: five searches a turn in all (not
@@ -306,12 +311,7 @@ async function runLoop(lang: Lang, messages: MessageParam[], created: Proposal[]
     if (calls.some((c) => OTHERS_TEXT.has(c.name))) readOthers = true;
     const results = await Promise.all(
       calls.map(async (block) => {
-        if (readOthers && NEEDS_CLEAN_TURN.has(block.name)) {
-          const blocked: ToolResult = { type: 'tool_result', tool_use_id: block.id, content: 'Not done: an email, message or task was read in this turn, so MAAI will not add a person to a team now. Ask the user to say it again in a new message, or to add them in Settings → My teams.', is_error: true };
-          onEvent({ type: 'step', tool: `${block.name}:done`, detail: undefined });
-          return blocked;
-        }
-        const { result, detail } = await runTool(block, created);
+        const { result, detail } = await runTool(block, created, said);
         onEvent({ type: 'step', tool: `${block.name}:done`, detail });
         return result;
       }),
