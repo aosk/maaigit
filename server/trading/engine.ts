@@ -2,7 +2,7 @@ import type { MarketPulse, TradingState } from '../../shared/trading.js';
 import { client } from '../ai/claude.js';
 import { alertTrade } from '../notify.js';
 import { randomBytes } from 'node:crypto';
-import { decisionRound, lastDecisionRecord, marketContext, newsFetchedAt, newsRound, technicalRound, type Decision, type MarketItem } from './agents.js';
+import { decisionRound, lastDecisionRecord, marketContext, newsFetchedAt, newsRound, stopLossNow, technicalRound, type Decision, type MarketItem } from './agents.js';
 import { archiveRound, type RoundRecord } from './archive.js';
 import { botStale, cancelAllOpen, halt, openOrders, processOrders, submit } from './executor.js';
 import { currentIndex, currentQuotes, refreshQuotes, historyOf } from './market.js';
@@ -62,6 +62,8 @@ async function tick(now = new Date()): Promise<void> {
       saveTrading();
     }
     checkDailyLoss(now);
+    // The stop-loss does not wait for the next round: a holding at its stop is sold within a tick, whatever the round length.
+    if (clock.open && !trading.halted) for (const d of stopLossNow(new Set(openOrders(trading.mode).map((o) => o.symbol)), now)) gate(d, now);
     // Friday from noon: the week's review. Every 90 days (US): the Shariah check of the list.
     await weeklyReview(now);
     await shariahRound(now);

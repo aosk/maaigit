@@ -13,6 +13,7 @@ import { upcoming } from './calendar.js';
 import { trackRecord } from './scoring.js';
 import { fetchOutcomes, outcomesLine, searchLine, createSearching, SEARCH_RULE } from './webtools.js';
 import { fundamentalsForDecision } from './fundamentals.js';
+import { STALE_QUOTE_MS } from './risk.js';
 import { instrument, tradingDay, units, UNIVERSE } from './tadawul.js';
 import { deskConfig, perDesk, unitAr } from './desk.js';
 
@@ -213,7 +214,7 @@ Report only items from the last 24 hours that could move the price, at most 8, t
       // exchange's pages are named here.
       messages: [{ role: 'user', content: saudi ? `Today is ${now.toISOString().slice(0, 10)}. What is new? The Saudi Exchange announcements: ${ANNOUNCEMENTS_AR} (English: ${ANNOUNCEMENTS_EN}).` : `Today is ${now.toISOString().slice(0, 10)}. What is new?` }],
       tools: saudi ? [WEB_FETCH, { ...WEB_SEARCH, max_uses: 4 }] : [WEB_SEARCH],
-      effort: 'medium',
+      effort: 'low',
       maxTokens: 3000,
       format: newsSchema(),
     });
@@ -316,6 +317,29 @@ interface DecisionRecord {
 }
 export const lastDecisionRecord = () => mem().decision;
 
+/** A decision gets its id and goes on the log (the risk gate takes it from there). */
+function record(d: Omit<Decision, 'id'>, now: Date): Decision {
+  const decision = { ...d, id: `dec_${randomBytes(6).toString('hex')}`, qty: units(d.qty), confidence: Math.max(0, Math.min(1, d.confidence)) };
+  emit('decision.created', 'decision', `${d.side === 'buy' ? 'شراء' : 'بيع'} ${decision.qty}${unitAr()} ${label(d.symbol)} بحد ${d.limitPrice} · ثقة ${Math.round(decision.confidence * 100)}٪ — ${d.rationale}`, { correlationId: decision.id, data: { ...decision } }, now);
+  return decision;
+}
+
+/**
+ * The stop-loss between rounds. It is a rule in code (no Claude), so it does not wait for the next round: every tick
+ * a holding at or below its stop, with a fresh price and no order already open for it, is sold. `busy` is the symbols
+ * that have an open order. The round's own stop (above) stays as it was; the open-order rule keeps the two from doubling.
+ */
+export function stopLossNow(busy: Set<string>, now = new Date()): Decision[] {
+  const quotes = currentQuotes();
+  const held = trading.books[trading.mode].positions.flatMap((p) => {
+    const q = quotes.get(p.symbol);
+    // No price, or one the risk gate would refuse as stale: wait for a fresh one rather than logging a refusal every tick.
+    if (busy.has(p.symbol) || !q || !(q.price > 0) || now.getTime() - Date.parse(q.asOf) > STALE_QUOTE_MS) return [];
+    return [{ symbol: p.symbol, qty: p.qty, avgCost: p.avgCost, price: q.price, pnlPct: p.avgCost > 0 ? ((q.price - p.avgCost) / p.avgCost) * 100 : 0 }];
+  });
+  return hardStops(held).map((d) => record(d, now));
+}
+
 /** The portfolio manager: weighs the technical reads and the news against what is held and the user's instructions. */
 export async function decisionRound(reads: TechRead[], news: NewsItem[], minutesToClose: number, now = new Date(), pulse?: MarketPulse): Promise<Decision[]> {
   mem().decision = { source: 'none', decisions: [] };
@@ -414,11 +438,7 @@ export async function decisionRound(reads: TechRead[], news: NewsItem[], minutes
       .filter((d) => instrument(d.symbol) && (d.side === 'buy' || d.side === 'sell') && d.qty > 0 && d.limitPrice > 0 && !stopped.has(d.symbol))
       .slice(0, MAX_PER_ROUND),
   ]
-    .map((d) => {
-      const decision = { ...d, id: `dec_${randomBytes(6).toString('hex')}`, qty: units(d.qty), confidence: Math.max(0, Math.min(1, d.confidence)) };
-      emit('decision.created', 'decision', `${d.side === 'buy' ? 'شراء' : 'بيع'} ${decision.qty}${unitAr()} ${label(d.symbol)} بحد ${d.limitPrice} · ثقة ${Math.round(decision.confidence * 100)}٪ — ${d.rationale}`, { correlationId: decision.id, data: { ...decision } }, now);
-      return decision;
-    });
+    .map((d) => record(d, now));
   mem().decision.decisions = made;
   return made;
 }

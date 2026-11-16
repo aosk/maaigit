@@ -12,7 +12,7 @@ vi.hoisted(() => {
 const create = vi.hoisted(() => vi.fn());
 vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof import('../ai/claude')>()), client: {}, create }));
 
-import { decisionRound } from './agents';
+import { decisionRound, stopLossNow } from './agents';
 import { gate } from './engine';
 import { processOrders } from './executor';
 import { currentQuotes, injectQuote, refreshQuotes, resetQuotes } from './market';
@@ -108,5 +108,37 @@ describe('the stop-loss in code', () => {
     expect(() => processOrders(later)).not.toThrow();
     expect(trading.orders.map((o) => [o.id, o.status])).toEqual([['bad', 'failed'], ['good', 'filled']]);
     expect(trading.events.some((e) => e.type === 'order.failed')).toBe(true);
+  });
+});
+
+describe('the stop-loss between rounds', () => {
+  it('sells a holding at its stop from a tick, with no round and no Claude', () => {
+    holding(0.95);
+    const [sell, ...rest] = stopLossNow(new Set(), SUN);
+    expect(rest).toEqual([]);
+    expect(sell).toMatchObject({ symbol: '2222', side: 'sell', qty: 100, confidence: 1 });
+    expect(sell.limitPrice).toBeLessThan(currentQuotes().get('2222')!.price);
+    expect(create).not.toHaveBeenCalled();
+    // and the risk gate lets it through as a sale
+    expect(gate(sell, SUN).verdict).not.toBe('veto');
+    expect(trading.orders.some((o) => o.symbol === '2222' && o.side === 'sell')).toBe(true);
+  });
+
+  it('leaves a holding above its stop, one with an order already open, and one with no fresh price', () => {
+    holding(0.97);
+    expect(stopLossNow(new Set(), SUN)).toEqual([]);
+    holding(0.95);
+    expect(stopLossNow(new Set(['2222']), SUN)).toEqual([]);
+    const q = currentQuotes().get('2222')!;
+    injectQuote({ ...q, asOf: new Date(SUN.getTime() - 3 * 3_600_000).toISOString() });
+    expect(stopLossNow(new Set(), SUN)).toEqual([]);
+  });
+
+  it('does not sell again while its own order is open (a tick every minute makes one order, not many)', () => {
+    holding(0.95);
+    const [sell] = stopLossNow(new Set(), SUN);
+    gate(sell, SUN);
+    const busy = new Set(trading.orders.filter((o) => o.status !== 'filled').map((o) => o.symbol));
+    expect(stopLossNow(busy, SUN)).toEqual([]);
   });
 });

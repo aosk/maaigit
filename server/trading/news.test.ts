@@ -36,7 +36,7 @@ describe('the news agent and the Saudi Exchange announcements', () => {
     const retry = create.mock.calls[1][0] as { messages: { role: string; content: unknown }[]; effort: string };
     expect(retry.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
     expect(retry.messages[2].content).toMatch(/without using your search/);
-    expect(retry.effort).toBe('medium');
+    expect(retry.effort).toBe('low'); // the rule and the retry make it search; no extra thinking is paid for
     expect(items.map((i) => i.symbol)).toEqual(['2222']);
   });
 
