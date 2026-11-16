@@ -10,6 +10,7 @@ import { useAction } from '../useAction';
 import { useOnRefresh } from '../refresh';
 import { Back, Bell, Chat, Check, Chevron, Mail, Refresh, Search, Send, Trash } from '../components/Icons';
 import { CountBadge } from '../components/CountBadge';
+import { Exchange, SentMessages } from '../components/SentMessages';
 import { mailtoLink } from '../components/EmailCard';
 import { stripBidi } from '../links';
 
@@ -256,6 +257,7 @@ export function Inbox() {
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [sentOpen, setSentOpen] = useState(false);
   // Opened from a tile on «يومك» (email or WhatsApp): start on that source.
   const [source, setSource] = useState<SourceFilter>(() => {
     try {
@@ -321,6 +323,7 @@ export function Inbox() {
   const gmail = Boolean(status?.mail?.configured);
   const whatsapp = Boolean(status?.whatsapp?.configured);
   if (replying) return <Reply message={replying} ready={feed?.items.find((i) => i.message?.id === replying.id)?.readyDraft} clash={clashingNames(feed?.items ?? []).has(stripBidi(replying.from).trim().toLowerCase())} gmail={gmail} whatsapp={whatsapp} device={Boolean(feed?.bot.connected)} onBack={() => setReplying(null)} onChanged={() => load(false)} />;
+  if (sentOpen) return <SentMessages onBack={() => setSentOpen(false)} />;
   if (adding) return <Messages onBack={() => { setAdding(false); load(false); }} gmail={gmail} whatsapp={whatsapp} device={Boolean(feed?.bot.connected)} />;
 
   const items = feed?.items ?? [];
@@ -408,6 +411,7 @@ export function Inbox() {
                   <button key={f} role="radio" aria-checked={filter === f} onClick={() => setFilter(f)}>{t.filters[f]}</button>
                 ))}
               </div>
+              {has.whatsapp && <button type="button" className="btn ghost" onClick={() => setSentOpen(true)}>{t.sent.open}</button>}
               {has.email && has.whatsapp && (
                 <select className="source-select" value={source} onChange={(e) => setSource(e.target.value as SourceFilter)} aria-label={t.sourceLabel}>
                   {(['all', 'email', 'whatsapp'] as const).map((s) => <option key={s} value={s}>{t.sources[s]}</option>)}
@@ -581,7 +585,7 @@ function Detail({ item, clash, unread, onBack, onReply, onRead, onLabel }: { ite
         {item.priority === 'high' && <span className="tag">{t.maaiPriority}</span>}
       </div>
 
-      <div className="mail-body detail-body" dir="auto">{item.body || t.noText}</div>
+      {item.exchange?.some((line) => line.who === 'sent') ? <Exchange lines={item.exchange} /> : <div className="mail-body detail-body" dir="auto">{item.body || t.noText}</div>}
 
       {(item.intake || item.suggestion) && (
         <div className="card soft">

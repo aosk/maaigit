@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Tone } from '../../shared/types.js';
 import { digestInbox, draftReply } from '../ai/mail.js';
+import { sentMessages } from '../sent.js';
 import { digestWhatsApp } from '../ai/whatsapp.js';
 import { ANSWER_WINDOW_MS, canAnswer, pruneWhatsApp, sendWhatsApp, whatsappConfigured } from '../whatsapp.js';
 import { isEmail, sendMail } from '../mail.js';
@@ -42,6 +43,9 @@ inbox.post('/inbox', (req, res) => {
   save();
   res.status(201).json(message);
 });
+
+/** What went out on WhatsApp through MAAI (its own replies, reminders, what the user approved), newest first. */
+inbox.get('/sent', (_req, res) => res.json({ messages: sentMessages() }));
 
 inbox.post('/inbox/:id/draft', wrap(async (req, res) => {
   const message = find(state.inbox, req.params.id);

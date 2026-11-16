@@ -328,7 +328,7 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
     // Told at once, in their own words, only when no reviewed summary is coming (no AI reply for this message).
     // Otherwise the user is told a moment later, with what Claude understood from it (see server/intake.ts).
     if (reason || !summaryComes()) void tell(message, {}, now);
-    const reply = (text: string) => queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text, automatic: true });
+    const reply = (text: string) => queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text, automatic: true, tag: 'reply' });
     const general = () => void answer(message, reply).catch((error: Error) => console.error('First reply failed:', error.message));
     // A person in one of the user's teams, or a delivery courier, is answered by that module instead (see server/inbound.ts).
     if (claimInbound(message, general, now)) {
@@ -435,7 +435,7 @@ export function deviceTarget(action: DeviceAction, value: unknown): string {
 const validAttachment = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= 400 && !/\p{Cc}/u.test(value) && !value.includes('..') && /\.(jpe?g|png|webp)$/i.test(value);
 
-export function queueCommand(command: Pick<BotCommand, 'kind' | 'text' | 'phone' | 'toName' | 'automatic' | 'action' | 'attachment'>, now = Date.now()): BotCommand {
+export function queueCommand(command: Pick<BotCommand, 'kind' | 'text' | 'phone' | 'toName' | 'automatic' | 'action' | 'attachment' | 'tag'>, now = Date.now()): BotCommand {
   if (!botConnected()) throw new BotInputError('The device bot is not connected. Make a device key in the admin page first.');
   if (command.attachment !== undefined && !validAttachment(command.attachment)) throw new BotInputError('The attachment must be a plain picture path (jpg, jpeg, png or webp, no "..").');
   const queued: BotCommand = { id: id(), ...command, status: 'queued', createdAt: new Date(now).toISOString() };
@@ -524,5 +524,5 @@ export function receiveContacts(body: unknown): number {
 
 /** After a restart: answers, once, the recent messages that were still waiting for their answer when MAAI stopped. */
 export function answerLeftoverMessages(): number {
-  return answerLeftovers((phone, name, text) => queueCommand({ kind: 'reply', phone, toName: name, text, automatic: true }));
+  return answerLeftovers((phone, name, text) => queueCommand({ kind: 'reply', phone, toName: name, text, automatic: true, tag: 'reply' }));
 }

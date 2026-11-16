@@ -250,7 +250,7 @@ export function voiceFailed(reason: string): void {
     reason === 'too-long'
       ? 'الرسالة الصوتية أطول من ٣ دقائق. أرسل رسالة أقصر أو اكتبها.\nThat voice note is over 3 minutes. Send a shorter one, or type it.'
       : 'ما قدرت أقرأ رسالتك الصوتية من الواتساب. أرسلها مرة ثانية أو اكتبها.\nI could not get your voice note from WhatsApp. Send it again, or type it.';
-  queueCommand({ kind: 'reply', phone, toName: 'MAAI', text: `🤖 MAAI\n${text}`, automatic: true });
+  queueCommand({ kind: 'reply', phone, toName: 'MAAI', text: `🤖 MAAI\n${text}`, automatic: true, tag: 'self' });
 }
 
 // ---------- Orders ----------
@@ -273,7 +273,7 @@ async function carryOut(order: Order, now: number): Promise<void> {
   const phone = state.bot.orderPhone;
   if (!phone) return;
   const lang: Lang = arabic(order.text) ? 'ar' : 'en';
-  const reply = (text: string) => queueCommand({ kind: 'reply', phone, toName: 'MAAI', text: `🤖 MAAI\n${text}`.slice(0, 4000), automatic: true });
+  const reply = (text: string) => queueCommand({ kind: 'reply', phone, toName: 'MAAI', text: `🤖 MAAI\n${text}`.slice(0, 4000), automatic: true, tag: 'self' });
 
   // A recording that reaches here is one the device bot could not write out (it does that itself, on the user's
   // computer; the first note only starts the set-up). Nothing outside is used to hear it: say so, and offer both ways on.

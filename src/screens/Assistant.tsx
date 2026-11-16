@@ -4,11 +4,11 @@ import { api } from '../api';
 import { useSettings } from '../settings';
 import { canListen, listen, speak, speechQuiet, speechStream, stopSpeaking, unlockSpeech, type ListenProblem } from '../speech';
 import { FileText, Mic, Paperclip, Person, Plus, Send, Stop } from '../components/Icons';
-import { canPickContacts, pickContacts } from '../contacts';
 import { AttachError, prepare, type AttachKind } from '../attach';
 import { takeArrival } from '../nav';
 import { Logo } from '../components/Logo';
 import { ProposalCard } from '../components/ProposalCard';
+import { ContactPicker } from '../components/ContactPicker';
 import { WorkingBubble } from '../components/WorkingBubble';
 import { addEvent, emptyProgress, type Progress } from '../progress';
 
@@ -47,6 +47,7 @@ export function Assistant() {
   const [pending, setPending] = useState<Pending[]>([]);
   // What to offer in an empty chat: the user's own repeated orders and what today calls for (the usual examples until it loads).
   const [ideas, setIdeas] = useState<{ lang: Lang; list: string[] } | null>(null);
+  const [picking, setPicking] = useState(false);
   // What the long-lived callbacks (dictation, a streamed reply, an upload) must see now, not as it was when they started.
   const alive = useRef(true);
   const busyRef = useRef(false);
@@ -341,24 +342,21 @@ export function Assistant() {
             ))}
           </ul>
         )}
+        {picking && (
+          <ContactPicker
+            onClose={() => setPicking(false)}
+            onPick={(text) => {
+              // Dropped into the message as the user's own words: the assistant then knows exactly who is meant.
+              setInput((before) => `${before}${before.trim() ? ' ' : ''}${text}`);
+              setPicking(false);
+              inputRef.current?.focus();
+            }}
+          />
+        )}
         <div className="composer-row">
           <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => void attach(e.target.files)} />
           <button type="button" className="attach" aria-label={t.attach} onClick={() => fileRef.current?.click()} disabled={busy}><Paperclip size={22} /></button>
-          {canPickContacts() && (
-            <button
-              type="button"
-              className="attach"
-              aria-label={t.pickContact}
-              disabled={busy}
-              onClick={() =>
-                void pickContacts()
-                  .then((names) => names && setInput((before) => `${before}${before.trim() ? ' ' : ''}${names}`))
-                  .catch(() => {})
-              }
-            >
-              <Person size={22} />
-            </button>
-          )}
+          <button type="button" className="attach" aria-label={t.cp.open} aria-expanded={picking} onClick={() => setPicking((v) => !v)} disabled={busy}><Person size={22} /></button>
           <label htmlFor="chat-input" className="sr-only">{t.typeMessage}</label>
           <input
             id="chat-input"

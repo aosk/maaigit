@@ -703,6 +703,33 @@ export interface AsanaOverview extends AsanaStatus {
 /** What the bot can do on the device by itself, each approved one at a time: open a web link, open a file or folder, send a file to the user on WhatsApp. */
 export type DeviceAction = 'open_url' | 'open_path' | 'send_file';
 
+type SentTag = 'reply' | 'team' | 'courier' | 'self';
+
+/** One WhatsApp message that went out (or is waiting to) through the device bot, for the user to look back at. */
+export interface SentMessage {
+  id: string;
+  phone: string;
+  toName?: string;
+  text: string;
+  at: string;
+  /** approved: the user approved or wrote it; the others were sent by MAAI by itself. */
+  kind: 'approved' | SentTag;
+  status: BotCommand['status'];
+  /** What the bot said when it could not send it. */
+  problem?: string;
+  /** A picture went with it. */
+  withPicture?: boolean;
+}
+
+/** One line of a WhatsApp conversation as the Inbox shows it: what they wrote, or what went out to them. */
+export interface ExchangeLine {
+  who: 'them' | 'sent';
+  text: string;
+  at: string;
+  kind?: SentMessage['kind'];
+  status?: BotCommand['status'];
+}
+
 export interface BotCommand {
   id: string;
   /** reply: send a WhatsApp message from the user's own number; task: an instruction the user approved; restart: start the bot again (asked in Admin); media: hand over the picture or PDF of the message whose id is in `text`. */
@@ -717,6 +744,8 @@ export interface BotCommand {
   attachment?: string;
   /** Sent by MAAI by itself (the fixed note), not approved one by one. */
   automatic?: boolean;
+  /** For a reply: what kind it is, for the list of sent messages. reply: MAAI's own first reply; team: a reminder or answer to a team member; courier: an address or note to a courier; self: a notice to the user's own number. Unset: a reply the user approved. */
+  tag?: SentTag;
   status: 'queued' | 'sent' | 'done' | 'failed' | 'expired';
   createdAt: string;
   sentAt?: string;
@@ -806,6 +835,8 @@ export interface FeedItem {
   intake?: string;
   /** A reply MAAI wrote for the user to send themselves, ready when they open the message. */
   readyDraft?: string;
+  /** A WhatsApp conversation in order: their messages and what went out to them through MAAI. */
+  exchange?: ExchangeLine[];
   handled?: boolean;
   /** Whether it needs an answer: MAAI's read (or the user's correction); "maybe" when there is no read to go on. */
   needsReply: 'yes' | 'maybe' | 'no';

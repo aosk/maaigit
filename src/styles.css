@@ -1165,3 +1165,21 @@ body::before { content: ''; position: fixed; inset: 0 0 auto 0; height: env(safe
 .tm-switch-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; }
 .tm-three { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .tm-form input[type='number'], .tm-form input[type='search'] { width: 100%; }
+
+/* A conversation with what went out to them, and the list of sent messages */
+.exchange { list-style: none; margin: 0; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-radius: 12px; background: var(--raised); }
+.ex { max-width: 88%; display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 12px; font-size: 0.88em; overflow-wrap: anywhere; }
+.ex.them { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); }
+.ex.sent { align-self: flex-end; background: var(--tint-soft); color: var(--tint-text); }
+.ex.failed { background: var(--danger-soft); color: var(--danger); }
+.ex-text { white-space: pre-wrap; }
+.ex-mark { font-size: 0.78em; font-weight: 700; }
+.ex-time { font-size: 0.74em; opacity: 0.75; align-self: flex-end; }
+.sent-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sent-item { display: flex; flex-direction: column; gap: 6px; }
+.sent-item.failed { border-color: var(--danger); }
+.sent-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9em; }
+.seg.wrap { flex-wrap: wrap; }
+.contact-picker { display: flex; flex-direction: column; gap: 8px; margin: 0 0 8px; }
+.cp-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; }
+.cp-list button { width: 100%; display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--sep); background: transparent; color: var(--text); text-align: start; }

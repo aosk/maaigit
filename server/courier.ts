@@ -155,7 +155,7 @@ function eligible(message: InboxMessage, now: number): message is InboxMessage &
 /** Queues a fixed text to one number; false if the bot cannot take it. */
 function send(phone: string, name: string, text: string, attachment?: string): boolean {
   try {
-    queueCommand({ kind: 'reply', phone, toName: name, text, automatic: true, ...(attachment ? { attachment } : {}) });
+    queueCommand({ kind: 'reply', phone, toName: name, text, automatic: true, tag: phone === state.teamSettings.alertPhone ? 'self' : 'courier', ...(attachment ? { attachment } : {}) });
     return true;
   } catch (error) {
     console.error('Courier reply not queued:', (error as Error).message);

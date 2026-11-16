@@ -57,7 +57,7 @@ function alertOnWhatsApp(duty: Duty, now: Date): boolean {
   const alert = state.teamSettings.alertPhone;
   if (!alert) return true;
   try {
-    queueCommand({ kind: 'reply', phone: alert, toName: 'MAAI', text: `🤖 MAAI\n${escalationText(duty)}`, automatic: true }, now.getTime());
+    queueCommand({ kind: 'reply', phone: alert, toName: 'MAAI', text: `🤖 MAAI\n${escalationText(duty)}`, automatic: true, tag: 'self' }, now.getTime());
     return true;
   } catch (error) {
     console.error('Follow-up alert on WhatsApp failed:', (error as Error).message);
@@ -95,7 +95,7 @@ export function teamReminderTick(now = new Date()): number {
     if (!mayMessageNow(duty, now) || sentToday(duty.phone, now) >= MAX_PER_PERSON_DAY) continue;
     const text = reminderText(action.n, duty, member);
     try {
-      queueCommand({ kind: 'reply', phone: duty.phone, toName: member.name, text, automatic: true }, now.getTime());
+      queueCommand({ kind: 'reply', phone: duty.phone, toName: member.name, text, automatic: true, tag: 'team' }, now.getTime());
     } catch (error) {
       // The device bot is not connected right now: the same reminder is tried again at the next pass.
       console.error('Team reminder not sent:', (error as Error).message);

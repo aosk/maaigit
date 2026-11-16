@@ -93,7 +93,7 @@ function tellUser(key: string, text: string, whatsapp: boolean): void {
   const to = state.teamSettings.alertPhone;
   if (whatsapp && to) {
     try {
-      queueCommand({ kind: 'reply', phone: to, toName: 'MAAI', text: `🤖 MAAI\n${text}`, automatic: true });
+      queueCommand({ kind: 'reply', phone: to, toName: 'MAAI', text: `🤖 MAAI\n${text}`, automatic: true, tag: 'self' });
     } catch (error) {
       console.error('Follow-up alert on WhatsApp failed:', (error as Error).message);
     }
@@ -107,7 +107,7 @@ function sendTo(phone: string, name: string, text: string, now: Date): void {
   if (n >= MAX_ANSWERS_PER_DAY) return;
   answersToday.set(phone, { day, n: n + 1 });
   try {
-    queueCommand({ kind: 'reply', phone, toName: name, text, automatic: true }, now.getTime());
+    queueCommand({ kind: 'reply', phone, toName: name, text, automatic: true, tag: 'team' }, now.getTime());
   } catch (error) {
     console.error('Team answer not sent:', (error as Error).message);
   }

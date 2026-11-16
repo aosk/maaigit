@@ -1,3 +1,4 @@
+import { exchangeWith } from './sent.js';
 import type { FeedItem, InboxFeed, Lang, MailDigest, SourceState, WhatsAppDigest } from '../shared/types.js';
 import { client } from './ai/claude.js';
 import { digestInbox } from './ai/mail.js';
@@ -83,6 +84,7 @@ function fromMessages(digest: Pick<WhatsAppDigest, 'threads'>): FeedItem[] {
       message: last,
       intake: thread.phone ? state.intake[thread.phone]?.summary : undefined,
       readyDraft: thread.phone && thread.unanswered > 0 ? state.intake[thread.phone]?.draft : undefined,
+      exchange: thread.phone && last.channel === 'whatsapp' ? exchangeWith(thread.phone, thread.messages) : undefined,
       handled: thread.unanswered === 0,
       needsReply: needsReplyOf(ins?.category, thread.unanswered === 0, thread.unanswered > 0),
       urgentSaid: thread.unanswered > 0 && unanswered.some((m) => URGENT.test(`${m.subject ?? ''}\n${m.text}`)),
