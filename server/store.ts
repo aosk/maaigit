@@ -17,6 +17,7 @@ import type {
   CalendarEvent,
   ChatTurn,
   CourierFlag,
+  ReplyRules,
   CourierLogEntry,
   CourierSettings,
   Duty,
@@ -43,6 +44,8 @@ export interface IntakeState {
   /** MAAI has the details it needs and stopped asking. */
   done?: boolean;
   summary?: string;
+  /** A reply the user could send themselves, written with the summary, so it is ready when they open the message. */
+  draft?: string;
 }
 
 export interface Conversation {
@@ -143,6 +146,8 @@ interface State {
   replyWaitSeconds?: number;
   /** Per number: MAAI's own first replies to that person in the last day, and what it found out. */
   intake: Record<string, IntakeState>;
+  /** How the automatic replies treat people (see ReplyRules). */
+  replyRules: ReplyRules;
   /** Reminders to renew API keys: names and expiry dates only, never a key (see server/keys.ts). */
   keys?: ApiKeyEntry[];
 }
@@ -221,6 +226,7 @@ function seed(): State {
     bot: { commands: [] },
     replyMode: 'smart',
     intake: {},
+    replyRules: { knowContacts: true, shareBusy: true, quiet: [] },
     teams: [],
     teamMembers: [],
     duties: [],
@@ -325,6 +331,11 @@ function load(): State {
   saved.teams = Array.isArray(saved.teams) ? saved.teams : [];
   saved.teamMembers = Array.isArray(saved.teamMembers) ? saved.teamMembers : [];
   saved.duties = Array.isArray(saved.duties) ? saved.duties : [];
+  saved.replyRules = {
+    knowContacts: saved.replyRules?.knowContacts !== false,
+    shareBusy: saved.replyRules?.shareBusy !== false,
+    quiet: Array.isArray(saved.replyRules?.quiet) ? saved.replyRules.quiet.filter((x: unknown): x is string => typeof x === 'string' && /^\d{8,15}$/.test(x)).slice(0, 200) : [],
+  };
   saved.teamSettings = { enabled: saved.teamSettings?.enabled !== false, alertPhone: saved.teamSettings?.alertPhone, fromHour: saved.teamSettings?.fromHour ?? 8, toHour: saved.teamSettings?.toHour ?? 21, hoursBetween: saved.teamSettings?.hoursBetween ?? 4 };
   saved.courier = { enabled: saved.courier?.enabled === true, shortAddress: saved.courier?.shortAddress ?? '', fullDetails: saved.courier?.fullDetails ?? '', doorPhotoPath: saved.courier?.doorPhotoPath ?? '' };
   saved.courierLog = Array.isArray(saved.courierLog) ? saved.courierLog.slice(-200) : [];

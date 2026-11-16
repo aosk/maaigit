@@ -724,6 +724,16 @@ export interface BotCommand {
   result?: string;
 }
 
+/** How MAAI's own WhatsApp replies treat people. */
+export interface ReplyRules {
+  /** Someone in the contacts is greeted by name, in a warmer tone. */
+  knowContacts: boolean;
+  /** Someone in the contacts may be told when the user is expected to be free (never what they are doing). */
+  shareBusy: boolean;
+  /** Numbers (digits, international form) MAAI never answers by itself: their messages only reach the user. */
+  quiet: string[];
+}
+
 /** The user's device bot (for example a Grok bot on their own computer or phone) as MAAI sees it. */
 export interface BotStatus {
   /** A device key exists. */
@@ -745,6 +755,8 @@ export interface BotStatus {
   replyMode: ReplyMode;
   /** Seconds of quiet MAAI waits before answering a run of messages once (0 = each at once). */
   replyWait: number;
+  /** How the automatic replies treat people the user knows, and who is never answered automatically. */
+  replyRules: ReplyRules;
   /** Contacts the bot shared from the phone (names and numbers), for finding someone by name. */
   contacts: number;
   /**
@@ -791,6 +803,8 @@ export interface FeedItem {
   message?: InboxMessage;
   /** What MAAI's first reply found out from the sender (smart replies). */
   intake?: string;
+  /** A reply MAAI wrote for the user to send themselves, ready when they open the message. */
+  readyDraft?: string;
   handled?: boolean;
   /** Whether it needs an answer: MAAI's read (or the user's correction); "maybe" when there is no read to go on. */
   needsReply: 'yes' | 'maybe' | 'no';

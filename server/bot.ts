@@ -75,6 +75,7 @@ export function botStatus(now = Date.now()): BotStatus {
     messages: state.inbox.filter((m) => m.via === 'bot').length,
     replyMode: state.replyMode,
     replyWait: replyWaitSeconds(),
+    replyRules: state.replyRules,
     contacts: state.contacts.length,
     orderPhone: state.bot.orderPhone,
     orderPin: Boolean(state.bot.orderPin),

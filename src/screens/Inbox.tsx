@@ -35,7 +35,7 @@ function clashingNames(items: FeedItem[]): Set<string> {
 
 const Phone = ({ phone, className }: { phone: string; className?: string }) => <bdi dir="ltr" className={className}>{phone}</bdi>;
 
-function Reply({ message, gmail, whatsapp, device, clash, onBack, onChanged }: { message: InboxMessage; clash?: boolean; gmail: boolean; whatsapp: boolean; device: boolean; onBack: () => void; onChanged: () => void }) {
+function Reply({ message, ready, gmail, whatsapp, device, clash, onBack, onChanged }: { message: InboxMessage; /** A reply MAAI already wrote for this message: shown at once, no waiting. */ ready?: string; clash?: boolean; gmail: boolean; whatsapp: boolean; device: boolean; onBack: () => void; onChanged: () => void }) {
   const { t, settings } = useSettings();
   const lang = settings.lang;
   const [tone, setTone] = useState<Tone>(lang === 'ar' ? 'arabic' : 'friendly');
@@ -66,9 +66,10 @@ function Reply({ message, gmail, whatsapp, device, clash, onBack, onChanged }: {
       setSummary(res.summary);
     });
 
-  // Draft once on open; picking a tone redrafts explicitly.
+  // On open: the reply MAAI already wrote, if there is one (no waiting); otherwise one is drafted. Picking a tone redrafts.
   useEffect(() => {
-    void makeDraft(tone);
+    if (ready) setDraft(ready);
+    else void makeDraft(tone);
   }, [message.id]);
 
   function pickTone(next: Tone) {
@@ -319,7 +320,7 @@ export function Inbox() {
 
   const gmail = Boolean(status?.mail?.configured);
   const whatsapp = Boolean(status?.whatsapp?.configured);
-  if (replying) return <Reply message={replying} clash={clashingNames(feed?.items ?? []).has(stripBidi(replying.from).trim().toLowerCase())} gmail={gmail} whatsapp={whatsapp} device={Boolean(feed?.bot.connected)} onBack={() => setReplying(null)} onChanged={() => load(false)} />;
+  if (replying) return <Reply message={replying} ready={feed?.items.find((i) => i.message?.id === replying.id)?.readyDraft} clash={clashingNames(feed?.items ?? []).has(stripBidi(replying.from).trim().toLowerCase())} gmail={gmail} whatsapp={whatsapp} device={Boolean(feed?.bot.connected)} onBack={() => setReplying(null)} onChanged={() => load(false)} />;
   if (adding) return <Messages onBack={() => { setAdding(false); load(false); }} gmail={gmail} whatsapp={whatsapp} device={Boolean(feed?.bot.connected)} />;
 
   const items = feed?.items ?? [];
