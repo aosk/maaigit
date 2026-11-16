@@ -3,7 +3,7 @@ import type { ChatTurn, Lang, Proposal, StatusInfo } from '../../shared/types';
 import { api } from '../api';
 import { useSettings } from '../settings';
 import { canListen, listen, speak, speechStream, stopSpeaking, unlockSpeech, type ListenProblem } from '../speech';
-import { FileText, Mic, Paperclip, Person, Plus, Send } from '../components/Icons';
+import { FileText, Mic, Paperclip, Person, Plus, Send, Stop } from '../components/Icons';
 import { canPickContacts, pickContacts } from '../contacts';
 import { AttachError, prepare, type AttachKind } from '../attach';
 import { takeArrival } from '../nav';
@@ -215,30 +215,39 @@ export function Assistant() {
       return;
     }
     stopSpeaking();
-    unlockSpeech();
     setVoiceNote('');
     if (!canListen) return typeInstead('unsupported');
+    // Shown as listening at once (the red button), then the microphone opens once the phone's speaker is free.
     setLive(true);
     let heard = '';
-    stopRef.current = listen(
-      dictLang,
-      (text) => {
-        heard = text;
-        setInput(text);
-      },
-      (problem) => {
-        if (!alive.current) return; // the screen was left while listening: nothing is sent
-        setLive(false);
-        if (heard) heardWords(heard);
-        else if (problem) typeInstead(problem);
-      },
-      { silenceMs: settings.toggles.longListen ? 5000 : 2500 },
-    );
+    let cancelled = false;
+    stopRef.current = () => {
+      cancelled = true;
+      setLive(false);
+    };
+    void unlockSpeech().then(() => {
+      if (cancelled || !alive.current) return;
+      stopRef.current = listen(
+        dictLang,
+        (text) => {
+          heard = text;
+          setInput(text);
+        },
+        (problem, why) => {
+          if (!alive.current) return; // the screen was left while listening: nothing is sent
+          setLive(false);
+          if (heard) heardWords(heard);
+          else if (problem) typeInstead(problem, why);
+        },
+        { silenceMs: settings.toggles.longListen ? 5000 : 2500 },
+      );
+    });
   }
 
   /** When the browser can't listen, open the keyboard: its own microphone key works everywhere. */
-  function typeInstead(problem: ListenProblem) {
-    setVoiceNote(problem === 'denied' ? t.micDenied : problem === 'no-speech' ? t.noSpeech : t.voiceUnsupported);
+  function typeInstead(problem: ListenProblem, why?: string) {
+    // The browser's own reason is shown too, in brackets, so a repeat can be told apart from plain silence.
+    setVoiceNote(`${problem === 'denied' ? t.micDenied : problem === 'no-speech' ? t.noSpeech : t.voiceUnsupported}${why && problem === 'no-speech' ? ` (${why})` : ''}`);
     inputRef.current?.focus();
   }
 
@@ -263,7 +272,7 @@ export function Assistant() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    unlockSpeech();
+    void unlockSpeech();
     void send(input);
   }
 
@@ -285,7 +294,7 @@ export function Assistant() {
           <div className="chips">
             <p className="sub" style={{ fontSize: '0.9em' }}>{t.chatEmpty}</p>
             {(ideas?.lang === lang ? ideas.list : t.examples).map((ex) => (
-              <button key={ex} className="chip" onClick={() => { unlockSpeech(); void send(ex); }}>{ex}</button>
+              <button key={ex} className="chip" onClick={() => { void unlockSpeech(); void send(ex); }}>{ex}</button>
             ))}
           </div>
         )}
@@ -314,7 +323,8 @@ export function Assistant() {
       </div>
 
       <form className="composer" onSubmit={onSubmit}>
-        <div className="composer-hint" aria-live="polite">
+        <div className={`composer-hint${live ? ' live' : ''}`} aria-live="polite">
+          {live && <span className="rec-dot" aria-hidden="true" />}
           {live ? t.listening : voiceNote || t.tapToSpeak}
         </div>
         {pending.length > 0 && (
@@ -368,7 +378,7 @@ export function Assistant() {
               onClick={toggleMic}
               disabled={busy}
             >
-              <Mic size={26} />
+              {live ? <Stop size={24} /> : <Mic size={26} />}
             </button>
           )}
         </div>

@@ -34,16 +34,41 @@ let unlocked = false;
  * iPhone Safari speaks only after speech was first started from a tap. A reply arrives seconds after the tap (after the
  * server answers), so without this it is silently dropped. Call from a tap: it speaks nothing, once, and unlocks the voice.
  */
-export function unlockSpeech() {
-  if (unlocked || !('speechSynthesis' in window)) return;
+/**
+ * Resolves once the silent "unlock" phrase is over (at once when it was said before). On the iPhone, speaking and
+ * listening share one audio channel: a microphone opened while that phrase is still "playing" hears nothing, which
+ * is why the very first tap on the microphone used to fail. Wait for this before listening.
+ */
+let unlocking: Promise<void> | null = null;
+
+export function unlockSpeech(): Promise<void> {
+  // Asked again while the phrase is still being said (the "talk" shortcut, then the microphone): the same wait.
+  if (unlocking) return unlocking;
+  if (unlocked || !('speechSynthesis' in window)) return Promise.resolve();
   unlocked = true;
-  try {
-    const u = new SpeechSynthesisUtterance(' ');
-    u.volume = 0;
-    window.speechSynthesis.speak(u);
-  } catch {
-    unlocked = false;
-  }
+  unlocking = new Promise<void>((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    // Never left waiting: some browsers do not report the end of an empty phrase.
+    setTimeout(finish, 700);
+    try {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      u.onend = finish;
+      u.onerror = finish;
+      window.speechSynthesis.speak(u);
+    } catch {
+      unlocked = false;
+      finish();
+    }
+  }).finally(() => {
+    unlocking = null;
+  });
+  return unlocking;
 }
 
 /** Queues sentences to be read aloud in this session, each in the voice of its own language. */
@@ -167,7 +192,8 @@ export type ListenProblem = 'unsupported' | 'denied' | 'no-speech';
 export function listen(
   lang: Lang,
   onText: (text: string) => void,
-  onEnd: (problem?: ListenProblem) => void,
+  /** `why` is the browser's own word for what went wrong (network, audio-capture and so on), when it gave one. */
+  onEnd: (problem?: ListenProblem, why?: string) => void,
   opts: { silenceMs?: number } = {},
 ): () => void {
   if (!Ctor) {
@@ -178,6 +204,7 @@ export function listen(
   let finished = false;
   let stopping = false;
   let problem: ListenProblem | undefined;
+  let why: string | undefined;
   let kept = ''; // finished phrases from earlier rounds
   let current = ''; // what this round has heard so far
   let heardAnything = false;
@@ -200,7 +227,7 @@ export function listen(
     clearTimeout(limit);
     clearTimeout(silence);
     clearTimeout(firstWord);
-    onEnd(heardAnything ? undefined : problem ?? 'no-speech');
+    onEnd(heardAnything ? undefined : problem ?? 'no-speech', heardAnything ? undefined : why);
   }
 
   function stop() {
@@ -237,6 +264,8 @@ export function listen(
       }
     };
     r.onerror = (e) => {
+      // "no-speech" and "aborted" are the ordinary ends of a quiet round; anything else is worth telling the user.
+      if (e.error && e.error !== 'no-speech' && e.error !== 'aborted') why = String(e.error).slice(0, 40);
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         // iPhone home-screen apps report "service-not-allowed": voice typing isn't offered there.
         problem = e.error === 'not-allowed' ? 'denied' : 'unsupported';
