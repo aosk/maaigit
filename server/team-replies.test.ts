@@ -226,3 +226,23 @@ describe('a picture or a PDF from a team member', () => {
     expect(flush().some((c) => c.kind === 'media')).toBe(false);
   });
 });
+
+describe('what the user is told about a team answer', () => {
+  it('is Claude\'s reviewed line, while the log keeps the person\'s own words', async () => {
+    setUp();
+    reads({ intent: 'blocked', summary: 'أحمد يقول النظام واقف وما يقدر يقدّم الطلب اليوم. https://evil.example/x' });
+    await handleTeamMessage(message('🎤 والله النضام واقف من الصبح ومقدرت اقدم الطلب'), NOW);
+    const [alert] = toOwner();
+    expect(alert.text).toContain('أحمد يقول النظام واقف وما يقدر يقدّم الطلب اليوم.');
+    expect(alert.text).not.toContain('evil.example');
+    expect(alert.text).not.toContain('النضام');
+    expect(duty().replies.at(-1)!.text).toBe('🎤 والله النضام واقف من الصبح ومقدرت اقدم الطلب');
+  });
+
+  it('falls back to their own words when Claude gives no summary', async () => {
+    setUp();
+    reads({ intent: 'question', summary: '' });
+    await handleTeamMessage(message('متى الموعد؟'), NOW);
+    expect(toOwner()[0].text).toContain('متى الموعد؟');
+  });
+});

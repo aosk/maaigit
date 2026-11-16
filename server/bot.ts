@@ -6,7 +6,7 @@ import { isEmail } from './mail.js';
 import { phoneDigits } from '../shared/vcard.js';
 import { agentEnabled, audit, id, save, state } from './store.js';
 import { cleanText } from './ai/untrusted.js';
-import { answer, answerLeftovers, replyWaitSeconds, tell, whyNot } from './intake.js';
+import { answer, answerLeftovers, replyWaitSeconds, summaryComes, tell, whyNot } from './intake.js';
 import { claimInbound } from './inbound.js';
 
 /**
@@ -293,7 +293,9 @@ export function receiveFromBot(body: unknown, now = Date.now(), onOrder: (order:
     const reason = whyNot(message, now);
     if (reason) notAnswered[reason] = (notAnswered[reason] ?? 0) + 1;
     if (now - Date.parse(message.receivedAt) > ACK_RECENT_MS || message.replied) continue;
-    void tell(message, {}, now);
+    // Told at once, in their own words, only when no reviewed summary is coming (no AI reply for this message).
+    // Otherwise the user is told a moment later, with what Claude understood from it (see server/intake.ts).
+    if (reason || !summaryComes()) void tell(message, {}, now);
     const reply = (text: string) => queueCommand({ kind: 'reply', phone: message.phone, toName: message.from, text, automatic: true });
     const general = () => void answer(message, reply).catch((error: Error) => console.error('First reply failed:', error.message));
     // A person in one of the user's teams, or a delivery courier, is answered by that module instead (see server/inbound.ts).
