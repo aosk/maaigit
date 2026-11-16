@@ -360,6 +360,7 @@ export type UsagePurpose =
   | 'email-digest'
   | 'email-draft'
   | 'whatsapp'
+  | 'team-replies'
   | 'news'
   /** Before the trading agents were counted one by one (kept for older rows). */
   | 'trading'
@@ -859,7 +860,7 @@ export interface TeamMember {
 }
 
 type DutyStatus = 'open' | 'acknowledged' | 'done' | 'blocked' | 'cancelled';
-type DutyIntent = 'done' | 'need_time' | 'blocked' | 'question' | 'ack' | 'other';
+export type DutyIntent = 'done' | 'need_time' | 'blocked' | 'question' | 'ack' | 'other';
 
 /** Something a person owes by a date, which MAAI reminds them of and follows up. */
 export interface Duty {

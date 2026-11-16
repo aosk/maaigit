@@ -119,12 +119,12 @@ export function removeMember(phone: string): void {
 }
 
 /** The member with this number, if any. */
-const memberOf = (phone: string): TeamMember | undefined => state.teamMembers.find((m) => m.phone === phone);
+export const memberOf = (phone: string): TeamMember | undefined => state.teamMembers.find((m) => m.phone === phone);
 
 // ---------- Duties ----------
 
 const isOpen = (d: Duty) => d.status === 'open' || d.status === 'acknowledged' || d.status === 'blocked';
-const openDuties = (): Duty[] => state.duties.filter(isOpen);
+export const openDuties = (): Duty[] => state.duties.filter(isOpen);
 
 /** A date the user or the assistant gave: an ISO time, or a plain date (taken as the end of that day, Riyadh time). */
 function parseDue(value: unknown, now: Date): string {

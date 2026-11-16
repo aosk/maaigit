@@ -12,6 +12,8 @@ import { emailForClaude, dayTime } from './context.js';
 import { cleanText, neutralize } from './untrusted.js';
 import { category, cleanFact } from '../profile.js';
 import type { Tool, ToolResult, ToolUse } from './claude.js';
+import { TeamError, createDuty, normalizePhone } from '../teams.js';
+import { dueText } from '../team-text.js';
 
 /**
  * The tools Claude can call. The propose_* tools only create a pending
@@ -478,9 +480,60 @@ const propose_device_action: ToolSpec<{ title: string; action: DeviceAction; tar
   detail: lastTitle,
 };
 
+const create_followup: ToolSpec<{ person: string; title: string; due: string }> = {
+  definition: {
+    description:
+      "Set up a follow-up with someone in the user's teams (Najiz, estates, lawyers...). MAAI then reminds them on WhatsApp a day before it is due, again if they do not answer, reads what they answer, and tells the user if they have not answered two reminders. The person MUST already be in a team (Settings → My teams): only people the user put there can be messaged, with fixed texts, so no approval card is shown. Use it when the user says things like \"remind Ahmed to file the request before Thursday\". due is an ISO date (YYYY-MM-DD, taken as the end of that day, Riyadh time) or an ISO date-time.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        person: { type: 'string', description: "The person's name as the user said it (part of it is enough), or their number." },
+        title: { type: 'string', description: 'What they have to do, in a few words, in the language the team uses (Arabic by default).' },
+        due: { type: 'string', description: 'When it is due: YYYY-MM-DD or an ISO date-time.' },
+      },
+      required: ['person', 'title', 'due'],
+      additionalProperties: false,
+    },
+  },
+  run({ person, title, due }) {
+    const digits = normalizePhone(person);
+    const wanted = cleanText(person, 80).toLowerCase();
+    const found = state.teamMembers.filter((m) => (digits ? m.phone === digits : wanted && m.name.toLowerCase().includes(wanted)));
+    if (!found.length) throw new ToolError(`${cleanText(person, 40) || 'That person'} is not in any team yet. Ask the user to add them in Settings → My teams (name, number and team), then try again.`);
+    // Several matches: the user picks; never guess between two people.
+    if (found.length > 1) throw new ToolError(`Several people match: ${found.map((m) => `${cleanText(m.name, 40)} (+${m.phone})`).join(', ')}. Ask the user which one.`);
+    try {
+      const duty = createDuty({ title, phone: found[0].phone, due, source: 'assistant' });
+      return `Follow-up set for ${cleanText(duty.name, 40)}: "${cleanText(duty.title, 100)}", due ${dueText(duty.due, 'en')}. They are reminded a day before, and again if they do not answer.`;
+    } catch (error) {
+      if (error instanceof TeamError) throw new ToolError(error.message);
+      throw error;
+    }
+  },
+  detail: ({ title }) => title,
+};
+
+const followups_status: ToolSpec<Record<string, never>> = {
+  definition: {
+    description: "List the user's follow-ups with their teams: what is open, who owes it, when it is due, how many reminders went out and what they answered. Use it when the user asks how a follow-up or a team is doing.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  run() {
+    const open = state.duties.filter((d) => d.status === 'open' || d.status === 'acknowledged' || d.status === 'blocked');
+    const closed = state.duties.filter((d) => d.status === 'done').slice(-5);
+    if (!open.length && !closed.length) return 'No follow-ups yet.';
+    const line = (d: (typeof state.duties)[number]) => {
+      const answer = d.replies.at(-1);
+      return `- ${neutralize(cleanText(d.name, 40))}: ${neutralize(cleanText(d.title, 100))} · due ${dueText(d.due, 'en')} · ${d.status} · ${d.reminders.length} reminder(s)${d.escalatedAt ? ' · you were told they did not answer' : ''}${answer ? ` · last answer (${answer.intent}): ${neutralize(cleanText(answer.text, 120))}` : ''}`;
+    };
+    return `${open.length ? `Open (${open.length}):\n${open.map(line).join('\n')}` : 'Nothing open.'}${closed.length ? `\nRecently done:\n${closed.map(line).join('\n')}` : ''}`;
+  },
+  detail: () => undefined,
+};
+
 // Each tool has its own input type, checked by its strict schema; the table of them cannot name one type for all.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SPECS: Record<string, ToolSpec<any>> = { read_email, search_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder, propose_remember, propose_device_task, propose_device_action, find_contact };
+const SPECS: Record<string, ToolSpec<any>> = { read_email, search_email, read_whatsapp, propose_whatsapp, read_asana_task, propose_asana_update, propose_asana_task, propose_email, propose_meeting, propose_reminder, propose_remember, propose_device_task, propose_device_action, find_contact, create_followup, followups_status };
 
 export const tools: Tool[] = Object.entries(SPECS).map(([name, spec]) => ({ name, strict: true, ...spec.definition }));
 

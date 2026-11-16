@@ -268,6 +268,11 @@ export async function alertTrade(key: string, body: string): Promise<void> {
   await deliver({ key, kind: 'trade', text: () => ({ title: 'أسهمي', body }) }, '/#/stocks');
 }
 
+/** A team member did not answer, answered something that needs the user, or finished: always told, opening My teams in Settings. */
+export async function alertFollowup(key: string, body: string): Promise<void> {
+  await deliver({ key, kind: 'message', text: () => ({ title: 'متابعة الفريق', body }) }, '/#/settings');
+}
+
 /** An order from the user's WhatsApp number made approval cards: always told, opening the assistant where they wait. */
 export async function alertOrderCards(count: number): Promise<void> {
   await deliver({

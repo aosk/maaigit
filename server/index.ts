@@ -8,6 +8,8 @@ import { config } from './config.js';
 import { pinGuard, phoneSetup } from './phone.js';
 import { startScheduler } from './notify.js';
 import { startHealthWatch } from './health.js';
+import { startTeamReminders } from './team-reminders.js';
+import { registerTeamReplies } from './team-replies.js';
 import { feedRoutes } from './feed.js';
 import { startGoogleWrite } from './gwrite.js';
 import { startBackgroundSync, syncAll } from './sync.js';
@@ -68,6 +70,9 @@ if (config.production) {
 
 // The briefing notification is written from freshly read calendars, Asana and mail.
 startHealthWatch();
+// The user's teams: reminders to them, and their answers read.
+registerTeamReplies();
+startTeamReminders();
 // Messages that were waiting to be answered when the server last stopped (a deploy, a restart) are answered now, once.
 setTimeout(() => {
   const n = answerLeftoverMessages();
