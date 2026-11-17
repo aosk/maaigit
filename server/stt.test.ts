@@ -112,6 +112,45 @@ describe('writing out what was said in the app', () => {
   });
 });
 
+describe('the outside speech service (when its key is set)', () => {
+  afterEach(() => {
+    delete process.env.GROQ_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+  });
+  const answer = (status: number, body: unknown) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+
+  it('is used first, with the computer off, and gets the recording and the language', async () => {
+    state.bot = { commands: [] }; // no bot at all
+    expect(canHear()).toBe(false);
+    process.env.GROQ_API_KEY = 'gsk_test';
+    expect(canHear()).toBe(true);
+    let sent: { url: string; auth: string; lang: unknown; model: unknown; bytes: number } | undefined;
+    const ask = (async (url: string, init: RequestInit) => {
+      const form = init.body as FormData;
+      sent = { url, auth: (init.headers as Record<string, string>).authorization, lang: form.get('language'), model: form.get('model'), bytes: (form.get('file') as Blob).size };
+      return new Response(JSON.stringify({ text: '  ذكرني  بكرة ' }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const sound = wavOf(3);
+    await expect(hear(sound, 'ar', Date.now(), ask)).resolves.toEqual({ text: 'ذكرني بكرة' });
+    expect(sent).toEqual({ url: 'https://api.groq.com/openai/v1/audio/transcriptions', auth: 'Bearer gsk_test', lang: 'ar', model: 'whisper-large-v3-turbo', bytes: sound.length });
+    delete process.env.GROQ_API_KEY;
+    process.env.OPENAI_API_KEY = 'sk-test';
+    await expect(hear(sound, 'en', Date.now(), ask)).resolves.toEqual({ text: 'ذكرني بكرة' });
+    expect(sent?.url).toBe('https://api.openai.com/v1/audio/transcriptions');
+  });
+
+  it('falls back to the bot when the service fails, and says so plainly when there is no bot either', async () => {
+    process.env.GROQ_API_KEY = 'gsk_test';
+    const waiting = hear(wavOf(2), 'ar', Date.now(), answer(500, { error: 'down' }));
+    await new Promise((r) => setTimeout(r, 20));
+    heard(idOf(), 'من البوت');
+    await expect(waiting).resolves.toEqual({ text: 'من البوت' });
+    state.bot = { commands: [] };
+    await expect(hear(wavOf(2), 'ar', Date.now(), answer(401, {}))).resolves.toEqual({ why: 'error' });
+    await expect(hear(wavOf(2), 'ar', Date.now(), answer(200, { text: '   ' }))).resolves.toEqual({ why: 'empty' });
+  });
+});
+
 describe('the doors: the app sends a recording, the bot fetches it and answers', () => {
   it('goes all the way round, three times in a row, and the bot\'s door needs the device key', async () => {
     const site = await listen(createInnerApp());

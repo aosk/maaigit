@@ -232,7 +232,7 @@ describe('listening: when the microphone really opens, and why nothing was heard
       const [problem, why, trace] = ended[0] as [string, string, string];
       expect(problem).toBe('no-speech');
       expect(why).toBe('network');
-      expect(trace).toMatch(/^ok=0 start=0 audio=1000 sound=1 speech=0 rounds=1 ms=\d+ spoke=-1 err=network$/);
+      expect(trace).toMatch(/^ok=0 torn=1 start=0 audio=1000 sound=1 speech=0 rounds=1 ms=\d+ spoke=-1 err=network$/);
     } finally {
       vi.useRealTimers();
     }
@@ -249,7 +249,7 @@ describe('listening: when the microphone really opens, and why nothing was heard
       made[0].onresult!({ results: [Object.assign([{ transcript: 'ذكرني' }], { isFinal: true })] });
       await vi.advanceTimersByTimeAsync(4000);
       expect(ended[0].slice(0, 2)).toEqual([undefined, undefined]);
-      expect(ended[0][2]).toMatch(/^ok=1 start=-1 audio=0 sound=0 speech=0 rounds=1 ms=\d+ spoke=-1$/);
+      expect(ended[0][2]).toMatch(/^ok=1 torn=1 start=-1 audio=0 sound=0 speech=0 rounds=1 ms=\d+ spoke=-1$/);
     } finally {
       vi.useRealTimers();
     }

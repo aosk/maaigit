@@ -30,17 +30,68 @@ export function plainWav(data: Buffer): boolean {
   return data.readUInt16LE(20) === 1 && data.readUInt16LE(22) === 1 && data.readUInt32LE(24) === 16_000 && data.readUInt16LE(34) === 16;
 }
 
-/** Whether what is said in the app can be written out right now: the bot is there and its speech model is not off. */
-export function canHear(now = Date.now()): boolean {
+/**
+ * An outside speech service, used first when its key is set (so voice works with the computer off). Either
+ * GROQ_API_KEY or OPENAI_API_KEY: both take the same request. With a key set, the recording does leave MAAI for that
+ * service; without one it never does.
+ */
+function cloud(): { url: string; key: string; model: string } | null {
+  const groq = process.env.GROQ_API_KEY?.trim();
+  if (groq) return { url: 'https://api.groq.com/openai/v1/audio/transcriptions', key: groq, model: process.env.STT_MODEL?.trim() || 'whisper-large-v3-turbo' };
+  const openai = process.env.OPENAI_API_KEY?.trim();
+  if (openai) return { url: 'https://api.openai.com/v1/audio/transcriptions', key: openai, model: process.env.STT_MODEL?.trim() || 'whisper-1' };
+  return null;
+}
+
+/** The words from the outside service, or null when it failed (the bot is tried next). `ask` is fetch, swapped in tests. */
+async function hearCloud(audio: Buffer, lang: Lang, ask: typeof fetch = fetch): Promise<string | null> {
+  const service = cloud();
+  if (!service) return null;
+  try {
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(audio)], { type: 'audio/wav' }), 'said.wav');
+    form.append('model', service.model);
+    form.append('language', lang);
+    form.append('response_format', 'json');
+    const res = await ask(service.url, { method: 'POST', headers: { authorization: `Bearer ${service.key}` }, body: form, signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) {
+      console.log(`Hear: the speech service answered ${res.status}`);
+      return null;
+    }
+    const text = ((await res.json()) as { text?: unknown }).text;
+    return typeof text === 'string' ? text.replace(/\s+/g, ' ').trim().slice(0, 2000) : null;
+  } catch (error) {
+    console.log(`Hear: the speech service failed (${(error as Error).name})`);
+    return null;
+  }
+}
+
+/** The bot is there and its speech model is not off. */
+function botCanHear(now: number): boolean {
   const { lastSeen, voice } = state.bot;
   if (!botConnected() || !lastSeen || now - Date.parse(lastSeen) > BOT_AWAY_MS) return false;
   return voice?.state !== 'off' && voice?.state !== 'installing';
 }
 
+/** Whether what is said in the app can be written out right now: by the outside service, or by the bot. */
+export function canHear(now = Date.now()): boolean {
+  return Boolean(cloud()) || botCanHear(now);
+}
+
 /** Hands a recording to the bot and waits for its words. Always answers: with the words, or with why not. */
-export function hear(audio: Buffer, lang: Lang, now = Date.now()): Promise<Heard> {
-  if (!plainWav(audio)) return Promise.resolve({ why: 'bad-audio' });
-  if (!canHear(now)) return Promise.resolve({ why: botConnected() && state.bot.voice?.state ? 'not-ready' : 'bot-away' });
+export async function hear(audio: Buffer, lang: Lang, now = Date.now(), ask: typeof fetch = fetch): Promise<Heard> {
+  if (!plainWav(audio)) return { why: 'bad-audio' };
+  if (cloud()) {
+    const text = await hearCloud(audio, lang, ask);
+    if (text) return { text };
+    if (text === '') return { why: 'empty' };
+    if (!botCanHear(now)) return { why: 'error' };
+  }
+  return hearBot(audio, lang, now);
+}
+
+function hearBot(audio: Buffer, lang: Lang, now: number): Promise<Heard> {
+  if (!botCanHear(now)) return Promise.resolve({ why: botConnected() && state.bot.voice?.state ? 'not-ready' : 'bot-away' });
   if (waiting.size >= AT_ONCE) return Promise.resolve({ why: 'busy' });
   const id = randomUUID();
   return new Promise((resolve) => {

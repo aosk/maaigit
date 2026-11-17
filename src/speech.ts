@@ -207,6 +207,7 @@ interface Recognition {
   onspeechstart: (() => void) | null;
   start(): void;
   stop(): void;
+  abort?(): void;
 }
 
 type RecognitionCtor = new () => Recognition;
@@ -272,7 +273,16 @@ export function listen(
     clearTimeout(limit);
     clearTimeout(silence);
     clearTimeout(firstWord);
-    const trace = `start=${seen.start} audio=${seen.audio} sound=${seen.sound ? 1 : 0} speech=${seen.speech ? 1 : 0} rounds=${seen.rounds} ms=${Date.now() - began} spoke=${lastSpokeAt ? Date.now() - lastSpokeAt : -1}${why ? ` err=${why}` : ''}`;
+    // Let go of the recogniser completely. On the iPhone one that was only stopped can leave its sound session
+    // half open, and the next listen then starts on it at once and hears nothing.
+    try {
+      if (rec) rec.onresult = rec.onend = rec.onerror = rec.onstart = rec.onaudiostart = rec.onsoundstart = rec.onspeechstart = null;
+      rec?.abort?.();
+    } catch {
+      // already gone
+    }
+    rec = null;
+    const trace = `torn=1 start=${seen.start} audio=${seen.audio} sound=${seen.sound ? 1 : 0} speech=${seen.speech ? 1 : 0} rounds=${seen.rounds} ms=${Date.now() - began} spoke=${lastSpokeAt ? Date.now() - lastSpokeAt : -1}${why ? ` err=${why}` : ''}`;
     onEnd(heardAnything ? undefined : problem ?? 'no-speech', heardAnything ? undefined : why, `ok=${heardAnything ? 1 : 0} ${trace}`);
   }
 
