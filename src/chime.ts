@@ -17,22 +17,51 @@ function audio(): AudioContext | null {
   }
 }
 
-// Phones only allow sound after the person has touched the page once: unlock it on the first touch.
+// Phones only allow sound after the person has touched the page once. The output used to be opened on that first
+// touch and then stayed open for good; it is now opened only by the first touch while chimes are switched on, and
+// let go of whenever the microphone listens.
 if (typeof window !== 'undefined') {
   const unlock = () => {
-    void audio()?.resume();
     window.removeEventListener('pointerdown', unlock);
     window.removeEventListener('keydown', unlock);
+    if (wanted()) void audio()?.resume();
   };
   window.addEventListener('pointerdown', unlock);
   window.addEventListener('keydown', unlock);
+}
+
+/** Whether the user has chimes switched on (read from the saved settings, so nothing is opened for someone who has them off). */
+function wanted(): boolean {
+  try {
+    return (JSON.parse(localStorage.getItem('maai.settings') ?? '{}') as { sound?: boolean }).sound !== false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Lets go of the phone's sound output while the microphone listens. An open sound output (even a silent one) and the
+ * microphone share one channel on the iPhone, and the microphone can then be handed silence. Returns the state the
+ * output was in, for finding out what happened ("none" when no output was ever opened).
+ */
+export async function quietSound(): Promise<string> {
+  const before = context?.state ?? 'none';
+  try {
+    if (context && context.state !== 'suspended' && context.state !== 'closed') await context.suspend();
+  } catch {
+    // nothing to let go of
+  }
+  return before;
 }
 
 /** Plays the chime. Calls closer together than 4 seconds (a push and the banner for the same alert) sound once. */
 export function playChime(now = Date.now()): boolean {
   if (now - lastPlayed < 4000) return false;
   const ctx = audio();
-  if (!ctx || ctx.state !== 'running') return false;
+  if (!ctx) return false;
+  // Let go of while the microphone listened (see quietSound): woken for this chime; it sounds from the next one on.
+  if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
+  if (ctx.state !== 'running') return false;
   lastPlayed = now;
   const start = ctx.currentTime + 0.02;
   // E5 then A5: a calm rising fourth.
