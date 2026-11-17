@@ -31,6 +31,8 @@ await ctx.addInitScript(() => {
       else if (speakerBusy()) { log.push('DEAF (the speaker still held the sound channel)'); this.deaf = true; }
       else log.push('heard');
       chan.listening = this;
+      setTimeout(() => this.onstart?.(), 20);
+      if (!this.deaf) setTimeout(() => this.onaudiostart?.(), 250);
       if (!this.deaf) this.t = setTimeout(() => this.onresult?.({ results: [Object.assign([{ transcript: 'ذكرني أتصل بأحمد الساعة خمسة' }], { isFinal: true })] }), 500);
     }
     stop() { clearTimeout(this.t); setTimeout(() => { if (chan.listening === this) chan.listening = null; this.onend?.(); }, 200); }

@@ -173,3 +173,84 @@ describe('speaking to the assistant again, over its spoken answer', () => {
     }
   });
 });
+
+describe('listening: when the microphone really opens, and why nothing was heard', () => {
+  /** A recogniser the test drives by hand. */
+  function recogniser() {
+    const made: { onstart?: () => void; onaudiostart?: () => void; onsoundstart?: () => void; onspeechstart?: () => void; onend?: () => void; onerror?: (e: { error: string }) => void; onresult?: (e: unknown) => void; stopped: boolean }[] = [];
+    class Rec {
+      stopped = false;
+      constructor() {
+        made.push(this);
+      }
+      start() {}
+      stop() {
+        this.stopped = true;
+        setTimeout(() => (this as unknown as { onend?: () => void }).onend?.(), 10);
+      }
+    }
+    vi.stubGlobal('window', { SpeechRecognition: Rec });
+    vi.stubGlobal('navigator', { userAgent: 'iPhone' });
+    return made;
+  }
+
+  it('waits 8 seconds for the first word from when the microphone opened, not from the tap, and says so once it is open', async () => {
+    vi.useFakeTimers();
+    try {
+      const made = recogniser();
+      const { listen } = await import('./speech');
+      const ended: unknown[][] = [];
+      let opened = 0;
+      listen('ar', () => {}, (...a) => ended.push(a), { onOpen: () => (opened += 1) });
+      made[0].onstart!();
+      await vi.advanceTimersByTimeAsync(4500); // the phone takes 4.5 seconds to open the microphone
+      expect(opened).toBe(1); // (taken as open 2.5 s after listening started, since the phone had not said)
+      made[0].onaudiostart!();
+      await vi.advanceTimersByTimeAsync(7000); // 11.5 s after the tap: the old limit of 8 s would have given up
+      expect(ended).toEqual([]);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(ended).toHaveLength(1);
+      expect(ended[0][0]).toBe('no-speech');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports what the phone noticed, in times and yes/no only: here the microphone opened and heard sound, but no words came', async () => {
+    vi.useFakeTimers();
+    try {
+      const made = recogniser();
+      const { listen } = await import('./speech');
+      const ended: unknown[][] = [];
+      listen('ar', () => {}, (...a) => ended.push(a));
+      made[0].onstart!();
+      await vi.advanceTimersByTimeAsync(1000);
+      made[0].onaudiostart!();
+      made[0].onsoundstart!();
+      made[0].onerror!({ error: 'network' });
+      await vi.advanceTimersByTimeAsync(9000);
+      const [problem, why, trace] = ended[0] as [string, string, string];
+      expect(problem).toBe('no-speech');
+      expect(why).toBe('network');
+      expect(trace).toMatch(/^start=0 audio=1000 sound=1 speech=0 rounds=1 ms=\d+ spoke=-1 err=network$/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives no trace when words were heard', async () => {
+    vi.useFakeTimers();
+    try {
+      const made = recogniser();
+      const { listen } = await import('./speech');
+      const ended: unknown[][] = [];
+      listen('ar', () => {}, (...a) => ended.push(a));
+      made[0].onaudiostart!();
+      made[0].onresult!({ results: [Object.assign([{ transcript: 'ذكرني' }], { isFinal: true })] });
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(ended[0]).toEqual([undefined, undefined, undefined]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

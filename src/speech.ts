@@ -201,6 +201,10 @@ interface Recognition {
   onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
   onend: (() => void) | null;
   onerror: ((e: { error: string }) => void) | null;
+  onstart: (() => void) | null;
+  onaudiostart: (() => void) | null;
+  onsoundstart: (() => void) | null;
+  onspeechstart: (() => void) | null;
   start(): void;
   stop(): void;
 }
@@ -226,8 +230,9 @@ export function listen(
   lang: Lang,
   onText: (text: string) => void,
   /** `why` is the browser's own word for what went wrong (network, audio-capture and so on), when it gave one. */
-  onEnd: (problem?: ListenProblem, why?: string) => void,
-  opts: { silenceMs?: number } = {},
+  onEnd: (problem?: ListenProblem, why?: string, trace?: string) => void,
+  /** `onOpen` is called when the phone has really opened the microphone (which can take seconds after the tap). */
+  opts: { silenceMs?: number; onOpen?: () => void } = {},
 ): () => void {
   if (!Ctor) {
     onEnd('unsupported');
@@ -244,13 +249,19 @@ export function listen(
   let rec: Recognition | null = null;
   let silence: ReturnType<typeof setTimeout> | undefined;
   const limit = setTimeout(() => stop(), 120_000);
-  // Give up waiting for the first word after 8 seconds of quiet.
-  let firstWord: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+  const began = Date.now();
+  // What the phone reported, for finding out why nothing was heard: when listening started, when the microphone
+  // really opened, whether any sound and any speech were noticed, how many rounds. Times and yes/no only.
+  const seen = { start: -1, audio: -1, sound: false, speech: false, rounds: 0 };
+  const giveUp = () => {
     if (!heardAnything) {
       problem = 'no-speech';
       stop();
     }
-  }, 8000);
+  };
+  // Give up waiting for the first word after 8 seconds of quiet, counted from when the microphone really opened
+  // (the phone can take several seconds to open it); 15 seconds after the tap whatever happens.
+  let firstWord: ReturnType<typeof setTimeout> | undefined = setTimeout(giveUp, 15_000);
 
   const text = () => `${kept} ${current}`.replace(/\s+/g, ' ').trim();
 
@@ -260,7 +271,8 @@ export function listen(
     clearTimeout(limit);
     clearTimeout(silence);
     clearTimeout(firstWord);
-    onEnd(heardAnything ? undefined : problem ?? 'no-speech', heardAnything ? undefined : why);
+    const trace = `start=${seen.start} audio=${seen.audio} sound=${seen.sound ? 1 : 0} speech=${seen.speech ? 1 : 0} rounds=${seen.rounds} ms=${Date.now() - began} spoke=${lastSpokeAt ? Date.now() - lastSpokeAt : -1}${why ? ` err=${why}` : ''}`;
+    onEnd(heardAnything ? undefined : problem ?? 'no-speech', heardAnything ? undefined : why, heardAnything ? undefined : trace);
   }
 
   function stop() {
@@ -284,9 +296,27 @@ export function listen(
     // Android's recogniser, when left listening, reports the whole sentence again in every result. Asking for one
     // sentence at a time (and restarting, below) avoids that; the iPhone and computers are fine as they are.
     r.continuous = !ANDROID;
+    seen.rounds += 1;
+    r.onstart = () => {
+      if (seen.start < 0) seen.start = Date.now() - began;
+      // A browser that never says the microphone opened: taken as open a moment after listening started.
+      setTimeout(() => !finished && seen.audio < 0 && opts.onOpen?.(), 2500);
+    };
+    r.onaudiostart = () => {
+      if (seen.audio >= 0) return;
+      seen.audio = Date.now() - began;
+      opts.onOpen?.();
+      if (!heardAnything) {
+        clearTimeout(firstWord);
+        firstWord = setTimeout(giveUp, 8000);
+      }
+    };
+    r.onsoundstart = () => (seen.sound = true);
+    r.onspeechstart = () => (seen.speech = true);
     r.onresult = (e) => {
       current = assembleHeard(Array.from(e.results).map((res) => ({ text: res[0].transcript, final: res.isFinal })));
       if (current.trim()) {
+        if (!heardAnything) opts.onOpen?.();
         heardAnything = true;
         clearTimeout(firstWord);
         firstWord = undefined;

@@ -239,6 +239,8 @@ export const api = {
   saveMember: (member: { phone: string; name: string; teamIds: string[]; lang?: string }) => call<TeamMember>('PUT', '/team-members', member),
   deleteMember: (phone: string) => call<void>('DELETE', `/team-members/${encodeURIComponent(phone)}`),
   sent: () => call<{ messages: SentMessage[] }>('GET', '/sent', undefined, true),
+  /** Why the microphone heard nothing, as the phone reported it (times and yes/no only), for the server log. */
+  micTrace: (trace: string) => call<void>('POST', '/chat/mic-trace', { trace }, true),
   teamContacts: (q: string) => call<AddressCard[]>('GET', `/team-contacts?q=${encodeURIComponent(q)}`),
   addDuty: (duty: { title: string; phone: string; due: string; teamId?: string }) => call<Duty>('POST', '/duties', duty),
   updateDuty: (id: string, patch: { status?: 'done' | 'cancelled'; due?: string }) => call<Duty>('PATCH', `/duties/${encodeURIComponent(id)}`, patch),

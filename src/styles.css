@@ -226,6 +226,8 @@ a { color: var(--tint-text); }
 .mic.live { background: var(--rec); border-color: var(--rec-soft); color: #fff; animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 10px var(--rec-soft); } }
 .composer-hint.live { color: var(--rec); font-weight: 600; }
+.mic.opening { background: var(--warn-bar); border-color: var(--warn-soft); color: #fff; }
+.composer-hint.opening { color: var(--warn-text); font-weight: 600; }
 .rec-dot { display: inline-block; width: 10px; height: 10px; border-radius: 5px; background: var(--rec); margin-inline-end: 6px; animation: blink 1s steps(2, start) infinite; }
 @keyframes blink { to { visibility: hidden; } }
 @media (prefers-reduced-motion: reduce) { .mic.live, .rec-dot { animation: none; } }

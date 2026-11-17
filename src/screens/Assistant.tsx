@@ -48,6 +48,8 @@ export function Assistant() {
   // What to offer in an empty chat: the user's own repeated orders and what today calls for (the usual examples until it loads).
   const [ideas, setIdeas] = useState<{ lang: Lang; list: string[] } | null>(null);
   const [picking, setPicking] = useState(false);
+  // The phone has really opened the microphone (it can take seconds after the tap): only then is it time to speak.
+  const [micOpen, setMicOpen] = useState(false);
   // What the long-lived callbacks (dictation, a streamed reply, an upload) must see now, not as it was when they started.
   const alive = useRef(true);
   const busyRef = useRef(false);
@@ -222,6 +224,7 @@ export function Assistant() {
     }
     // Shown as listening at once (the red button), then the microphone opens once the phone's speaker is free.
     setLive(true);
+    setMicOpen(false);
     let heard = '';
     let cancelled = false;
     stopRef.current = () => {
@@ -237,13 +240,18 @@ export function Assistant() {
           heard = text;
           setInput(text);
         },
-        (problem, why) => {
+        (problem, why, trace) => {
           if (!alive.current) return; // the screen was left while listening: nothing is sent
           setLive(false);
+          setMicOpen(false);
           if (heard) heardWords(heard);
-          else if (problem) typeInstead(problem, why);
+          else if (problem) {
+            typeInstead(problem, why);
+            // Why nothing was heard, as the phone reported it (times and yes/no, never words), for fixing it.
+            if (trace) void api.micTrace(`${trace} read=${settings.toggles.speakReplies ? 1 : 0}`).catch(() => {});
+          }
         },
-        { silenceMs: settings.toggles.longListen ? 5000 : 2500 },
+        { silenceMs: settings.toggles.longListen ? 5000 : 2500, onOpen: () => alive.current && setMicOpen(true) },
       );
     });
   }
@@ -327,9 +335,9 @@ export function Assistant() {
       </div>
 
       <form className="composer" onSubmit={onSubmit}>
-        <div className={`composer-hint${live ? ' live' : ''}`} aria-live="polite">
-          {live && <span className="rec-dot" aria-hidden="true" />}
-          {live ? t.listening : voiceNote || t.tapToSpeak}
+        <div className={`composer-hint${live ? (micOpen ? ' live' : ' opening') : ''}`} aria-live="polite">
+          {live && micOpen && <span className="rec-dot" aria-hidden="true" />}
+          {live ? (micOpen ? t.listening : t.micOpening) : voiceNote || t.tapToSpeak}
         </div>
         {pending.length > 0 && (
           <ul className="attachments" aria-label={t.attach}>
@@ -373,7 +381,7 @@ export function Assistant() {
           ) : (
             <button
               type="button"
-              className={`mic${live ? ' live' : ''}`}
+              className={`mic${live ? (micOpen ? ' live' : ' opening') : ''}`}
               aria-label={live ? t.stopListening : t.startListening}
               aria-pressed={live}
               onClick={toggleMic}
