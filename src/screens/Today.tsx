@@ -1,3 +1,4 @@
+import { useBackCloses } from '../back';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Briefing, BriefingFacts, CalendarEvent, Duty, TodayData } from '../../shared/types';
 import { PRAYER_BUFFER_MINUTES } from '../../shared/prayer';
@@ -57,6 +58,7 @@ export function Today() {
   const [selected, setSelected] = useState<CalendarEvent | null>(null);
   const [work, setWork] = useState<Duty[] | null>(null);
   const closeSheet = useCallback(() => setSelected(null), []);
+  useBackCloses(Boolean(selected), closeSheet);
 
   const load = useCallback((background = false) => {
     api

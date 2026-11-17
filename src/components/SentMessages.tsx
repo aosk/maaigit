@@ -47,7 +47,7 @@ export function SentMessages({ onBack }: { onBack: () => void }) {
   const shown = (messages ?? []).filter((m) => kind === 'all' || m.kind === kind);
   return (
     <div className="screen cols">
-      <button className="back" onClick={onBack}><Back size={20} />{t.sent.back}</button>
+      <button className="btn ghost" onClick={onBack} style={{ paddingInline: 0, alignSelf: 'flex-start' }}><Back size={20} />{t.sent.back}</button>
       <h1 className="title">{t.sent.title}</h1>
       <p className="sub">{t.sent.note}</p>
       <div className="seg wrap" role="radiogroup" aria-label={t.sent.filter}>

@@ -1,3 +1,4 @@
+import { useBackCloses } from '../back';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ChatTurn, Lang, Proposal, StatusInfo } from '../../shared/types';
 import { api } from '../api';
@@ -49,6 +50,7 @@ export function Assistant() {
   // What to offer in an empty chat: the user's own repeated orders and what today calls for (the usual examples until it loads).
   const [ideas, setIdeas] = useState<{ lang: Lang; list: string[] } | null>(null);
   const [picking, setPicking] = useState(false);
+  useBackCloses(picking, () => setPicking(false));
   // The phone has really opened the microphone (it can take seconds after the tap): only then is it time to speak.
   const [micOpen, setMicOpen] = useState(false);
   // What the long-lived callbacks (dictation, a streamed reply, an upload) must see now, not as it was when they started.

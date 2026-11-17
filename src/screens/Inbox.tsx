@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useBackCloses } from '../back';
 import type { FeedItem, InboxFeed, InboxMessage, Lang, StatusInfo, Tone } from '../../shared/types';
 import { api } from '../api';
 import { cachedFeed, keepFeed, whenConfirmed, whenForgotten } from '../inboxCache';
@@ -269,11 +270,22 @@ export function Inbox() {
     }
   });
   const [showSummary, setShowSummary] = useState(false);
+  // Closing a message shows the list where it was, not at its top.
+  const listY = useRef(0);
+  useLayoutEffect(() => {
+    if (!openKey && listY.current) window.scrollTo(0, listY.current);
+  }, [openKey]);
+  // The phone's Back closes what is open, the innermost first, instead of leaving «رسائلك».
+  useBackCloses(Boolean(openKey), () => setOpenKey(null));
+  useBackCloses(sentOpen, () => setSentOpen(false));
+  useBackCloses(adding, () => setAdding(false));
+  useBackCloses(Boolean(replying), () => setReplying(null));
   // Tapping «رسائلك» while a message is open goes back to the list.
   useOnRetap('inbox', () => {
     setOpenKey(null);
     setReplying(null);
     setAdding(false);
+    setSentOpen(false);
   });
   const [now, setNow] = useState(() => Date.now());
   // Read and unread live on this device; this makes the list show a change at once.
@@ -347,7 +359,10 @@ export function Inbox() {
     setOpenKey(item.key);
     markSeen(item, true);
     setReadTick((x) => x + 1);
-    if (document.documentElement.dataset.layout !== 'desktop') window.scrollTo(0, 0);
+    if (document.documentElement.dataset.layout !== 'desktop') {
+      listY.current = window.scrollY;
+      window.scrollTo(0, 0);
+    }
   }
 
   function setRead(item: FeedItem, read: boolean) {
@@ -643,6 +658,7 @@ function Messages({ onBack, gmail, whatsapp, device }: { onBack: () => void; gma
   useOnRefresh(load);
 
   const current = messages.find((m) => m.id === open);
+  useBackCloses(Boolean(current), () => setOpen(null));
   if (current) return <Reply message={current} gmail={gmail} whatsapp={whatsapp} device={device} onBack={() => setOpen(null)} onChanged={load} />;
 
   const add = (e: FormEvent) => {

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { watchHistory } from './back';
 import { useSettings } from './settings';
 import { Calendar, ChartUp, Chat, Gear, Inbox as InboxIcon } from './components/Icons';
 import { Today } from './screens/Today';
@@ -27,10 +28,14 @@ export function App() {
   const [route, setRoute] = useState<Route>(readRoute);
   const [locked, setLocked] = useState<{ kind: 'pin' | 'password'; face: boolean } | null>(null);
   const unread = useMailCount();
+  const scrolls = useRef<Partial<Record<Route, number>>>({});
+  /** The screen the scroll position belongs to right now. */
+  const shown = useRef<Route>(route);
 
   // The service worker shows notifications; register it early so they work with the app closed.
   useEffect(() => {
     void worker();
+    watchHistory();
   }, []);
 
   // Touching the screen keeps MAAI open: with Face ID set up the server locks it after a few minutes
@@ -122,10 +127,40 @@ export function App() {
         }
       }
       setRoute(next);
-      window.scrollTo(0, 0);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
+  }, [route]);
+
+  // Each screen keeps its place: coming back to it (by its tab, Back or Forward) shows it where it was left, not at
+  // the top. The place is noted as the person scrolls; the browser's own remembering is off so the two do not fight.
+  useEffect(() => {
+    try {
+      window.history.scrollRestoration = 'manual';
+    } catch {
+      // an old browser: its own remembering stays
+    }
+    const onScroll = () => { scrolls.current[shown.current] = window.scrollY; };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // After the new screen is drawn: its saved place, or the top the first time. A screen that loads its content late
+  // is too short to scroll at first, so the place is asked for again for a moment, until the person touches the screen.
+  useLayoutEffect(() => {
+    const y = route === 'assistant' ? 0 : scrolls.current[route] ?? 0; // the chat goes to its last message by itself
+    shown.current = route;
+    window.scrollTo(0, y);
+    if (!y) return;
+    let stop = false;
+    const touched = () => { stop = true; };
+    const events = ['touchstart', 'wheel', 'keydown', 'pointerdown'] as const;
+    for (const name of events) window.addEventListener(name, touched, { passive: true, once: true });
+    const timers = [60, 150, 300, 600, 1000, 1500].map((ms) => setTimeout(() => { if (!stop && Math.abs(window.scrollY - y) > 2) window.scrollTo(0, y); }, ms));
+    return () => {
+      timers.forEach(clearTimeout);
+      for (const name of events) window.removeEventListener(name, touched);
+    };
   }, [route]);
 
   useEffect(() => {
