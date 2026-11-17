@@ -801,7 +801,7 @@ const en = {
   newsRankedNote: 'Ranked by recency, source and how many sources reported it. Add a Claude API key for MAAI to pick and summarise.',
   attach: 'Attach a photo or document',
   pickContact: 'Pick a contact from your phone',
-  cp: { open: 'Add a contact to the message', title: 'Pick a contact', close: 'Close', search: 'Type part of the name', hint: 'From the contacts MAAI holds. Their name and number go into your message.', none: 'Nobody by that name.', fromPhone: 'Pick from the phone instead' },
+  cp: { open: 'Add a contact to the message', title: 'Pick a contact', close: 'Close', search: 'Type part of the name', hint: 'These are the contacts your phone shared through WhatsApp. Their name and number go into your message.', none: 'Nobody by that name.', fromPhone: 'Open the phone\'s contacts', autofillHint: 'From the iPhone: tap the name box and choose “AutoFill Contact” above the keyboard, then pick anyone.', name: 'Name', tel: 'Number', add: 'Add', orSearch: 'Or search the contacts MAAI holds:' },
   sent: {
     open: 'Sent',
     back: 'Messages',
@@ -1769,7 +1769,7 @@ const ar: Strings = {
   newsRankedNote: 'مرتّبة بحسب الحداثة والمصدر وعدد من نقلها. أضف مفتاح Claude ليختار «معي» ويلخّص.',
   attach: 'أرفق صورة أو مستنداً',
   pickContact: 'اختر جهة اتصال من جوالك',
-  cp: { open: 'أضف جهة اتصال للرسالة', title: 'اختر جهة اتصال', close: 'إغلاق', search: 'اكتب جزء من الاسم', hint: 'من جهات الاتصال المحفوظة عند «معي». الاسم والرقم ينضافان لرسالتك.', none: 'ما فيه أحد بهذا الاسم.', fromPhone: 'اختر من الجوال بدلاً' },
+  cp: { open: 'أضف جهة اتصال للرسالة', title: 'اختر جهة اتصال', close: 'إغلاق', search: 'اكتب جزء من الاسم', hint: 'هذي جهات الاتصال اللي شاركها جوالك عبر واتساب. الاسم والرقم ينضافان لرسالتك.', none: 'ما فيه أحد بهذا الاسم.', fromPhone: 'افتح جهات اتصال الجوال', autofillHint: 'من الآيفون: اضغط خانة الاسم واختر «تعبئة تلقائية لجهة الاتصال» فوق لوحة المفاتيح، ثم اختر أي شخص.', name: 'الاسم', tel: 'الرقم', add: 'أضف', orSearch: 'أو ابحث في جهات الاتصال المحفوظة عند «معي»:' },
   sent: {
     open: 'المرسلة',
     back: 'رسائلك',

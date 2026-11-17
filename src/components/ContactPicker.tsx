@@ -20,8 +20,13 @@ export function ContactPicker({ onPick, onClose }: { onPick: (text: string) => v
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<{ q: string; cards: AddressCard[] } | null>(null);
   const [error, setError] = useState('');
+  const [name, setName] = useState('');
+  const [tel, setTel] = useState('');
   const box = useRef<HTMLInputElement>(null);
-  useEffect(() => box.current?.focus(), []);
+  const addTyped = () => {
+    const text = contactText(name, tel);
+    if (tel.replace(/\D/g, '').length >= 8 && text) onPick(text);
+  };
   // What was found, with the words it was found for: results for an older search are never shown under a newer one.
   const q = query.trim();
   useEffect(() => {
@@ -44,6 +49,21 @@ export function ContactPicker({ onPick, onClose }: { onPick: (text: string) => v
         <strong>{t.cp.title}</strong>
         <button type="button" className="btn ghost" onClick={onClose}>{t.cp.close}</button>
       </div>
+      {canPickContacts() && (
+        // The phone's own contact list, where the browser offers it (Android; on the iPhone only with Safari's "Contact Picker API" switched on).
+        <button type="button" className="btn primary" onClick={() => void pickContacts().then((names) => names && onPick(names)).catch(() => {})}>{t.cp.fromPhone}</button>
+      )}
+      {/* On the iPhone the keyboard offers "AutoFill Contact" for a name and a phone field: any contact on the phone can be chosen there. */}
+      {/* Not a form of its own: it sits inside the message form, and a form inside a form would send the message instead. */}
+      <div className="cp-phone">
+        <span className="sub">{t.cp.autofillHint}</span>
+        <div className="row">
+          <input className="grow" name="name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.cp.name} aria-label={t.cp.name} dir="auto" />
+          <input className="grow" name="tel" type="tel" inputMode="tel" autoComplete="tel" value={tel} onChange={(e) => setTel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTyped(); } }} placeholder={t.cp.tel} aria-label={t.cp.tel} dir="ltr" />
+          <button type="button" className="btn secondary" disabled={tel.replace(/\D/g, '').length < 8} onClick={addTyped}>{t.cp.add}</button>
+        </div>
+      </div>
+      <span className="sub">{t.cp.orSearch}</span>
       <input ref={box} type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.cp.search} aria-label={t.cp.search} dir="auto" autoComplete="off" />
       {error && <div className="error" role="alert">{error}</div>}
       {cards && cards.length === 0 && <p className="sub">{t.cp.none}</p>}
@@ -60,9 +80,7 @@ export function ContactPicker({ onPick, onClose }: { onPick: (text: string) => v
           )),
         )}
       </ul>
-      {canPickContacts() && (
-        <button type="button" className="btn secondary" onClick={() => void pickContacts().then((names) => names && onPick(names)).catch(() => {})}>{t.cp.fromPhone}</button>
-      )}
+
     </div>
   );
 }
