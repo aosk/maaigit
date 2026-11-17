@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { writePrivate } from './secure-fs.js';
 import { failed, ok } from './signals.js';
 import type Anthropic from '@anthropic-ai/sdk';
-import { config } from './config.js';
+import { config, setPlace } from './config.js';
 import { calendarConfigured, googleEvents } from './gcal.js';
 import { dedupeEvents } from '../shared/schedule.js';
 import type { AddressCard } from '../shared/vcard.js';
@@ -144,6 +144,8 @@ interface State {
   addressBook: { cards: AddressCard[]; importedAt?: string };
   /** Minutes MAAI stays open on a Face ID device without being used, as the user chose (else MAAI_LOCK_MINUTES). */
   lockMinutes?: number;
+  /** Where the user is (chosen in Settings), for prayer times and the clock. Absent: the server's own setting. */
+  location?: import('./config.js').Place;
   /** How MAAI answers new WhatsApp messages by itself (see server/intake.ts). */
   replyMode: ReplyMode;
   /** How many seconds of quiet MAAI waits after someone's message before answering, so a run of messages gets one answer (0 = answer each at once). */
@@ -353,6 +355,7 @@ function load(): State {
 }
 
 export const state: State = load();
+if (state.location) setPlace(state.location);
 
 let saveTimer: NodeJS.Timeout | undefined;
 /** Writes at most twice a second; a restart picks up where it left off. */

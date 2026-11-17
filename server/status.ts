@@ -30,6 +30,6 @@ export function status(): StatusInfo {
     trading: tradingSummary(),
     lockMinutes: state.lockMinutes ?? config.lockMinutes,
     model: MODEL,
-    location: { latitude: config.latitude, longitude: config.longitude, timezone: config.timezone },
+    location: { latitude: config.latitude, longitude: config.longitude, timezone: config.timezone, name: config.placeName },
   };
 }

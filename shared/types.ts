@@ -361,7 +361,8 @@ export interface StatusInfo {
   /** Minutes a Face ID device stays open without being used. */
   lockMinutes?: number;
   model: string;
-  location: { latitude: number; longitude: number; timezone: string };
+  /** Where prayer times and the clock are worked out for. `name` is what the user chose in Settings (empty: the server's own setting). */
+  location: { latitude: number; longitude: number; timezone: string; name?: string };
 }
 
 /** What a Claude request was for, so token use can be split by feature. */

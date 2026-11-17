@@ -5,13 +5,39 @@ import { eventEnd } from '../../shared/schedule.js';
 import { briefing } from '../ai/briefing.js';
 import { briefingFacts } from '../ai/facts.js';
 import { refreshCalendar, sane } from '../gcal.js';
-import { config } from '../config.js';
+import { config, setPlace } from '../config.js';
 import { allEvents, audit, id, save, state } from '../store.js';
 import { mirrorToGoogle, removeFromGoogle } from '../gwrite.js';
 import { lastSyncAt } from '../sync.js';
 import { HttpError, find, lang, text, wrap } from './http.js';
 
 export const today = Router();
+
+const validZone = (zone: string) => {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Where the user is now (a city picked in Settings, or the phone's own position): prayer times and the clock follow. */
+today.put('/location', (req, res) => {
+  const body = (req.body ?? {}) as { latitude?: unknown; longitude?: unknown; timezone?: unknown; name?: unknown };
+  const latitude = Number(body.latitude);
+  const longitude = Number(body.longitude);
+  const timezone = text(body.timezone, 64);
+  if (typeof body.latitude !== 'number' || typeof body.longitude !== 'number' || !(Math.abs(latitude) <= 90) || !(Math.abs(longitude) <= 180)) throw new HttpError(400, 'Send a latitude (-90 to 90) and a longitude (-180 to 180).');
+  if (!timezone || !validZone(timezone)) throw new HttpError(400, 'Send a time zone such as Asia/Riyadh.');
+  // Four decimals is about ten metres: plenty for prayer times, and no more precise than needed.
+  const round = (n: number) => Math.round(n * 10_000) / 10_000;
+  state.location = { latitude: round(latitude), longitude: round(longitude), timezone, name: text(body.name, 60).replace(/\p{Cc}/gu, '') || 'My location' };
+  setPlace(state.location);
+  save();
+  audit(`Location set to ${state.location.name} (${timezone})`, 'User', 'done');
+  res.json(state.location);
+});
 
 today.get('/today', wrap(async (_req, res) => {
   await refreshCalendar();

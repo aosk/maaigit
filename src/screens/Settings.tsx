@@ -1,3 +1,4 @@
+import { PlaceSettings } from '../components/PlaceSettings';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import type { Lang, ReplyMode, ReplyRules, StatusInfo } from '../../shared/types';
@@ -145,6 +146,10 @@ export function SettingsScreen() {
 
       <Group id="courier" title={t.groupCourier} hint={t.groupCourierHint}>
         <CourierSettings />
+      </Group>
+
+      <Group id="place" title={t.place.group} hint={t.place.hint}>
+        <PlaceSettings where={status?.location} onChanged={loadStatus} />
       </Group>
 
       <Group id="calendar" title={t.groupCalendar}>

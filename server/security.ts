@@ -27,7 +27,7 @@ export function securityHeaders(options: { csp?: boolean; hsts?: boolean } = {})
     res.setHeader('X-Frame-Options', 'DENY');
     // Links that carry a secret (the calendar address) must never leak in a Referer header.
     res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), payment=(), usb=(), microphone=(self)');
+    res.setHeader('Permissions-Policy', 'camera=(), geolocation=(self), payment=(), usb=(), microphone=(self)');
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     if (options.csp) res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);

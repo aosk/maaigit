@@ -36,6 +36,23 @@ process.env.TZ ||= timezone;
 const production = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true' || process.argv.includes('--online');
 if (production) process.env.NODE_ENV ??= 'production';
 
+/** Where the user is, for prayer times and the clock. Starts as the server's setting; Settings can change it. */
+export interface Place {
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  /** What the user called it ("جدة", "My location"), or empty for the server's own setting. */
+  name: string;
+}
+const home: Place = { latitude: num(process.env.MAAI_LATITUDE, 24.7136), longitude: num(process.env.MAAI_LONGITUDE, 46.6753), timezone, name: '' };
+let place: Place = home;
+
+/** The place chosen in Settings (null: back to the server's own setting). The clock follows it at once. */
+export function setPlace(next: Place | null): void {
+  place = next ?? home;
+  process.env.TZ = place.timezone;
+}
+
 export const config = {
   dataDir,
   port: num(process.env.PORT, 5173),
@@ -43,9 +60,19 @@ export const config = {
   phonePort: num(process.env.MAAI_PHONE_PORT, num(process.env.PORT, 5173) + 1),
   /** Online mode: password, all network interfaces, built files. Render sets RENDER=true on its servers. */
   production,
-  latitude: num(process.env.MAAI_LATITUDE, 24.7136),
-  longitude: num(process.env.MAAI_LONGITUDE, 46.6753),
-  timezone,
+  // These three follow the place chosen in Settings (see setPlace).
+  get latitude() {
+    return place.latitude;
+  },
+  get longitude() {
+    return place.longitude;
+  },
+  get timezone() {
+    return place.timezone;
+  },
+  get placeName() {
+    return place.name;
+  },
   /** How often everything (calendars, Asana, mail) is refreshed in the background. */
   syncHours: Math.max(0.25, num(process.env.MAAI_SYNC_HOURS, 3)),
   /** Hours between automatic updates of the news section. */
