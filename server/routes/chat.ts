@@ -61,17 +61,17 @@ assistant.post('/chat/stream', async (req, res) => {
 });
 
 /**
- * Why the app's microphone heard nothing, as the phone reported it: times and yes/no flags, never words. Logged so
- * the cause can be found. Only the expected shape is kept (letters, digits, = and spaces), and only a few a minute.
+ * What the phone reported about one listen of the app's microphone (heard or not): times and yes/no flags, never
+ * words. Logged so a microphone that hears nothing can be explained. Only the expected shape is kept (letters, digits, = and spaces), and only a few a minute.
  */
 let traces: number[] = [];
 assistant.post('/chat/mic-trace', (req, res) => {
   const now = Date.now();
   traces = traces.filter((t) => now - t < 60_000);
   const trace = typeof req.body?.trace === 'string' ? req.body.trace.replace(/[^a-z0-9=\- ]/gi, '').slice(0, 160) : '';
-  if (trace && traces.length < 6) {
+  if (trace && traces.length < 12) {
     traces.push(now);
-    console.log(`Mic heard nothing: ${trace}`);
+    console.log(`Mic: ${trace}`);
   }
   res.status(204).end();
 });

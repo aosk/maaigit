@@ -8,6 +8,7 @@ import { AttachError, prepare, type AttachKind } from '../attach';
 import { takeArrival } from '../nav';
 import { Logo } from '../components/Logo';
 import { ProposalCard } from '../components/ProposalCard';
+import { quietSound } from '../chime';
 import { ContactPicker } from '../components/ContactPicker';
 import { WorkingBubble } from '../components/WorkingBubble';
 import { addEvent, emptyProgress, type Progress } from '../progress';
@@ -232,7 +233,12 @@ export function Assistant() {
       setLive(false);
     };
     // The microphone opens once nothing is being read aloud and the phone's speaker is free (see speechQuiet).
-    void speechQuiet().then(() => {
+    let soundWas = 'none';
+    // The sound output is let go of first (an open one can leave the microphone with silence on the iPhone).
+    void quietSound().then((was) => {
+      soundWas = was;
+      return speechQuiet();
+    }).then(() => {
       if (cancelled || !alive.current) return;
       stopRef.current = listen(
         dictLang,
@@ -244,12 +250,10 @@ export function Assistant() {
           if (!alive.current) return; // the screen was left while listening: nothing is sent
           setLive(false);
           setMicOpen(false);
+          // What the phone reported about this listen (times and yes/no, never words), heard or not, for fixing it.
+          if (trace) void api.micTrace(`${trace} read=${settings.toggles.speakReplies ? 1 : 0} out=${soundWas}`).catch(() => {});
           if (heard) heardWords(heard);
-          else if (problem) {
-            typeInstead(problem, why);
-            // Why nothing was heard, as the phone reported it (times and yes/no, never words), for fixing it.
-            if (trace) void api.micTrace(`${trace} read=${settings.toggles.speakReplies ? 1 : 0}`).catch(() => {});
-          }
+          else if (problem) typeInstead(problem, why);
         },
         { silenceMs: settings.toggles.longListen ? 5000 : 2500, onOpen: () => alive.current && setMicOpen(true) },
       );

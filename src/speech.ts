@@ -230,6 +230,7 @@ export function listen(
   lang: Lang,
   onText: (text: string) => void,
   /** `why` is the browser's own word for what went wrong (network, audio-capture and so on), when it gave one. */
+  /** `trace` is what the phone reported about this listen (times and yes/no only): given every time, heard or not. */
   onEnd: (problem?: ListenProblem, why?: string, trace?: string) => void,
   /** `onOpen` is called when the phone has really opened the microphone (which can take seconds after the tap). */
   opts: { silenceMs?: number; onOpen?: () => void } = {},
@@ -272,7 +273,7 @@ export function listen(
     clearTimeout(silence);
     clearTimeout(firstWord);
     const trace = `start=${seen.start} audio=${seen.audio} sound=${seen.sound ? 1 : 0} speech=${seen.speech ? 1 : 0} rounds=${seen.rounds} ms=${Date.now() - began} spoke=${lastSpokeAt ? Date.now() - lastSpokeAt : -1}${why ? ` err=${why}` : ''}`;
-    onEnd(heardAnything ? undefined : problem ?? 'no-speech', heardAnything ? undefined : why, heardAnything ? undefined : trace);
+    onEnd(heardAnything ? undefined : problem ?? 'no-speech', heardAnything ? undefined : why, `ok=${heardAnything ? 1 : 0} ${trace}`);
   }
 
   function stop() {
