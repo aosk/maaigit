@@ -61,7 +61,7 @@ const XAI_BASE = (process.env.XAI_BASE_URL || 'https://api.x.ai/v1').replace(/\/
 const SYNC_MS = Math.max(5, Number(process.env.SYNC_MINUTES) || 60) * 60_000;
 const DEVICE = 'WhatsApp bot';
 /** Shown in MAAI's server log, so it is clear which copy of the bot is running. */
-const VERSION = '2026-11-17c';
+const VERSION = '2026-11-17d';
 if (!/^https:\/\//.test(BASE) && !/^http:\/\/localhost(:\d+)?\//.test(BASE)) {
   const found = fs.readdirSync(HERE).filter((f) => f.startsWith('.env'));
   const where = !envUsed
@@ -539,6 +539,29 @@ function noteLanguage(typed, phone, text) {
 function voiceLanguage(typed, english, phone) {
   return typed[phone] ?? (english.has(phone) ? 'english' : 'arabic');
 }
+
+/** The sound of a recording the MAAI app made (a plain WAV: one channel, 16-bit, 16,000 a second), or null. */
+function wavSamples(bytes) {
+  const text = (from, to) => String.fromCharCode(...bytes.subarray(from, to));
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length < 44 || text(0, 4) !== 'RIFF' || text(8, 12) !== 'WAVE') return null;
+  let at = 12;
+  let ok = false;
+  while (at + 8 <= bytes.length) {
+    const name = text(at, at + 4);
+    const size = view.getUint32(at + 4, true);
+    if (name === 'fmt ') ok = view.getUint16(at + 8, true) === 1 && view.getUint16(at + 10, true) === 1 && view.getUint32(at + 12, true) === 16000 && view.getUint16(at + 22, true) === 16;
+    if (name === 'data') {
+      if (!ok) return null;
+      const n = Math.floor(Math.min(size, bytes.length - at - 8) / 2);
+      const out = new Float32Array(n);
+      for (let i = 0; i < n; i++) out[i] = view.getInt16(at + 8 + i * 2, true) / 32768;
+      return out;
+    }
+    at += 8 + size + (size % 2);
+  }
+  return null;
+}
 // VOICE-END
 
 const STT_PACKAGES = ['@huggingface/transformers@4.3.2', 'ogg-opus-decoder@1.7.5'];
@@ -606,6 +629,40 @@ async function loadStt() {
     sttLoading = null;
   });
   return sttLoading;
+}
+
+/**
+ * What the user said to the assistant in the MAAI app: MAAI gives the recording's id, the bot fetches the sound,
+ * writes it out with the same speech model as voice notes, and sends the words back. Nothing is kept.
+ */
+async function hearApp(id) {
+  const say = (body) => maai('POST', '/stt', { id, ...body });
+  const began = Date.now();
+  try {
+    const ready = stt === 'off' ? null : await loadStt();
+    if (!ready || typeof ready === 'string') {
+      await say({ why: 'not-ready' });
+      return { ok: false, output: `The speech model is not ready (${voiceReport.state}).` };
+    }
+    const res = await fetch(`${BASE}/stt?${new URLSearchParams({ id })}`, { headers: { authorization: `Bearer ${KEY}` }, signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) return { ok: false, output: `MAAI answered ${res.status} for the recording.` };
+    const samples = wavSamples(new Uint8Array(await res.arrayBuffer()));
+    if (!samples?.length) {
+      await say({ why: 'empty' });
+      return { ok: false, output: 'The recording was not a sound MAAI\'s app makes.' };
+    }
+    const language = res.headers.get('x-maai-lang') === 'en' ? 'english' : 'arabic';
+    // In line with the voice notes: the model uses the whole processor.
+    const job = voiceLine.then(() => withTimeout(ready.hear(samples, { chunk_length_s: 30, return_timestamps: false, language, task: 'transcribe' }), 40_000, 'writing out what was said'));
+    voiceLine = job.then(() => {}, () => {}); // a failure here does not stop the line for the next one
+    const out = await job;
+    const text = String(out?.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+    await say(text ? { text } : { why: 'empty' });
+    return { ok: Boolean(text), output: `Wrote out ${Math.round(samples.length / 16000)} s said in the app (${Date.now() - began} ms).` };
+  } catch (error) {
+    await say({ why: 'error' }).catch(() => {});
+    return { ok: false, output: `Could not write out what was said in the app (${why(error)}).` };
+  }
 }
 
 /** The bytes of a message's attachment, straight from WhatsApp's media servers first, the library's way second. */
@@ -1182,6 +1239,10 @@ async function handleAll(commands) {
         // MAAI asks for a picture or a PDF by the message's id (only ones it is allowed to read: see server/media.ts).
         result = await sendMedia(String(c.text));
         log(result.output);
+      } else if (c.kind === 'stt') {
+        // What was said to the assistant in the app, to be written out here (see server/stt.ts).
+        result = await hearApp(String(c.text));
+        log(result.output);
       } else if (c.kind === 'task' && c.action) {
         log(`Action ${c.action}: ${c.text.slice(0, 80)}`);
         result = await act(c.action, c.text);
@@ -1280,6 +1341,9 @@ wa.on('ready', async () => {
     // Once the first read is in: the minute-by-minute safety net for messages the live events miss.
     .finally(() => setInterval(() => void catchUp(), 60_000));
   setInterval(() => void shareContacts().catch(() => {}), 24 * 3_600_000);
+  // Where the voice packages are already installed, the speech model is loaded now, so the first thing said in the
+  // app does not wait for it. (Not installed yet: left until the first voice note asks for it.)
+  if (stt !== 'off') void import('@huggingface/transformers').then(() => loadStt(), () => {});
   await sync();
   setInterval(sync, SYNC_MS);
   void listenForCommands();

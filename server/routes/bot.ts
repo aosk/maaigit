@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import { BotInputError, MAX_BATCH, botStatus, finishCommand, keyMatches, receiveContacts, receiveFromBot, receiveLink, seen, takeCommands, waitForCommands } from '../bot.js';
 import { receiveFile } from '../media.js';
+import { audioFor, heard } from '../stt.js';
 import { alertLink } from '../notify.js';
 import { fixVoiceNotes } from '../voice-fix.js';
 import { takeOrder, voiceFailed } from '../remote.js';
@@ -108,6 +109,22 @@ deviceApi.post('/media', express.raw({ type: '*/*', limit: '4mb' }), (req, res) 
   const outcome = receiveFile(id, req.body);
   if (outcome !== 'taken') return res.status(outcome === 'not asked for' ? 404 : 415).json({ error: `MAAI did not take this file: ${outcome}.` });
   res.json({ ok: true });
+});
+
+/** The app recording MAAI told the bot about (see server/stt.ts): the sound, once, and the language to write it in. */
+deviceApi.get('/stt', (req, res) => {
+  seen();
+  const got = audioFor(typeof req.query.id === 'string' ? req.query.id.slice(0, 64) : '');
+  if (!got) return res.status(404).json({ error: 'MAAI is not waiting for this recording.' });
+  res.set('x-maai-lang', got.lang).type('audio/wav').send(got.audio);
+});
+
+/** The words of that recording, or why there are none. */
+deviceApi.post('/stt', (req, res) => {
+  seen();
+  const body = (req.body ?? {}) as { id?: unknown; text?: unknown; why?: unknown };
+  const taken = heard(typeof body.id === 'string' ? body.id.slice(0, 64) : '', typeof body.text === 'string' ? body.text : '', typeof body.why === 'string' ? body.why.slice(0, 20) : undefined);
+  res.status(taken ? 200 : 404).json({ ok: taken });
 });
 
 /** The phone's contacts (names and numbers), so the assistant can find someone by name. Replaces the last list. */

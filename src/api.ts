@@ -197,7 +197,14 @@ export const api = {
   /** Streams MAAI's progress (thinking, steps, reply text) and resolves with the final reply. `signal` abandons it (the screen was left). */
   send: async (text: string, lang: Lang, onEvent: (e: ChatEvent) => void, attachments: string[] = [], signal?: AbortSignal, voice?: Lang, spoken = false) =>
     readStream(await request('POST', '/chat/stream', { text, lang, attachments, voice, spoken }, false, signal), onEvent),
-  /** Sends a recording to be turned into words (Arabic and English may be mixed). */
+  /** What was said to the assistant, recorded by the app: written out on the user's own computer. Fails with the reason as the message. */
+  hear: async (audio: ArrayBuffer, lang: Lang): Promise<string> => {
+    const res = await fetch(`/api/chat/hear?lang=${lang}`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: audio, signal: AbortSignal.timeout(60_000) });
+    const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string; why?: string; kind?: string; face?: boolean };
+    if (res.status === 401 && data.error === 'locked') window.dispatchEvent(new CustomEvent(LOCKED_EVENT, { detail: { kind: data.kind, face: data.face === true } }));
+    if (!res.ok || !data.text) throw new Error(data.why ?? (res.status === 401 ? 'locked' : 'error'));
+    return data.text;
+  },
   contacts: () => call<ContactCount>('GET', '/contacts'),
   // StockSmart
   trading: (background = false, market?: TradingMarket) => call<TradingState>('GET', onMarket('/trading', market), undefined, background),

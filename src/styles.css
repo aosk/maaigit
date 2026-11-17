@@ -1206,3 +1206,6 @@ summary:not([class]), summary.sub { padding-block: 11px; cursor: pointer; }
 /* A field beside a button shares the row: it shrinks to fit instead of pushing the page wider than the phone. */
 input.grow { flex: 1; min-width: 0; }
 form.row > input.grow { border-radius: 4px; border: 1px solid var(--input-border); background: var(--surface); color: var(--text); padding: 0 12px; }
+/* While recording: a bar that moves with the person's voice, so they see they are heard. */
+.rec-level { display: block; height: 4px; margin: 6px auto 0; width: min(220px, 60%); border-radius: 2px; background: var(--seg-bg); overflow: hidden; }
+.rec-level i { display: block; height: 100%; background: var(--rec); transform-origin: center; transition: transform 90ms linear; }

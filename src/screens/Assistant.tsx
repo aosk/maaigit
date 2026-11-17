@@ -10,6 +10,7 @@ import { takeArrival } from '../nav';
 import { Logo } from '../components/Logo';
 import { ProposalCard } from '../components/ProposalCard';
 import { quietSound } from '../chime';
+import { canRecord, record } from '../recorder';
 import { ContactPicker } from '../components/ContactPicker';
 import { WorkingBubble } from '../components/WorkingBubble';
 import { addEvent, emptyProgress, type Progress } from '../progress';
@@ -53,6 +54,12 @@ export function Assistant() {
   useBackCloses(picking, () => setPicking(false));
   // The phone has really opened the microphone (it can take seconds after the tap): only then is it time to speak.
   const [micOpen, setMicOpen] = useState(false);
+  /** How loud the person is right now (0 to 1), shown while recording so they see they are heard. */
+  const [level, setLevel] = useState(0);
+  /** The recording is being written out. */
+  const [writing, setWriting] = useState(false);
+  /** Writing out failed because the computer is away: the phone's own recogniser is used until the screen is opened again. */
+  const [hearOff, setHearOff] = useState(false);
   // What the long-lived callbacks (dictation, a streamed reply, an upload) must see now, not as it was when they started.
   const alive = useRef(true);
   const busyRef = useRef(false);
@@ -215,12 +222,54 @@ export function Assistant() {
     } else void send(words, dictLang, true);
   }
 
+  /**
+   * The app records the sound itself and MAAI writes it out (on the user's computer, through the device bot). Used
+   * whenever that is there: the phone's own recogniser goes deaf on a second use on the iPhone.
+   */
+  function recordAndHear() {
+    stopSpeaking(); // nothing is read aloud into the recording
+    setLive(true);
+    setMicOpen(false);
+    setLevel(0);
+    stopRef.current = record(
+      (lvl) => alive.current && setLevel(lvl),
+      (out) => {
+        if (!alive.current) return; // the screen was left while recording: nothing is sent
+        setLive(false);
+        setMicOpen(false);
+        if ('problem' in out) {
+          void api.micTrace(out.trace).catch(() => {});
+          return typeInstead(out.problem);
+        }
+        setWriting(true);
+        const sent = Date.now();
+        api.hear(out.audio, dictLang).then(
+          (words) => {
+            void api.micTrace(`ok=1 ${out.trace} stt=${Date.now() - sent}`).catch(() => {});
+            if (alive.current) heardWords(words);
+          },
+          (e: Error) => {
+            const why = (e.message || 'error').replace(/[^a-z-]/gi, '').slice(0, 20);
+            void api.micTrace(`ok=0 ${out.trace} stt=${Date.now() - sent} why=${why}`).catch(() => {});
+            // The computer is away: the next tap uses the phone's own recogniser instead.
+            if (why === 'bot-away' || why === 'not-ready' || why === 'timeout') setHearOff(true);
+            if (!alive.current) return;
+            setVoiceNote(t.hearFailed(why));
+            inputRef.current?.focus();
+          },
+        ).finally(() => alive.current && setWriting(false));
+      },
+      { silenceMs: settings.toggles.longListen ? 5000 : 2500, onOpen: () => alive.current && setMicOpen(true) },
+    );
+  }
+
   function toggleMic() {
     if (live) {
       stopRef.current?.();
       return;
     }
     setVoiceNote('');
+    if (canRecord && status?.voiceIn && !hearOff) return recordAndHear();
     if (!canListen) {
       stopSpeaking();
       return typeInstead('unsupported');
@@ -343,7 +392,8 @@ export function Assistant() {
       <form className="composer" onSubmit={onSubmit}>
         <div className={`composer-hint${live ? (micOpen ? ' live' : ' opening') : ''}`} aria-live="polite">
           {live && micOpen && <span className="rec-dot" aria-hidden="true" />}
-          {live ? (micOpen ? t.listening : t.micOpening) : voiceNote || t.tapToSpeak}
+          {live ? (micOpen ? t.listening : t.micOpening) : writing ? t.micWriting : voiceNote || t.tapToSpeak}
+          {live && micOpen && <span className="rec-level" aria-hidden="true"><i style={{ transform: `scaleX(${Math.max(0.04, level)})` }} /></span>}
         </div>
         {pending.length > 0 && (
           <ul className="attachments" aria-label={t.attach}>
@@ -391,7 +441,7 @@ export function Assistant() {
               aria-label={live ? t.stopListening : t.startListening}
               aria-pressed={live}
               onClick={toggleMic}
-              disabled={busy}
+              disabled={busy || writing}
             >
               {live ? <Stop size={24} /> : <Mic size={26} />}
             </button>

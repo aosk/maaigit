@@ -1,9 +1,10 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import type { StreamEvent } from '../../shared/types.js';
 import { answering, chat, currentConversation as conversation } from '../ai/chat.js';
 import { approveCard, cancelCard } from '../approve.js';
 import { chatSuggestions } from '../suggestions.js';
 import { releaseUploads, takeUploads } from '../uploads.js';
+import { MAX_WAV_BYTES, hear } from '../stt.js';
 import { id, save, state } from '../store.js';
 import { explain, find, lang, text, wrap } from './http.js';
 
@@ -61,6 +62,22 @@ assistant.post('/chat/stream', async (req, res) => {
 });
 
 /**
+ * What the user said to the assistant, recorded by the app (a short WAV): written out on the user's own computer by
+ * the device bot. Answers with the words, or 503 and why not, so the app can say so and open the keyboard.
+ */
+let hears: number[] = [];
+assistant.post('/chat/hear', express.raw({ type: ['audio/wav', 'audio/x-wav', 'application/octet-stream'], limit: MAX_WAV_BYTES + 1024 }), wrap(async (req, res) => {
+  const now = Date.now();
+  hears = hears.filter((t) => now - t < 60_000);
+  if (hears.length >= 20) return res.status(429).json({ error: 'Too many recordings this minute.', why: 'busy' });
+  hears.push(now);
+  const out = Buffer.isBuffer(req.body) ? await hear(req.body, lang(req.query.lang)) : ({ why: 'bad-audio' } as const);
+  console.log(`Hear: ${'text' in out ? `ok ${Date.now() - now} ms` : out.why}`);
+  if ('text' in out) return res.json({ text: out.text });
+  res.status(out.why === 'bad-audio' ? 400 : 503).json({ error: 'The recording could not be written out.', why: out.why });
+}));
+
+/**
  * What the phone reported about one listen of the app's microphone (heard or not): times and yes/no flags, never
  * words. Logged so a microphone that hears nothing can be explained. Only the expected shape is kept (letters, digits, = and spaces), and only a few a minute.
  */
@@ -68,7 +85,7 @@ let traces: number[] = [];
 assistant.post('/chat/mic-trace', (req, res) => {
   const now = Date.now();
   traces = traces.filter((t) => now - t < 60_000);
-  const trace = typeof req.body?.trace === 'string' ? req.body.trace.replace(/[^a-z0-9=\- ]/gi, '').slice(0, 160) : '';
+  const trace = typeof req.body?.trace === 'string' ? req.body.trace.replace(/[^a-z0-9=\- ]/gi, '').slice(0, 240) : '';
   if (trace && traces.length < 12) {
     traces.push(now);
     console.log(`Mic: ${trace}`);

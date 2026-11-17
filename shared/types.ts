@@ -350,6 +350,8 @@ export interface StatusInfo {
   whatsapp?: WhatsAppStatus;
   /** The user's own device bot (WhatsApp and email from their device, and tasks run there). */
   bot?: BotStatus;
+  /** What is said to the assistant in the app can be written out by the device bot right now (see server/stt.ts). */
+  voiceIn?: boolean;
   /** How this device signed in: not at all on the computer itself, a PIN at home, a password online. */
   auth?: 'none' | 'pin' | 'password';
   /** Online only: whether saved data is on a disk that survives updates (if not, every update erases it). */
@@ -732,8 +734,8 @@ export interface ExchangeLine {
 
 export interface BotCommand {
   id: string;
-  /** reply: send a WhatsApp message from the user's own number; task: an instruction the user approved; restart: start the bot again (asked in Admin); media: hand over the picture or PDF of the message whose id is in `text`. */
-  kind: 'reply' | 'task' | 'restart' | 'media';
+  /** reply: send a WhatsApp message from the user's own number; task: an instruction the user approved; restart: start the bot again (asked in Admin); media: hand over the picture or PDF of the message whose id is in `text`; stt: write out the app recording whose id is in `text`. */
+  kind: 'reply' | 'task' | 'restart' | 'media' | 'stt';
   /** A task the bot does itself; text is then the link (open_url) or the file or folder (open_path, send_file). */
   action?: DeviceAction;
   /** For a reply: the number, digits only, and who it is. */
