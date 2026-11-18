@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MonitorResult } from '../../shared/types';
 import { api } from '../api';
+import { readSite } from '../monitorSite';
 import { sections } from '../monitorView';
+import { MonitorSite } from './MonitorSite';
 import { useSettings } from '../settings';
 
 const DAYS = [1, 7, 30, 90];
@@ -22,7 +24,9 @@ export function MonitorPanel({ configured }: { configured: boolean }) {
   }, [configured, days, load]);
 
   if (!configured) return <section className="card"><p className="sub">{t.mon.noKey}</p></section>;
-  const parts = result?.ok ? sections(result.data, t.mon.summary, settings.lang === 'ar' ? 'ar-SA-u-nu-latn' : 'en') : [];
+  const site = result?.ok ? readSite(result.data) : null;
+  // An answer of another shape is shown as it is.
+  const parts = result?.ok && !site ? sections(result.data, t.mon.summary, settings.lang === 'ar' ? 'ar-SA-u-nu-latn' : 'en') : [];
 
   return (
     <>
@@ -35,8 +39,9 @@ export function MonitorPanel({ configured }: { configured: boolean }) {
           <button className="btn ghost" type="button" disabled={busy} onClick={() => load(days, true)}>{t.mon.refresh}</button>
         </div>
         {result && !result.ok && <div className="error" role="alert">{t.mon.why(result.why, result.status)}</div>}
-        {result?.ok && parts.length === 0 && <p className="sub">{t.mon.empty}</p>}
+        {result?.ok && !site && parts.length === 0 && <p className="sub">{t.mon.empty}</p>}
       </section>
+      {site && <MonitorSite site={site} />}
       {parts.map((s, i) => (
         <section className="card" key={`${s.title}-${i}`}>
           <span className="section-label" style={{ padding: 0 }} dir="auto">{s.title}</span>
