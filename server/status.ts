@@ -10,6 +10,7 @@ import { botStatus } from './bot.js';
 import { newsStatus } from './news/index.js';
 import { config } from './config.js';
 import { canHear } from './stt.js';
+import { monitorConfigured } from './monitor.js';
 import { state } from './store.js';
 import { dataIsPersistent } from './storage.js';
 import { tradingSummary } from './trading/health.js';
@@ -18,6 +19,7 @@ import { tradingSummary } from './trading/health.js';
 export function status(): StatusInfo {
   return {
     aiConfigured: Boolean(client),
+    monitor: monitorConfigured(),
     mail: { configured: mailConfigured, from: mailFrom, inbox: inboxConfigured },
     calendar: { ...calendarStatus(), write: googleWriteStatus() },
     asana: asanaStatus(),

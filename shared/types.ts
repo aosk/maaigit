@@ -336,8 +336,13 @@ export interface NewsDigest {
   everyHours: number;
 }
 
+/** What the monitoring page gets: the other site's own answer as it is, or why there is none. */
+export type MonitorResult = { ok: true; data: unknown; fetchedAt: string } | { ok: false; why: 'no-key' | 'refused' | 'unreachable' | 'not-json' | 'too-big'; status?: number };
+
 export interface StatusInfo {
   aiConfigured: boolean;
+  /** The key for the monitoring page of the user's other site is set on the server. */
+  monitor?: boolean;
   /** Gmail connected for sending, and from which address. */
   mail?: { configured: boolean; from: string; inbox?: boolean };
   /** Google Calendar, read through its private iCal address. */

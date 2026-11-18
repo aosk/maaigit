@@ -1209,3 +1209,13 @@ form.row > input.grow { border-radius: 4px; border: 1px solid var(--input-border
 /* While recording: a bar that moves with the person's voice, so they see they are heard. */
 .rec-level { display: block; height: 4px; margin: 6px auto 0; width: min(220px, 60%); border-radius: 2px; background: var(--seg-bg); overflow: hidden; }
 .rec-level i { display: block; height: 100%; background: var(--rec); transform-origin: center; transition: transform 90ms linear; }
+/* Monitoring: values as tiles, lists as tables that scroll sideways inside their card (never the page). */
+.mon-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 8px 0 0; }
+.mon-tiles > div { background: var(--seg-bg); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.mon-tiles dt { font-size: max(12px, 0.76em); color: var(--text2); overflow-wrap: anywhere; }
+.mon-tiles dd { margin: 2px 0 0; font-weight: 700; font-size: 1.1em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.mon-table-wrap { margin-top: 12px; display: grid; gap: 6px; min-width: 0; }
+.mon-scroll { overflow-x: auto; max-width: 100%; }
+.mon-table { border-collapse: collapse; font-size: max(12px, 0.8em); width: 100%; }
+.mon-table th, .mon-table td { text-align: start; padding: 8px 10px; border-bottom: 1px solid var(--sep); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mon-table th { color: var(--text2); font-weight: 600; }

@@ -6,6 +6,7 @@ import { briefing } from '../ai/briefing.js';
 import { briefingFacts } from '../ai/facts.js';
 import { refreshCalendar, sane } from '../gcal.js';
 import { config, setPlace } from '../config.js';
+import { monitoring } from '../monitor.js';
 import { allEvents, audit, id, save, state } from '../store.js';
 import { mirrorToGoogle, removeFromGoogle } from '../gwrite.js';
 import { lastSyncAt } from '../sync.js';
@@ -38,6 +39,11 @@ today.put('/location', (req, res) => {
   audit(`Location set to ${state.location.name} (${timezone})`, 'User', 'done');
   res.json(state.location);
 });
+
+/** The monitoring page of the user's other site (see server/monitor.ts). */
+today.get('/monitoring', wrap(async (req, res) => {
+  res.json(await monitoring(Number(req.query.days) || 30, req.query.fresh === '1'));
+}));
 
 today.get('/today', wrap(async (_req, res) => {
   await refreshCalendar();

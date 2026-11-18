@@ -1,3 +1,4 @@
+import { MonitorPanel } from '../components/MonitorPanel';
 import { PlaceSettings } from '../components/PlaceSettings';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
@@ -146,6 +147,10 @@ export function SettingsScreen() {
 
       <Group id="courier" title={t.groupCourier} hint={t.groupCourierHint}>
         <CourierSettings />
+      </Group>
+
+      <Group id="monitor" title={t.mon.group} hint={t.mon.hint}>
+        <MonitorPanel configured={Boolean(status?.monitor)} />
       </Group>
 
       <Group id="place" title={t.place.group} hint={t.place.hint}>

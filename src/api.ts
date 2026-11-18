@@ -37,6 +37,7 @@ import type {
   BotOverview,
   Proposal,
   Reminder,
+  MonitorResult,
   StatusInfo,
   StreamEvent,
   TodayData,
@@ -164,6 +165,8 @@ export interface Passkey {
 export const api = {
   // /status sits behind the sign-in, so an answer proves the session is good: the saved Inbox may be shown.
   /** Where the user is now: prayer times and the clock follow. */
+  /** The monitoring numbers of the user's other site, for the last `days` days. */
+  monitoring: (days: number, fresh = false) => call<MonitorResult>('GET', `/monitoring?days=${days}${fresh ? '&fresh=1' : ''}`),
   setLocation: (place: { latitude: number; longitude: number; timezone: string; name: string }) => call<StatusInfo['location']>('PUT', '/location', place),
   status: () => call<StatusInfo>('GET', '/status').then((s) => (confirmSession(), s)),
   unlock: (pin: string) => call<void>('POST', '/unlock', { pin }),

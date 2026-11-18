@@ -426,6 +426,24 @@ const en = {
     logEmpty: 'No couriers yet.',
     stages: { short: 'Short address sent', details: 'Details sent', payment: 'Asked for payment', ignored: 'Ignored' },
   },
+  mon: {
+    group: 'Monitoring',
+    hint: 'The numbers of your other site',
+    summary: 'Summary',
+    period: 'Period',
+    days: (n: number): string => (n === 1 ? 'Today' : `${n} days`),
+    loading: 'Loading…',
+    asOf: (time: string): string => `As of ${time}`,
+    refresh: 'Refresh',
+    empty: 'The site answered, but with nothing to show for this period.',
+    more: (n: number): string => `and ${n} more rows`,
+    noKey: 'Not connected yet. Add the site key on Render as MONITOR_API_KEY, then open this again.',
+    why: (why: string, status?: number): string =>
+      why === 'refused' ? (status === 401 || status === 403 ? 'The site refused the key. Check MONITOR_API_KEY on Render.' : `The site answered with an error (${status ?? '?'}).`)
+      : why === 'not-json' || why === 'too-big' ? 'The site answered with something MAAI cannot show.'
+      : why === 'no-key' ? 'Not connected yet. Add MONITOR_API_KEY on Render.'
+      : 'Could not reach the site. Try again in a moment.',
+  },
   place: {
     group: 'Your location',
     hint: 'Prayer times and the clock follow it',
@@ -1411,6 +1429,24 @@ const ar: Strings = {
     logTitle: 'وش صار مؤخرًا',
     logEmpty: 'ما جاك مناديب للحين.',
     stages: { short: 'انرسل العنوان المختصر', details: 'انرسلت التفاصيل', payment: 'طلب دفع', ignored: 'تجاهلته' },
+  },
+  mon: {
+    group: 'المراقبة',
+    hint: 'أرقام موقعك الثاني',
+    summary: 'الملخص',
+    period: 'المدة',
+    days: (n: number): string => (n === 1 ? 'اليوم' : `${n} يوم`),
+    loading: 'أحمّل…',
+    asOf: (time: string): string => `حتى ${time}`,
+    refresh: 'تحديث',
+    empty: 'الموقع رد، لكن ما فيه شي يُعرض لهذي المدة.',
+    more: (n: number): string => `و${n} صف زيادة`,
+    noKey: 'ما انربط للحين. أضف مفتاح الموقع في Render باسم MONITOR_API_KEY، ثم افتح هذي الشاشة من جديد.',
+    why: (why: string, status?: number): string =>
+      why === 'refused' ? (status === 401 || status === 403 ? 'الموقع رفض المفتاح. تأكد من MONITOR_API_KEY في Render.' : `الموقع رد بخطأ (${status ?? '؟'}).`)
+      : why === 'not-json' || why === 'too-big' ? 'الموقع رد بشي ما أقدر أعرضه.'
+      : why === 'no-key' ? 'ما انربط للحين. أضف MONITOR_API_KEY في Render.'
+      : 'ما قدرت أوصل للموقع. جرّب بعد شوي.',
   },
   place: {
     group: 'موقعك',

@@ -44,7 +44,7 @@ const duty = (i = 0) => state.duties.find((d) => d.id === ids[i])!;
 /** Everything queued for the device bot so far in this test (reading it does not use it up). */
 let outbox: ReturnType<typeof takeCommands> = [];
 const flush = () => {
-  outbox = [...outbox, ...takeCommands()];
+  outbox = [...outbox, ...takeCommands(0)];
   return outbox;
 };
 const toMember = () => flush().filter((c) => c.phone === PHONE);
@@ -200,7 +200,7 @@ describe('a picture or a PDF from a team member', () => {
     reads({ intent: 'done' });
     const m = withFile('image');
     expect(claimInbound(m, vi.fn(), NOW.getTime())).toBe(true);
-    const asked = takeCommands().find((c) => c.kind === 'media')!;
+    const asked = takeCommands(0).find((c) => c.kind === 'media')!;
     expect(asked.text).toBe(m.externalId!.slice(4));
     expect(receiveFile(asked.text, JPEG)).toBe('taken');
     await vi.waitFor(() => expect(duty().status).toBe('done'));

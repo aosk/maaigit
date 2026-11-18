@@ -31,6 +31,9 @@ services:
         sync: false
       - key: MAAI_PASSWORD
         sync: false
+      # Optional: the key of your monitoring site, shown in Settings → Monitoring.
+      - key: MONITOR_API_KEY
+        sync: false
       # Optional: a speech service key (Groq), so voice in the app works with the computer off.
       - key: GROQ_API_KEY
         sync: false

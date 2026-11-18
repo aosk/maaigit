@@ -34,7 +34,7 @@ function setUp(due = '2026-11-18T12:00:00+03:00') {
   dutyId = createDuty({ title: 'تقديم الطلب في ناجز', phone: PHONE, due }, SUN).id;
 }
 const duty = () => state.duties.find((d) => d.id === dutyId)!;
-const sent = () => takeCommands().filter((c) => c.phone === PHONE);
+const sent = () => takeCommands(0).filter((c) => c.phone === PHONE);
 
 beforeEach(() => {
   state.teams = [];
@@ -68,14 +68,14 @@ describe('the reminders', () => {
     setUp();
     const t1 = new Date('2026-11-17T13:00:00+03:00');
     teamReminderTick(t1);
-    takeCommands();
+    takeCommands(0);
     expect(teamReminderTick(at(t1, 3.9))).toBe(0);
     expect(teamReminderTick(at(t1, 4))).toBe(1);
     expect(sent()[0].text).toContain('تذكير ثاني');
     expect(duty().reminders.map((r) => r.n)).toEqual([1, 2]);
     // No answer to the second one either: the user is told (on WhatsApp to the alert number), once.
     expect(teamReminderTick(at(t1, 8))).toBe(1);
-    const alert = takeCommands().find((c) => c.phone === ALERT)!;
+    const alert = takeCommands(0).find((c) => c.phone === ALERT)!;
     expect(alert.text).toContain('ما رد على تذكيرين');
     expect(alert.text).toContain('أحمد');
     expect(duty().escalatedAt).toBeDefined();
@@ -88,7 +88,7 @@ describe('the reminders', () => {
     setUp();
     const t1 = new Date('2026-11-17T13:00:00+03:00');
     teamReminderTick(t1);
-    takeCommands();
+    takeCommands(0);
     duty().replies.push({ at: at(t1, 1).toISOString(), text: 'ان شاء الله', intent: 'ack' });
     duty().status = 'acknowledged';
     expect(teamReminderTick(at(t1, 6))).toBe(0);
@@ -97,7 +97,7 @@ describe('the reminders', () => {
     expect(teamReminderTick(due)).toBe(1);
     expect(sent()[0].text).toContain('حان موعد');
     expect(teamReminderTick(at(due, 4))).toBe(1);
-    expect(takeCommands().some((c) => c.phone === ALERT)).toBe(true);
+    expect(takeCommands(0).some((c) => c.phone === ALERT)).toBe(true);
   });
 
   it('do not go out on Friday or Saturday, nor outside the sending hours, and wait for the next working time', () => {
@@ -171,7 +171,7 @@ describe('telling the user when the device bot is away', () => {
     const t1 = new Date('2026-11-17T13:00:00+03:00');
     expect(teamReminderTick(t1)).toBe(1);
     expect(teamReminderTick(at(t1, 4.1))).toBe(1); // second reminder
-    takeCommands();
+    takeCommands(0);
     revokeKey(); // the bot is not connected when the alert falls due
     const late = at(t1, 8.3);
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -182,7 +182,7 @@ describe('telling the user when the device bot is away', () => {
     createKey();
     expect(teamReminderTick(at(late, 0.2))).toBe(1);
     expect(duty().alertUnsent).toBe(false);
-    expect(takeCommands().filter((c) => c.phone === ALERT)).toHaveLength(1);
+    expect(takeCommands(0).filter((c) => c.phone === ALERT)).toHaveLength(1);
     expect(teamReminderTick(at(late, 0.3))).toBe(0);
   });
 });
