@@ -12,7 +12,7 @@ vi.hoisted(() => {
 const create = vi.hoisted(() => vi.fn());
 vi.mock('../ai/claude.js', async (original) => ({ ...(await original<typeof import('../ai/claude')>()), client: {}, create }));
 
-import { blackoutNow, calendarRound, checkEvents, upcoming } from './calendar';
+import { blackoutNow, calendarRound, checkEvents, dividendHoldNow, upcoming } from './calendar';
 import { inDesk } from './desk';
 import { gate } from './engine';
 import { currentQuotes, refreshQuotes, resetQuotes } from './market';
@@ -82,6 +82,64 @@ describe('the calendar agent', () => {
     trading.books.paper.positions = [{ symbol: '2222', qty: 10, avgCost: 20 }];
     gate({ id: 's1', symbol: '2222', side: 'sell', qty: 10, limitPrice: currentQuotes().get('2222')!.price, confidence: 0.8, rationale: 't' }, SUN);
     expect(trading.orders[0]).toMatchObject({ side: 'sell', qty: 10 });
+  });
+});
+
+describe('dividends: a holding is not sold just before it earns one', () => {
+  /** Jarir's Q3 2026 dividend: eligibility Monday 16 November, paid 25 November. */
+  const jarir = (confirmed = true) => ({ id: 'd', date: '2026-11-16', timeRiyadh: '', kind: 'dividend' as const, perShare: 0.3, payDate: '2026-11-25', symbols: ['4190'], title: 'توزيع جرير', source: 'Saudi Exchange', confirmed });
+  const at = (day: string) => new Date(`${day}T08:00:00Z`); // 11:00 Riyadh
+  const sell = (id: string, when: Date) => gate({ id, symbol: '4190', side: 'sell', qty: 100, limitPrice: currentQuotes().get('4190')!.price, confidence: 0.8, rationale: 'جني ربح' }, when);
+
+  it('reads the dividend with its amount and payment day, and keeps it only with a followed stock', () => {
+    const events = checkEvents(
+      [
+        { date: '2026-11-16', timeRiyadh: '', kind: 'dividend', perShare: 0.3, payDate: '2026-11-25', symbols: ['4190'], title: 'توزيع جرير ٠٫٣٠ ريال', source: 'Argaam', confirmed: true },
+        { date: '2026-11-16', timeRiyadh: '', kind: 'dividend', perShare: 1, payDate: '', symbols: [], title: 'بدون سهم', source: 'x', confirmed: true },
+        { date: '2026-11-17', timeRiyadh: '', kind: 'dividend', perShare: -5, payDate: '2026-11-01', symbols: ['2222'], title: 'أرقام غلط', source: 'x', confirmed: true },
+      ],
+      '2026-11-08',
+    );
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ kind: 'dividend', symbols: ['4190'], perShare: 0.3, payDate: '2026-11-25' });
+    expect(events[1].perShare).toBeUndefined(); // a negative amount is dropped
+    expect(events[1].payDate).toBeUndefined(); // paid before it is earned: dropped
+  });
+
+  it('holds from three trading days before the eligibility day through its close, over the weekend too', () => {
+    trading.calendar = { events: [jarir()] };
+    // Eligibility Monday 16th: the three trading days before are Wed 11, Thu 12 and Sun 15 (Fri and Sat are closed).
+    expect(dividendHoldNow(at('2026-11-10'))).toEqual({}); // Tuesday: four trading days before
+    for (const day of ['2026-11-11', '2026-11-12', '2026-11-15', '2026-11-16']) expect(dividendHoldNow(at(day))).toEqual({ '4190': { date: '2026-11-16', perShare: 0.3 } });
+    expect(dividendHoldNow(at('2026-11-17'))).toEqual({}); // earned: free to sell, the dividend still comes on the 25th
+    trading.calendar = { events: [jarir(false)] };
+    expect(dividendHoldNow(at('2026-11-12'))).toEqual({}); // an estimate never blocks
+  });
+
+  it('refuses the sale in that window, lets it through after, and the stop-loss still sells', async () => {
+    trading.calendar = { events: [jarir()] };
+    const thu = at('2026-11-12');
+    await refreshQuotes(thu);
+    const price = currentQuotes().get('4190')!.price;
+    trading.books.paper.positions = [{ symbol: '4190', qty: 100, avgCost: price * 0.95 }]; // up about 5%
+    sell('s1', thu);
+    expect(trading.orders).toHaveLength(0);
+    expect(trading.events.find((e) => e.correlationId === 's1' && e.type === 'risk.verdict')!.text).toMatch(/أحقية توزيع الأرباح 2026-11-16: ما يُباع قبل إقفال ذاك اليوم \(0.3 للسهم\)/);
+    // A buy is never held back by a dividend.
+    gate({ id: 'b1', symbol: '4190', side: 'buy', qty: 1, limitPrice: price, confidence: 0.8, rationale: 't' }, thu);
+    expect(trading.orders.some((o) => o.side === 'buy' && o.symbol === '4190')).toBe(true);
+    trading.orders = [];
+    // At the stop (down 5%): sold whatever the dividend.
+    trading.books.paper.positions = [{ symbol: '4190', qty: 100, avgCost: price / 0.95 }];
+    sell('s2', thu);
+    expect(trading.orders[0]).toMatchObject({ side: 'sell', symbol: '4190', qty: 100 });
+    // The day after eligibility: sold as usual.
+    trading.orders = [];
+    const tue = at('2026-11-17');
+    await refreshQuotes(tue);
+    trading.books.paper.positions = [{ symbol: '4190', qty: 100, avgCost: currentQuotes().get('4190')!.price * 0.95 }];
+    sell('s3', tue);
+    expect(trading.orders[0]).toMatchObject({ side: 'sell', symbol: '4190' });
   });
 });
 

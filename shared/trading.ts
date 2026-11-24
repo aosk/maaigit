@@ -207,7 +207,11 @@ export interface CalendarEvent {
   date: string;
   /** The time if known (HH:MM, Riyadh), else ''. */
   timeRiyadh: string;
-  kind: 'earnings' | 'rates' | 'inflation' | 'jobs' | 'other';
+  /** dividend: `date` is the eligibility day (owners at that day's close get it). */
+  kind: 'earnings' | 'dividend' | 'rates' | 'inflation' | 'jobs' | 'other';
+  /** A dividend: how much per share, and the day it is paid (YYYY-MM-DD). */
+  perShare?: number;
+  payDate?: string;
   /** The stocks it concerns; empty for the whole market. */
   symbols: string[];
   title: string;

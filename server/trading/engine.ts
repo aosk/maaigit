@@ -9,7 +9,7 @@ import { currentIndex, currentQuotes, refreshQuotes, historyOf } from './market.
 import { marketPulse } from './pulse.js';
 import { DESKS, deskConfig, inDesk, perDesk, unitAr } from './desk.js';
 import { holdersRound, holdersView } from './holders.js';
-import { blackoutNow, calendarRound, upcoming } from './calendar.js';
+import { blackoutNow, calendarRound, dividendHoldNow, upcoming } from './calendar.js';
 import { latestReview, weeklyReview } from './review.js';
 import { shariahRound, shariahView } from './shariah.js';
 import { scoreRound, scorecardView } from './scoring.js';
@@ -210,6 +210,7 @@ export function gate(d: Decision, now = new Date()): { decisionId: string; verdi
           live: trading.mode === 'live',
           caution: cautionNow(now),
           blackout: blackoutNow(now),
+          dividendHold: dividendHoldNow(now),
           volatility: volatilityNow(),
           calmVolatility: deskConfig().id === 'crypto' ? 4 : 2,
           ordersToday: trading.ordersToday.day === day ? trading.ordersToday.count : 0,
@@ -250,6 +251,7 @@ function arabicReason(reason: string): string {
     [/last 20 minutes/, () => 'ما فيه مراكز جديدة في آخر ٢٠ دقيقة'],
     [/Caution mode: no new buys/, () => 'وضع الحذر: ما فيه شراء جديد في هالقطاع'],
     [/Caution mode: half/, () => 'وضع الحذر: نص حد الأمر'],
+    [/Dividend eligibility on (\S+): held until that day's close(?: \(([\d.]+) a share\))?/, (m) => `أحقية توزيع الأرباح ${m[1]}: ما يُباع قبل إقفال ذاك اليوم${m[2] ? ` (${m[2]} للسهم)` : ''}`],
     [/Results on (\S+): no new buys/, (m) => `نتائج الشركة ${m[1].replace(/\.$/, '')}: ما فيه شراء جديد قبلها بيوم ويومها`],
     [/Market event today/, () => 'حدث كبير في السوق اليوم: نص حد الأمر'],
     [/Volatile: it moves about ([\d.]+)%/, (m) => `سهم متذبذب (يتحرك حوالي ${m[1]}٪ باليوم): صغّرنا الأمر`],

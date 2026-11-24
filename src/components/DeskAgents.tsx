@@ -3,7 +3,7 @@ import type { CalendarEvent, TradingState } from '../../shared/trading';
 import { api } from '../api';
 import { useSettings } from '../settings';
 
-const KIND_ICON: Record<CalendarEvent['kind'], string> = { earnings: '📊', rates: '🏦', inflation: '📈', jobs: '👷', other: '📌' };
+const KIND_ICON: Record<CalendarEvent['kind'], string> = { earnings: '📊', dividend: '💰', rates: '🏦', inflation: '📈', jobs: '👷', other: '📌' };
 
 /** "2026-11-12" as "الخميس 12 نوفمبر" (or "Thu 12 Nov"). */
 function dayLabel(day: string, lang: string): string {
@@ -37,6 +37,8 @@ export function Calendar({ st }: { st: TradingState }) {
                 <span className="sub">
                   {dayLabel(e.date, settings.lang)}
                   {e.timeRiyadh ? ` · ${e.timeRiyadh}` : ''}
+                  {e.kind === 'dividend' && e.perShare ? ` · ${s.calPerShare(e.perShare)}` : ''}
+                  {e.kind === 'dividend' && e.payDate ? ` · ${s.calPaid(dayLabel(e.payDate, settings.lang))}` : ''}
                   {e.symbols.length ? ` · ${e.symbols.map(name).join('، ')}` : ''} · {e.source}
                 </span>
               </span>

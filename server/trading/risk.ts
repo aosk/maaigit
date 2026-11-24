@@ -31,6 +31,8 @@ export interface RiskContext {
   caution?: { sectors: string[] };
   /** From the calendar (confirmed events only): stocks with results today or on the next trading day (no new buys), and a market-wide event today (half-size buys). */
   blackout?: { symbols: Record<string, string>; market?: string };
+  /** From the calendar (confirmed only): stocks whose dividend eligibility day is today or within three trading days. Not sold, unless at the stop. */
+  dividendHold?: Record<string, { date: string; perShare?: number }>;
   /** Each stock's usual daily move in % (see indicators.ts): the more volatile, the smaller the order. */
   volatility?: Map<string, number>;
   /** The daily move a full-size order is meant for (2% for stocks, 4% for coins). */
@@ -73,6 +75,13 @@ export function checkOrder(p: Proposal, ctx: RiskContext): Verdict {
   if (ctx.live && (quote.source !== 'bot' || ctx.now.getTime() - Date.parse(quote.asOf) > LIVE_QUOTE_MS)) return veto(`No live Broker price for ${p.symbol} in the last 2 minutes.`);
   if (p.side === 'buy' && ctx.clock.minutesToChange <= NO_NEW_POSITIONS_MIN) return veto('No new positions in the last 20 minutes before the close.');
   if (p.side === 'buy' && ctx.caution?.sectors.includes(stock.sector)) return veto(`Caution mode: no new buys in the ${stock.sector} sector.`);
+  const hold = p.side === 'sell' ? ctx.dividendHold?.[p.symbol] : undefined;
+  if (hold) {
+    // The stop-loss still sells: a dividend never outweighs a holding that has fallen to the stop.
+    const pos = ctx.book.positions.find((x) => x.symbol === p.symbol);
+    const atStop = pos && pos.avgCost > 0 && ((quote.price - pos.avgCost) / pos.avgCost) * 100 <= deskConfig().stopPct;
+    if (!atStop) return veto(`Dividend eligibility on ${hold.date}: held until that day's close${hold.perShare ? ` (${hold.perShare} a share)` : ''}.`);
+  }
   if (p.side === 'buy' && ctx.blackout?.symbols[p.symbol]) return veto(`Results on ${ctx.blackout.symbols[p.symbol]}: no new buys the day before and the day of.`);
   // The day's order count holds back new buys only: a sale (a stop above all) must never be refused for it.
   if (p.side === 'buy' && ctx.ordersToday >= ctx.limits.maxOrdersPerDay) return veto(`Today's limit of ${ctx.limits.maxOrdersPerDay} orders is used up.`);
